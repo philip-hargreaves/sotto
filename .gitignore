@@ -24,7 +24,7 @@ BundleArtifacts/
 *.cer
 *.pfx
 
-# Weights are fetched, never committed; stub fixtures are the exception
+# Weights
 models/
 *.onnx
 *.bin
