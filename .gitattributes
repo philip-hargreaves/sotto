@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# cmd.exe needs CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.onnx binary
+*.bin binary
+*.pfx binary
+*.cer binary
+*.msix binary
+*.appx binary
