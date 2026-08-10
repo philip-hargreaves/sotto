@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  format:
+  cpp-format:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +24,24 @@ jobs:
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
                   -latest -property installationPath
           $cf = Join-Path $vs 'VC\Tools\Llvm\x64\bin\clang-format.exe'
-          $files = Get-ChildItem -Recurse -Include *.cpp,*.hpp -Path engine, tests
+          $files = Get-ChildItem -Recurse -Include *.cpp,*.hpp -Path engine
           & $cf --style=file --dry-run --Werror @($files.FullName)
           exit $LASTEXITCODE
+
+  dotnet:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+      - name: Check formatting
+        run: dotnet format sotto.slnx --verify-no-changes
+      - name: Build
+        run: dotnet build sotto.slnx
+      - name: Test
+        run: dotnet test sotto.slnx --no-build
 
   build:
     runs-on: windows-latest

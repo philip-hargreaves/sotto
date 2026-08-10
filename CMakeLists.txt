@@ -13,7 +13,6 @@ enable_testing()
 
 add_library(sotto_warnings INTERFACE)
 target_compile_options(sotto_warnings INTERFACE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /utf-8 /WX>)
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /utf-8>)
 
 add_subdirectory(engine)
-add_subdirectory(tests)

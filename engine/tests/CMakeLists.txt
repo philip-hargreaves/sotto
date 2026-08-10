@@ -11,6 +11,8 @@ set(INSTALL_GTEST OFF)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
+
 add_executable(core_tests core/version_test.cpp)
 target_compile_definitions(core_tests PRIVATE SOTTO_CMAKE_VERSION="${sotto_VERSION}")
 target_link_libraries(core_tests PRIVATE sotto_core sotto_warnings GTest::gtest_main)

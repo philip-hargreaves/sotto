@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/app/">
+    <Project Path="app/Sotto.App/Sotto.App.csproj">
+      <Platform Project="x64" />
+      <Deploy Solution="Debug|*" />
+    </Project>
+    <Project Path="app/Sotto.Client.Tests/Sotto.Client.Tests.csproj" />
+    <Project Path="app/Sotto.Client/Sotto.Client.csproj" />
+  </Folder>
+</Solution>
