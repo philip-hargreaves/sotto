@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: dotnet build sotto.slnx
       - name: Test
-        run: dotnet test sotto.slnx --no-build
+        run: dotnet test sotto.slnx --no-build --blame-hang-timeout 120s
 
   build:
     runs-on: windows-latest
