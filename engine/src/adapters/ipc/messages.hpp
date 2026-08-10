@@ -39,7 +39,7 @@ struct PeerInfo {
     int protocol_version = 0;
 };
 
-// A8: Whisper output can carry invalid UTF-8; replace, never throw.
+// Whisper output can carry invalid UTF-8; replace rather than throw
 inline std::string Serialize(const json& j) {
     return j.dump(-1, ' ', false, json::error_handler_t::replace);
 }
@@ -49,7 +49,7 @@ inline json IdToJson(const Id& id) {
     return std::get<std::string>(id);
 }
 
-// the checks mirror envelope.schema.json, which is the source of truth
+// Checks mirror envelope.schema.json, which is the source of truth
 inline std::variant<Request, Error> ParseRequest(const json& j) {
     const auto invalid = [](std::string why) {
         return Error{kInvalidRequest, "Invalid Request", json(std::move(why))};

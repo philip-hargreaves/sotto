@@ -11,4 +11,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+add_executable(sotto_engine
+    src/main.cpp
+    src/adapters/ipc/pipe_security.cpp
+    src/adapters/ipc/pipe_server.cpp)
+target_link_libraries(sotto_engine PRIVATE
+    sotto_core sotto_warnings nlohmann_json::nlohmann_json advapi32)
+
 add_subdirectory(tests)
