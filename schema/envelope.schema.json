@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sotto.dev/schema/envelope.schema.json",
+  "title": "sotto IPC envelope",
+  "description": "JSON-RPC 2.0 profile: single messages only (no batch), id is string or number (never null). One frame carries exactly one message.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/notification" },
+    { "$ref": "#/$defs/successResponse" },
+    { "$ref": "#/$defs/errorResponse" }
+  ],
+  "$defs": {
+    "jsonrpc": { "const": "2.0" },
+    "id": { "type": ["string", "integer"] },
+    "request": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "method"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "notification": {
+      "type": "object",
+      "required": ["jsonrpc", "method"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "not": { "required": ["id"] },
+      "additionalProperties": false
+    },
+    "successResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "result": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "errorResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "error"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": {}
+      },
+      "additionalProperties": false
+    }
+  }
+}

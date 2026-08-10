@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sotto.dev/schema/messages.schema.json",
+  "title": "sotto IPC methods",
+  "description": "Method payloads. Engine domain errors use codes -32000..-32099; the JSON-RPC reserved codes keep their spec meaning.",
+  "$defs": {
+    "peerInfo": {
+      "type": "object",
+      "required": ["name", "version", "protocolVersion"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "protocolVersion": { "type": "integer", "const": 1 }
+      },
+      "additionalProperties": false
+    },
+    "helloParams": { "$ref": "#/$defs/peerInfo" },
+    "helloResult": { "$ref": "#/$defs/peerInfo" },
+    "echoParams": {
+      "type": "object",
+      "required": ["payload"],
+      "properties": {
+        "payload": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "echoResult": { "$ref": "#/$defs/echoParams" }
+  }
+}
