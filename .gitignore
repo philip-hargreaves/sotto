@@ -13,6 +13,10 @@ CMakeUserPresets.json
 # .NET
 bin/
 obj/
+TestResults/
+*.trx
+*.binlog
+Generated Files/
 
 # MSIX
 AppPackages/

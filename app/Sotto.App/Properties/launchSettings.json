@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Sotto.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Sotto.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

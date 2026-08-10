@@ -19,5 +19,38 @@ trim_trailing_whitespace = false
 [*.{bat,cmd,ps1}]
 end_of_line = crlf
 
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+
+# naming diagnostics only reach the build through IDE1006
+dotnet_diagnostic.IDE1006.severity = warning
+
+dotnet_naming_rule.interfaces_need_prefix.symbols = interfaces
+dotnet_naming_rule.interfaces_need_prefix.style = i_prefix
+dotnet_naming_rule.interfaces_need_prefix.severity = warning
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.i_prefix.capitalization = pascal_case
+dotnet_naming_style.i_prefix.required_prefix = I
+
+dotnet_naming_rule.types_are_pascal.symbols = types
+dotnet_naming_rule.types_are_pascal.style = pascal
+dotnet_naming_rule.types_are_pascal.severity = warning
+dotnet_naming_symbols.types.applicable_kinds = class, struct, enum, delegate
+
+dotnet_naming_rule.members_are_pascal.symbols = members
+dotnet_naming_rule.members_are_pascal.style = pascal
+dotnet_naming_rule.members_are_pascal.severity = warning
+dotnet_naming_symbols.members.applicable_kinds = method, property, event
+
+dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore_camel.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_style.underscore_camel.required_prefix = _
+
 [Makefile]
 indent_style = tab
