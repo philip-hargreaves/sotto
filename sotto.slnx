@@ -6,5 +6,9 @@
     </Project>
     <Project Path="app/Sotto.Client.Tests/Sotto.Client.Tests.csproj" />
     <Project Path="app/Sotto.Client/Sotto.Client.csproj" />
+    <Project Path="app/Sotto.Contract.Tests/Sotto.Contract.Tests.csproj" />
+  </Folder>
+  <Folder Name="/engine/">
+    <File Path="engine/CMakeLists.txt" />
   </Folder>
 </Solution>

@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "engine/hello",
+  "params": {
+    "name": "sotto-shell",
+    "version": "0.1.0",
+    "protocolVersion": 1
+  }
+}

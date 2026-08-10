@@ -22,7 +22,6 @@ end_of_line = crlf
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:warning
 
-# naming diagnostics only reach the build through IDE1006
 dotnet_diagnostic.IDE1006.severity = warning
 
 dotnet_naming_rule.interfaces_need_prefix.symbols = interfaces
@@ -41,6 +40,18 @@ dotnet_naming_rule.members_are_pascal.symbols = members
 dotnet_naming_rule.members_are_pascal.style = pascal
 dotnet_naming_rule.members_are_pascal.severity = warning
 dotnet_naming_symbols.members.applicable_kinds = method, property, event
+
+dotnet_naming_rule.const_fields_pascal.symbols = const_fields
+dotnet_naming_rule.const_fields_pascal.style = pascal
+dotnet_naming_rule.const_fields_pascal.severity = warning
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.required_modifiers = const
+
+dotnet_naming_rule.static_readonly_fields_pascal.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_fields_pascal.style = pascal
+dotnet_naming_rule.static_readonly_fields_pascal.severity = warning
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readonly
 
 dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel

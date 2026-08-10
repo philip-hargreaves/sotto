@@ -13,9 +13,15 @@ FetchContent_MakeAvailable(googletest)
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
-add_executable(core_tests core/version_test.cpp)
-target_compile_definitions(core_tests PRIVATE SOTTO_CMAKE_VERSION="${sotto_VERSION}")
-target_link_libraries(core_tests PRIVATE sotto_core sotto_warnings GTest::gtest_main)
+add_executable(engine_tests
+    core/version_test.cpp
+    adapters/framing_test.cpp
+    adapters/messages_test.cpp)
+target_compile_definitions(engine_tests PRIVATE
+    SOTTO_CMAKE_VERSION="${sotto_VERSION}"
+    SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
+target_link_libraries(engine_tests PRIVATE
+    sotto_core sotto_warnings nlohmann_json::nlohmann_json GTest::gtest_main)
 
 include(GoogleTest)
-gtest_discover_tests(core_tests)
+gtest_discover_tests(engine_tests)
