@@ -8,7 +8,7 @@
 
 namespace sotto::ipc {
 
-// the pipe imposes no size limit, and the reader allocates whatever the header claims
+// Pipe imposes no size limit; capped to prevent unbounded allocation
 inline constexpr std::uint32_t kMaxFrameBytes = 4u * 1024 * 1024;
 
 inline constexpr std::size_t kHeaderBytes = 4;
@@ -29,7 +29,7 @@ inline std::string EncodeFrame(std::string_view payload) {
     return frame;
 }
 
-// an oversize length means a corrupt stream: the decoder stops for good, drop the connection
+// Reassembles length-prefixed frames from a byte stream fed in arbitrary chunks.
 class FrameDecoder {
    public:
     void Push(std::string_view bytes) {

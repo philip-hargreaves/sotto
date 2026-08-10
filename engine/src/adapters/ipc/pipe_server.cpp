@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <system_error>
+#include <utility>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -25,6 +26,10 @@ struct OverlappedEvent {
     OVERLAPPED ov{};
     OverlappedEvent() {
         ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (ov.hEvent == nullptr) {
+            throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
+                                    "CreateEventW");
+        }
     }
     ~OverlappedEvent() {
         if (ov.hEvent != nullptr) CloseHandle(ov.hEvent);
@@ -104,29 +109,44 @@ void PipeServer::HandleFrame(const std::string& payload) {
         return;
     }
 
-    auto parsed = ParseRequest(message);
+    auto parsed = ParseRequest(std::move(message));
     if (std::holds_alternative<Error>(parsed)) {
         std::fputs("sotto-engine: dropped invalid request\n", stderr);
         return;
     }
     const auto& request = std::get<Request>(parsed);
 
-    const auto it = handlers_.find(request.method);
-    if (it == handlers_.end()) {
-        WriteFrame(Serialize(MakeError(
-            request.id, Error{kMethodNotFound, "Method not found", json(request.method)})));
-        return;
-    }
-
-    auto outcome = it->second(request.params);
-    if (std::holds_alternative<Error>(outcome)) {
-        WriteFrame(Serialize(MakeError(request.id, std::get<Error>(outcome))));
-    } else {
-        WriteFrame(Serialize(MakeResult(request.id, std::get<json>(outcome))));
+    // A handler, or an oversized reply, must never escape into the serve loop
+    try {
+        const auto it = handlers_.find(request.method);
+        if (it == handlers_.end()) {
+            Reply(request.id, MakeError(request.id, Error{kMethodNotFound, "Method not found"}));
+            return;
+        }
+        auto outcome = it->second(request.params);
+        if (std::holds_alternative<Error>(outcome)) {
+            Reply(request.id, MakeError(request.id, std::get<Error>(outcome)));
+        } else {
+            Reply(request.id, MakeResult(request.id, std::get<json>(outcome)));
+        }
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "sotto-engine: handler failed: %s\n", e.what());
+        Reply(request.id, MakeError(request.id, Error{kInternalError, "Internal error"}));
     }
 }
 
-void PipeServer::WriteFrame(const std::string& payload) {
+void PipeServer::Reply(const Id& id, const json& envelope) {
+    std::string payload = Serialize(envelope);
+    if (payload.size() > kMaxFrameBytes) {
+        std::fputs("sotto-engine: reply exceeded frame cap, sent internal error\n", stderr);
+        payload = Serialize(MakeError(id, Error{kInternalError, "Internal error"}));
+    }
+    if (!WriteFrame(payload)) {
+        std::fputs("sotto-engine: reply write failed, client gone\n", stderr);
+    }
+}
+
+bool PipeServer::WriteFrame(const std::string& payload) {
     const std::string frame = EncodeFrame(payload);
     HANDLE pipe = static_cast<HANDLE>(pipe_);
     std::size_t written_total = 0;
@@ -135,11 +155,12 @@ void PipeServer::WriteFrame(const std::string& payload) {
         DWORD written = 0;
         if (!WriteFile(pipe, frame.data() + written_total,
                        static_cast<DWORD>(frame.size() - written_total), nullptr, &write.ov)) {
-            if (GetLastError() != ERROR_IO_PENDING) return;
+            if (GetLastError() != ERROR_IO_PENDING) return false;
         }
-        if (!CompleteOverlapped(pipe, write.ov, written)) return;
+        if (!CompleteOverlapped(pipe, write.ov, written)) return false;
         written_total += written;
     }
+    return true;
 }
 
 }  // namespace sotto::ipc

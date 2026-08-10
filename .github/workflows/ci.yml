@@ -41,7 +41,26 @@ jobs:
       - name: Build
         run: dotnet build sotto.slnx
       - name: Test
-        run: dotnet test sotto.slnx --no-build --blame-hang-timeout 120s
+        run: dotnet test app/Sotto.Client.Tests --no-build --blame-hang-timeout 120s
+
+  contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+      - name: Build engine and run the contract suite
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+                  -latest -property installationPath
+          Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
+            -DevCmdArguments '-arch=x64 -host_arch=x64'
+          cmake --workflow --preset dev
+          dotnet test app/Sotto.Contract.Tests --blame-hang-timeout 120s
 
   build:
     runs-on: windows-latest

@@ -7,7 +7,9 @@ namespace Sotto.Client;
 
 /// <summary>
 /// JSON-RPC client over the engine's named pipe. One connection, concurrent
-/// requests correlated by id, notifications surfaced as an event.
+/// requests correlated by id, notifications surfaced as an event. Any transport
+/// failure is terminal: pending and future requests observe it, and the
+/// connection does not recover.
 /// </summary>
 public sealed class PipeTransport : IAsyncDisposable
 {
@@ -17,17 +19,17 @@ public sealed class PipeTransport : IAsyncDisposable
     private readonly CancellationTokenSource _closed = new();
     private Task _readLoop = Task.CompletedTask;
     private long _nextId;
+    private Exception? _fault;
+    private int _disposed;
 
     public event Action<string, JsonElement>? NotificationReceived;
 
     private PipeTransport(NamedPipeClientStream pipe) => _pipe = pipe;
 
     public static async Task<PipeTransport> ConnectAsync(
-        string pipeName, TimeSpan timeout, CancellationToken cancellationToken = default)
+        string pipeName, TimeSpan timeout, uint? expectedServerProcessId = null,
+        CancellationToken cancellationToken = default)
     {
-        // Individual rights, never generics: the engine's DACL withholds the
-        // instance-creation bit that generic write would demand
-        // ReadPermissions backs CurrentUserOnly's server-owner check
         const PipeAccessRights rights = PipeAccessRights.ReadData | PipeAccessRights.WriteData
             | PipeAccessRights.ReadAttributes | PipeAccessRights.WriteAttributes
             | PipeAccessRights.ReadPermissions;
@@ -40,6 +42,20 @@ public sealed class PipeTransport : IAsyncDisposable
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(timeout);
             await pipe.ConnectAsync(cts.Token).ConfigureAwait(false);
+
+            // The caller that spawned the engine knows its pid; refuse any other
+            // process that may have claimed the pipe name first.
+            if (expectedServerProcessId is uint expected)
+            {
+                var actual = ServerVerifier.GetServerProcessId(pipe);
+                if (actual != expected)
+                {
+                    var actualText = actual?.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        ?? "<unavailable>";
+                    throw new IOException(FormattableString.Invariant(
+                        $"pipe server pid {actualText} is not the expected engine pid {expected}"));
+                }
+            }
         }
         catch
         {
@@ -56,10 +72,27 @@ public sealed class PipeTransport : IAsyncDisposable
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (Volatile.Read(ref _fault) is { } fault)
+        {
+            throw new IOException("pipe transport is closed", fault);
+        }
+
         var id = Interlocked.Increment(ref _nextId);
         var completion = new TaskCompletionSource<JsonElement>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = completion;
+
+        // Close the register-after-fault window: a fault between the check above
+        // and this insert would not have seen our completion.
+        if (Volatile.Read(ref _fault) is { } raced)
+        {
+            _pending.TryRemove(id, out _);
+            throw new IOException("pipe transport is closed", raced);
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
         try
         {
             var request = new Dictionary<string, object?>
@@ -73,10 +106,7 @@ public sealed class PipeTransport : IAsyncDisposable
                 request["params"] = parameters;
             }
 
-            await SendAsync(request, cancellationToken).ConfigureAwait(false);
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken, _closed.Token);
-            cts.CancelAfter(timeout);
+            await SendAsync(request, cts.Token).ConfigureAwait(false);
             return await completion.Task.WaitAsync(cts.Token).ConfigureAwait(false);
         }
         finally
@@ -87,13 +117,29 @@ public sealed class PipeTransport : IAsyncDisposable
 
     private async Task SendAsync(object message, CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(message, Protocol.JsonOptions);
-        var frame = Framing.Encode(payload);
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var frame = Framing.Encode(JsonSerializer.SerializeToUtf8Bytes(message, Protocol.JsonOptions));
+        // The whole send follows one token: the caller's timeout, the caller's
+        // cancellation, and transport closure all abort it. A cancelled write
+        // desyncs the stream, so it is treated as a terminal fault below.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, _closed.Token);
+        await _writeLock.WaitAsync(linked.Token).ConfigureAwait(false);
         try
         {
-            await _pipe.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
-            await _pipe.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await _pipe.WriteAsync(frame, linked.Token).ConfigureAwait(false);
+            await _pipe.FlushAsync(linked.Token).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Fault(e);
+            // If closure cancelled this write, surface the closure cause rather
+            // than the incidental cancellation.
+            if (Volatile.Read(ref _fault) is { } cause && !ReferenceEquals(cause, e))
+            {
+                throw new IOException("pipe transport is closed", cause);
+            }
+
+            throw;
         }
         finally
         {
@@ -106,30 +152,36 @@ public sealed class PipeTransport : IAsyncDisposable
         var header = new byte[Framing.HeaderBytes];
         try
         {
-            while (!_closed.IsCancellationRequested)
+            while (true)
             {
                 await _pipe.ReadExactlyAsync(header, _closed.Token).ConfigureAwait(false);
-                var length = Framing.ReadDeclaredLength(header);
-                var body = new byte[length];
+                var body = new byte[Framing.ReadDeclaredLength(header)];
                 await _pipe.ReadExactlyAsync(body, _closed.Token).ConfigureAwait(false);
-                Dispatch(JsonDocument.Parse(body));
+                using var document = JsonDocument.Parse(body);
+                Dispatch(document.RootElement);
             }
         }
         catch (Exception e)
         {
-            FaultAllPending(e);
+            Fault(e);
         }
     }
 
-    private void Dispatch(JsonDocument document)
+    private void Dispatch(JsonElement root)
     {
-        var root = document.RootElement;
         if (!root.TryGetProperty("id", out var idElement))
         {
             if (root.TryGetProperty("method", out var method))
             {
                 var parameters = root.TryGetProperty("params", out var p) ? p.Clone() : default;
-                NotificationReceived?.Invoke(method.GetString() ?? "", parameters);
+                try
+                {
+                    NotificationReceived?.Invoke(method.GetString() ?? "", parameters);
+                }
+                catch
+                {
+                    // A subscriber's failure is not a transport failure
+                }
             }
 
             return;
@@ -140,44 +192,69 @@ public sealed class PipeTransport : IAsyncDisposable
             return;
         }
 
-        if (root.TryGetProperty("error", out var error))
+        // Build the outcome before completing: a malformed response must fault its
+        // own request, never leave the removed completion stranded.
+        try
         {
-            var data = error.TryGetProperty("data", out var d) ? d.Clone() : (JsonElement?)null;
-            completion.TrySetException(new EngineErrorException(
-                error.GetProperty("code").GetInt32(),
-                error.GetProperty("message").GetString() ?? "", data));
+            if (root.TryGetProperty("error", out var error))
+            {
+                var data = error.TryGetProperty("data", out var d) ? d.Clone() : (JsonElement?)null;
+                completion.SetException(new EngineErrorException(
+                    error.GetProperty("code").GetInt32(),
+                    error.GetProperty("message").GetString() ?? "", data));
+            }
+            else
+            {
+                completion.SetResult(root.GetProperty("result").Clone());
+            }
         }
-        else
+        catch (Exception e)
         {
-            completion.TrySetResult(root.GetProperty("result").Clone());
+            completion.TrySetException(e);
         }
     }
 
-    private void FaultAllPending(Exception e)
+    private void Fault(Exception cause)
     {
+        // First fault wins; the transport is terminal thereafter.
+        if (Interlocked.CompareExchange(ref _fault, cause, null) is not null)
+        {
+            return;
+        }
+
+        // Fault the pending requests before cancelling I/O, so each observes the
+        // real cause rather than a bare cancellation.
         foreach (var id in _pending.Keys)
         {
             if (_pending.TryRemove(id, out var completion))
             {
-                completion.TrySetException(e);
+                completion.TrySetException(cause);
             }
         }
+
+        _closed.Cancel();
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _closed.CancelAsync().ConfigureAwait(false);
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        Fault(new ObjectDisposedException(nameof(PipeTransport)));
         await _pipe.DisposeAsync().ConfigureAwait(false);
         try
         {
             await _readLoop.ConfigureAwait(false);
         }
-        catch (Exception)
+        catch
         {
-            // The loop's failure already faulted every pending request
+            // The loop's exit already faulted every pending request
         }
 
-        _closed.Dispose();
-        _writeLock.Dispose();
+        // _closed and _writeLock are left undisposed on purpose: a request parked
+        // on either would see ObjectDisposedException instead of the clean close.
+        // Neither holds an unmanaged handle, so the GC reclaims them.
     }
 }

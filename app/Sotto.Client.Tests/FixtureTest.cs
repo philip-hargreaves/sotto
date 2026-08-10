@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace Sotto.Client.Tests;
 
-/// <summary>The golden fixtures both languages must agree on.</summary>
+/// <summary>The fixtures both languages must agree on.</summary>
 public class FixtureTest
 {
     private static JsonDocument LoadFixture(string name)

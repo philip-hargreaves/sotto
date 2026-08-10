@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 
 namespace sotto::ipc {
@@ -18,6 +20,9 @@ inline constexpr int kInvalidParams = -32602;
 inline constexpr int kInternalError = -32603;
 
 inline constexpr int kProtocolVersion = 1;
+
+// A string id echoes into every reply, so bounding it keeps replies encodable
+inline constexpr std::size_t kMaxIdBytes = 128;
 
 using Id = std::variant<std::int64_t, std::string>;
 
@@ -49,8 +54,10 @@ inline json IdToJson(const Id& id) {
     return std::get<std::string>(id);
 }
 
-// Checks mirror envelope.schema.json, which is the source of truth
-inline std::variant<Request, Error> ParseRequest(const json& j) {
+// Checks mirror envelope.schema.json, which is the source of truth. Takes the
+// message by value so params can be moved out: nlohmann's copy recurses one
+// stack frame per nesting level, so a deeply nested params would overflow.
+inline std::variant<Request, Error> ParseRequest(json j) {
     const auto invalid = [](std::string why) {
         return Error{kInvalidRequest, "Invalid Request", json(std::move(why))};
     };
@@ -69,14 +76,21 @@ inline std::variant<Request, Error> ParseRequest(const json& j) {
     Request req;
     const auto& id = j["id"];
     if (id.is_number_integer()) {
+        if (id.is_number_unsigned() &&
+            id.get<std::uint64_t>() >
+                static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+            return invalid("id out of range");
+        }
         req.id = id.get<std::int64_t>();
     } else if (id.is_string()) {
-        req.id = id.get<std::string>();
+        const auto& text = id.get_ref<const std::string&>();
+        if (text.size() > kMaxIdBytes) return invalid("id string too long");
+        req.id = text;
     } else {
         return invalid("id must be a string or integer");
     }
     req.method = j["method"].get<std::string>();
-    req.params = j.contains("params") ? j["params"] : json::object();
+    req.params = j.contains("params") ? std::move(j["params"]) : json::object();
     return req;
 }
 
@@ -102,13 +116,13 @@ inline std::optional<PeerInfo> PeerInfoFromJson(const json& j) {
     if (!j.is_object() || j.size() != 3) return std::nullopt;
     if (!j.contains("name") || !j["name"].is_string()) return std::nullopt;
     if (!j.contains("version") || !j["version"].is_string()) return std::nullopt;
-    if (!j.contains("protocolVersion") || !j["protocolVersion"].is_number_integer()) {
+    // Compare on the json value: get<int>() would truncate an out-of-range number
+    // into a match. There is only one supported version, so equality is the check.
+    if (!j.contains("protocolVersion") || j["protocolVersion"] != kProtocolVersion) {
         return std::nullopt;
     }
-    PeerInfo p{j["name"].get<std::string>(), j["version"].get<std::string>(),
-               j["protocolVersion"].get<int>()};
-    if (p.protocol_version != kProtocolVersion) return std::nullopt;
-    return p;
+    return PeerInfo{j["name"].get<std::string>(), j["version"].get<std::string>(),
+                    kProtocolVersion};
 }
 
 }  // namespace sotto::ipc

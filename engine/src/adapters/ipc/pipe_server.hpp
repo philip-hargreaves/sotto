@@ -10,8 +10,8 @@
 
 namespace sotto::ipc {
 
-// One hardened duplex pipe, one client at a time. Construction claims the pipe
-// name; a name already taken is treated as an attack and throws, never retries.
+// One duplex pipe, one client at a time. Construction claims the pipe
+// name so a name already taken is treated as an attack and throws, never retries.
 class PipeServer {
    public:
     using MethodHandler = std::function<std::variant<json, Error>(const json& params)>;
@@ -28,7 +28,8 @@ class PipeServer {
 
    private:
     void HandleFrame(const std::string& payload);
-    void WriteFrame(const std::string& payload);
+    void Reply(const Id& id, const json& envelope);
+    bool WriteFrame(const std::string& payload);
 
     PipeSecurity security_;
     void* pipe_ = nullptr;  // HANDLE

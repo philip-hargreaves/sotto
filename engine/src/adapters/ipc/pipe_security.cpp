@@ -52,7 +52,7 @@ PipeSecurity::PipeSecurity() : impl_(std::make_unique<Impl>()) {
     CloseHandle(token);
 
     // The logon SID scopes access to this login session; another user on the
-    // same machine, or the same user in another session, gets nothing
+    // same machine, or the same user in another session get nothing
     const auto* groups = reinterpret_cast<TOKEN_GROUPS*>(impl_->groups.data());
     PSID logon_sid = nullptr;
     for (DWORD i = 0; i < groups->GroupCount; ++i) {
@@ -69,8 +69,7 @@ PipeSecurity::PipeSecurity() : impl_(std::make_unique<Impl>()) {
         ThrowLastError("AllocateAndInitializeSid");
     }
 
-    // Everything a duplex client needs, and never FILE_APPEND_DATA: that bit
-    // doubles as FILE_CREATE_PIPE_INSTANCE, the right to spawn rogue instances
+    // Client rights minus FILE_APPEND_DATA, which doubles as create-pipe-instance
     const DWORD client_rights = FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES |
                                 FILE_WRITE_ATTRIBUTES | FILE_READ_EA | FILE_WRITE_EA |
                                 READ_CONTROL | SYNCHRONIZE;

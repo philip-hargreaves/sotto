@@ -45,8 +45,7 @@ TEST(Messages, EchoRoundTripsNonAsciiFixture) {
 }
 
 TEST(Messages, ErrorResponseMatchesFixture) {
-    const json built = MakeError(
-        std::int64_t{7}, Error{kMethodNotFound, "Method not found", json("engine/no-such-method")});
+    const json built = MakeError(std::int64_t{7}, Error{kMethodNotFound, "Method not found"});
     EXPECT_EQ(built, LoadFixture("error-method-not-found.json"));
 }
 
@@ -95,6 +94,41 @@ TEST(Messages, StringAndIntegerIdsBothParse) {
     ASSERT_TRUE(std::holds_alternative<Request>(with_int));
     auto with_str = ParseRequest(json{{"jsonrpc", "2.0"}, {"id", "abc"}, {"method", "m"}});
     ASSERT_TRUE(std::holds_alternative<Request>(with_str));
+}
+
+TEST(Messages, RejectsOverlongStringId) {
+    const std::string long_id(kMaxIdBytes + 1, 'x');
+    auto parsed = ParseRequest(json{{"jsonrpc", "2.0"}, {"id", long_id}, {"method", "m"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(parsed));
+}
+
+TEST(Messages, RejectsIdBeyondInt64) {
+    const std::uint64_t too_big =
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 1;
+    auto parsed = ParseRequest(json{{"jsonrpc", "2.0"}, {"id", too_big}, {"method", "m"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(parsed));
+}
+
+TEST(Messages, RejectsOutOfRangeProtocolVersion) {
+    const std::uint64_t huge = static_cast<std::uint64_t>(1) << 33;  // truncates to 0, not 1
+    EXPECT_EQ(PeerInfoFromJson(json{{"name", "x"}, {"version", "1"}, {"protocolVersion", huge}}),
+              std::nullopt);
+}
+
+TEST(Messages, DeeplyNestedParamsDoesNotOverflow) {
+    // nlohmann parse and destruction are iterative; only a copy recurses, so
+    // ParseRequest must move params out. Depth far past a 1 MB stack's frames.
+    constexpr int kDepth = 200000;
+    std::string nested;
+    nested.reserve(kDepth * 6 + 32);
+    for (int i = 0; i < kDepth; ++i) nested += "{\"a\":";
+    nested += "1";
+    for (int i = 0; i < kDepth; ++i) nested += "}";
+    json message{{"jsonrpc", "2.0"}, {"id", 1}, {"method", "m"}, {"params", json::object()}};
+    message["params"]["deep"] = json::parse(nested);
+
+    auto parsed = ParseRequest(std::move(message));
+    EXPECT_TRUE(std::holds_alternative<Request>(parsed));
 }
 
 }  // namespace
