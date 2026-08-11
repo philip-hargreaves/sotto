@@ -42,6 +42,8 @@ jobs:
         run: dotnet build sotto.slnx
       - name: Test
         run: dotnet test app/Sotto.Client.Tests --no-build --blame-hang-timeout 120s
+      - name: Test app view models
+        run: dotnet test app/Sotto.App.Tests --no-build --blame-hang-timeout 120s
 
   contract:
     runs-on: windows-latest

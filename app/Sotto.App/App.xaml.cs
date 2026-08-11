@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Sotto.App.Core;
+using Sotto.App.Core.ViewModels;
 using Sotto.App.Services;
 using Sotto.Client;
 
@@ -27,6 +28,12 @@ public partial class App : Application
         // Supervision replaces the fake with the pid-verified transport
         services.AddSingleton<IEngineClient, FakeEngineClient>();
         services.AddSingleton<IUiDispatcher, UiDispatcher>();
+
+        services.AddSingleton<TranscriptViewModel>();
+        services.AddSingleton<NoteViewModel>();
+        services.AddSingleton<StatusBarViewModel>();
+        services.AddSingleton<ConsultationViewModel>();
+        services.AddSingleton<SessionControlsViewModel>();
 
         return services.BuildServiceProvider();
     }

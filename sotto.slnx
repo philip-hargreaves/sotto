@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/app/">
     <Project Path="app/Sotto.App.Core/Sotto.App.Core.csproj" />
+    <Project Path="app/Sotto.App.Tests/Sotto.App.Tests.csproj" />
     <Project Path="app/Sotto.App/Sotto.App.csproj">
       <Platform Project="x64" />
       <Deploy Solution="Debug|*" />
