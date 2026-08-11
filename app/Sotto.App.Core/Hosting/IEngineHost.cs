@@ -12,6 +12,8 @@ public interface IEngineHost
 
     EngineFault? Fault { get; }
 
+    int? EnginePid { get; }
+
     void Start();
 
     void Shutdown();

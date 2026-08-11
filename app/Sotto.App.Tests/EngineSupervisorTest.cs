@@ -109,6 +109,7 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Running, h.Host.Status);
         Assert.Single(h.Launcher.Launched);
         Assert.Equal(new[] { EngineStatus.Running }, h.Statuses);
+        Assert.Equal(1234, h.Host.EnginePid);
     }
 
     [Fact]
@@ -187,6 +188,7 @@ public class EngineSupervisorTest
         Assert.True(h.Current.Killed);
         Assert.Single(h.Launcher.Launched);
         Assert.Null(h.Host.Fault);
+        Assert.Null(h.Host.EnginePid);
     }
 
     [Fact]

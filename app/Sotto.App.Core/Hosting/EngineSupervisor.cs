@@ -19,6 +19,17 @@ public sealed class EngineSupervisor(
 
     public EngineFault? Fault { get; private set; }
 
+    public int? EnginePid
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _process?.Id;
+            }
+        }
+    }
+
     public void Start()
     {
         var changes = new List<EngineStatus>();
