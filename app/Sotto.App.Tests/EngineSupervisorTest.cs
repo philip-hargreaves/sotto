@@ -69,6 +69,13 @@ public class EngineSupervisorTest
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
+    private sealed class FakeCrashLog : ICrashLog
+    {
+        public List<CrashReport> Reports { get; } = [];
+
+        public void Record(CrashReport report) => Reports.Add(report);
+    }
+
     private sealed class Harness
     {
         public FakeLauncher Launcher { get; } = new();
@@ -77,13 +84,15 @@ public class EngineSupervisorTest
 
         public TestClock Clock { get; } = new();
 
+        public FakeCrashLog Log { get; } = new();
+
         public List<EngineStatus> Statuses { get; } = [];
 
         public EngineSupervisor Host { get; }
 
         public Harness()
         {
-            Host = new EngineSupervisor(Launcher, Session, Clock);
+            Host = new EngineSupervisor(Launcher, Session, Clock, Log);
             Host.StatusChanged += Statuses.Add;
         }
 
@@ -146,6 +155,8 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Faulted, h.Host.Status);
         Assert.Equal(EngineFaultKind.CrashLoop, h.Host.Fault!.Kind);
         Assert.Equal(RestartPolicy.StormLimit, h.Launcher.Launched.Count);
+        Assert.Equal(RestartPolicy.StormLimit, h.Log.Reports.Count);
+        Assert.Equal(RecoveryAction.GiveUp, h.Log.Reports[^1].Action);
     }
 
     [Fact]
@@ -206,6 +217,34 @@ public class EngineSupervisorTest
 
         Assert.Equal(EngineStatus.Faulted, h.Host.Status);
         Assert.Equal(new EngineFault(EngineFaultKind.LaunchFailed), h.Host.Fault);
+    }
+
+    [Fact]
+    public void CrashIsLoggedWithUptimeAndCount()
+    {
+        var h = new Harness();
+        h.Host.Start();
+        h.Clock.Now += TimeSpan.FromSeconds(90);
+
+        h.Current.Crash(-7);
+
+        var report = Assert.Single(h.Log.Reports);
+        Assert.Equal(-7, report.ExitCode);
+        Assert.Equal(TimeSpan.FromSeconds(90), report.Uptime);
+        Assert.Equal(1, report.CrashCount);
+        Assert.Equal(RecoveryAction.Restart, report.Action);
+        Assert.Equal(h.Clock.Now, report.Timestamp);
+    }
+
+    [Fact]
+    public void ShutdownLogsNothing()
+    {
+        var h = new Harness();
+        h.Host.Start();
+
+        h.Host.Shutdown();
+
+        Assert.Empty(h.Log.Reports);
     }
 
     [Fact]

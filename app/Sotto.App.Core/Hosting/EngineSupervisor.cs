@@ -5,12 +5,13 @@ namespace Sotto.App.Core.Hosting;
 /// Status events are raised outside the lock, after the state has settled.
 /// </summary>
 public sealed class EngineSupervisor(
-    IEngineLauncher launcher, ISessionState session, TimeProvider clock)
+    IEngineLauncher launcher, ISessionState session, TimeProvider clock, ICrashLog crashLog)
     : IEngineHost, IDisposable
 {
     private readonly object _gate = new();
     private readonly List<DateTimeOffset> _crashes = [];
     private IEngineProcess? _process;
+    private DateTimeOffset _launchedAt;
 
     public event Action<EngineStatus>? StatusChanged;
 
@@ -75,6 +76,7 @@ public sealed class EngineSupervisor(
         }
 
         _process = process;
+        _launchedAt = clock.GetUtcNow();
         process.Exited += () => OnExited(process);
         SetStatusLocked(EngineStatus.Running, changes);
 
@@ -112,7 +114,10 @@ public sealed class EngineSupervisor(
         _crashes.RemoveAll(crash => now - crash > RestartPolicy.StormWindow);
         _crashes.Add(now);
 
-        switch (RestartPolicy.Decide(session.ConsultationActive, _crashes, now))
+        var action = RestartPolicy.Decide(session.ConsultationActive, _crashes, now);
+        crashLog.Record(new CrashReport(now, exitCode, now - _launchedAt, _crashes.Count, action));
+
+        switch (action)
         {
             case RecoveryAction.Restart:
                 SetStatusLocked(EngineStatus.Restarting, changes);
