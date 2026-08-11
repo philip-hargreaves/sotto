@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Only the semantic colours the product owns live here; chrome uses the
+        built-in Fluent theme resources. Consumers bind with ThemeResource so a
+        theme switch re-evaluates. The dark palette is keyed "Default": WinUI
+        looks up the dark theme under that name, not "Dark".
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="DoctorBrush" Color="#4CA0E0" />
+            <SolidColorBrush x:Key="PatientBrush" Color="#A98BEA" />
+            <SolidColorBrush x:Key="RecordingBrush" Color="#F0584C" />
+            <SolidColorBrush x:Key="OnDeviceBrush" Color="#3FB56B" />
+            <SolidColorBrush x:Key="CautionBrush" Color="#E0913A" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="DoctorBrush" Color="#0067C0" />
+            <SolidColorBrush x:Key="PatientBrush" Color="#7A4DDB" />
+            <SolidColorBrush x:Key="RecordingBrush" Color="#E23B2E" />
+            <SolidColorBrush x:Key="OnDeviceBrush" Color="#0F7B3F" />
+            <SolidColorBrush x:Key="CautionBrush" Color="#B54708" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="DoctorBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="PatientBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="RecordingBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="OnDeviceBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="CautionBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

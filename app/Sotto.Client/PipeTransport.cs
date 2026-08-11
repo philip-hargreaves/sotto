@@ -11,7 +11,7 @@ namespace Sotto.Client;
 /// failure is terminal: pending and future requests observe it, and the
 /// connection does not recover.
 /// </summary>
-public sealed class PipeTransport : IAsyncDisposable
+public sealed class PipeTransport : IEngineClient
 {
     private readonly NamedPipeClientStream _pipe;
     private readonly ConcurrentDictionary<long, TaskCompletionSource<JsonElement>> _pending = new();
