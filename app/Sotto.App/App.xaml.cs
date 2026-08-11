@@ -30,16 +30,23 @@ public partial class App : Application
         services.AddSingleton<IEngineClient, FakeEngineClient>();
         services.AddSingleton<IUiDispatcher, UiDispatcher>();
 
+        services.AddSingleton<NavigationService>();
+        services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
+
         services.AddSingleton<TranscriptViewModel>();
         services.AddSingleton<NoteViewModel>();
         services.AddSingleton<StatusBarViewModel>();
         services.AddSingleton<ConsultationViewModel>();
         services.AddSingleton<SessionControlsViewModel>();
+        services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<SettingsViewModel>();
 
         services.AddTransient<SessionControlsView>();
         services.AddTransient<TranscriptPaneView>();
         services.AddTransient<NotePaneView>();
         services.AddTransient<StatusBarView>();
+        services.AddTransient<ConsultationView>();
+        services.AddTransient<SettingsView>();
         services.AddTransient<MainWindow>();
 
         return services.BuildServiceProvider();
