@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -41,9 +41,9 @@ public sealed class JobObject : IDisposable
 
     private HANDLE Handle => new(_handle.DangerousGetHandle());
 
-    public void Assign(Process process)
+    public void Assign(SafeHandle process)
     {
-        if (!PInvoke.AssignProcessToJobObject(Handle, new HANDLE(process.SafeHandle.DangerousGetHandle())))
+        if (!PInvoke.AssignProcessToJobObject(Handle, new HANDLE(process.DangerousGetHandle())))
         {
             throw new Win32Exception();
         }

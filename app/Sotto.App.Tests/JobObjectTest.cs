@@ -20,7 +20,7 @@ public class JobObjectTest
         try
         {
             var job = new JobObject();
-            job.Assign(waiter);
+            job.Assign(waiter.SafeHandle);
             Assert.False(waiter.HasExited);
 
             job.Dispose();

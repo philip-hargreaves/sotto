@@ -1,5 +1,10 @@
-CreateJobObject
-SetInformationJobObject
 AssignProcessToJobObject
-JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+CloseHandle
+CreateJobObject
+CreateProcess
+GetExitCodeProcess
 JOB_OBJECT_LIMIT
+JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+ResumeThread
+SetInformationJobObject
+TerminateProcess
