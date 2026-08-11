@@ -35,6 +35,8 @@ models/
 *.xml.data
 !**/fixtures/**
 
+internal/
+
 # OS
 Thumbs.db
 desktop.ini
