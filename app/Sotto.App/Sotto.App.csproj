@@ -17,6 +17,16 @@
     <ProjectReference Include="..\Sotto.App.Core\Sotto.App.Core.csproj" />
   </ItemGroup>
 
+  <!-- Ship the engine beside the app when it has been built; F5 works without it -->
+  <PropertyGroup>
+    <EnginePreset Condition="'$(Configuration)' == 'Debug'">dev</EnginePreset>
+    <EnginePreset Condition="'$(Configuration)' != 'Debug'">release</EnginePreset>
+    <EngineBinary>..\..\build\$(EnginePreset)\engine\sotto_engine.exe</EngineBinary>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(EngineBinary)')">
+    <Content Include="$(EngineBinary)" Link="sotto_engine.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />

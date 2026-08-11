@@ -24,7 +24,8 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "")
             var startup = new STARTUPINFOW { cb = (uint)sizeof(STARTUPINFOW) };
             if (!PInvoke.CreateProcess(
                     exePath, ref commandLine, null, null, false,
-                    PROCESS_CREATION_FLAGS.CREATE_SUSPENDED, null,
+                    PROCESS_CREATION_FLAGS.CREATE_SUSPENDED | PROCESS_CREATION_FLAGS.CREATE_NO_WINDOW,
+                    null,
                     Path.GetDirectoryName(exePath), in startup, out var info))
             {
                 throw new Win32Exception();
