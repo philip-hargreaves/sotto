@@ -25,6 +25,26 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task StatePropertyRaisesChangeNotification()
+    {
+        var (session, _, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+        var raised = false;
+        controls.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SessionControlsViewModel.State))
+            {
+                raised = true;
+            }
+        };
+
+        await session.StartRecordingAsync();
+
+        Assert.True(raised);
+        Assert.Equal(SessionState.Recording, controls.State);
+    }
+
+    [Fact]
     public async Task CommandsDriveTheMachine()
     {
         var (session, engine, _) = TestSession.Create();

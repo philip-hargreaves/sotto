@@ -11,6 +11,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public partial string EngineStateLabel { get; set; } = "engine: not connected";
 
     [ObservableProperty]
+    public partial string LatestActivity { get; private set; } = "";
+
+    [ObservableProperty]
     public partial string PerformanceLine { get; set; } = "";
 
     public ObservableCollection<string> LogEntries { get; } = [];
@@ -22,5 +25,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         {
             LogEntries.RemoveAt(0);
         }
+
+        LatestActivity = line;
     }
 }

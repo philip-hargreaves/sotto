@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Sotto.App.Core;
 using Sotto.App.Core.ViewModels;
 using Sotto.App.Services;
+using Sotto.App.Views;
 using Sotto.Client;
 
 namespace Sotto.App;
@@ -35,12 +36,18 @@ public partial class App : Application
         services.AddSingleton<ConsultationViewModel>();
         services.AddSingleton<SessionControlsViewModel>();
 
+        services.AddTransient<SessionControlsView>();
+        services.AddTransient<TranscriptPaneView>();
+        services.AddTransient<NotePaneView>();
+        services.AddTransient<StatusBarView>();
+        services.AddTransient<MainWindow>();
+
         return services.BuildServiceProvider();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
+        _window = Services.GetRequiredService<MainWindow>();
         _window.Activate();
     }
 }

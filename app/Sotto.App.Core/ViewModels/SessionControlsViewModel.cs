@@ -14,6 +14,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(ConsultationViewModel.State))
             {
+                OnPropertyChanged(nameof(State));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
