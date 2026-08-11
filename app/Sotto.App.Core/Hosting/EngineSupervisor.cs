@@ -5,7 +5,8 @@ namespace Sotto.App.Core.Hosting;
 /// Status events are raised outside the lock, after the state has settled.
 /// </summary>
 public sealed class EngineSupervisor(
-    IEngineLauncher launcher, ISessionState session, TimeProvider clock, ICrashLog crashLog)
+    IEngineLauncher launcher, ISessionState session, TimeProvider clock, ICrashLog crashLog,
+    Func<string?>? methodInFlight = null)
     : IEngineHost, IDisposable
 {
     private readonly object _gate = new();
@@ -126,7 +127,8 @@ public sealed class EngineSupervisor(
         _crashes.Add(now);
 
         var action = RestartPolicy.Decide(session.ConsultationActive, _crashes, now);
-        crashLog.Record(new CrashReport(now, exitCode, now - _launchedAt, _crashes.Count, action));
+        crashLog.Record(new CrashReport(
+            now, exitCode, now - _launchedAt, _crashes.Count, action, methodInFlight?.Invoke()));
 
         switch (action)
         {

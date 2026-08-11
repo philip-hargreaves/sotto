@@ -24,12 +24,12 @@ public partial class App : Application
 
     public IServiceProvider Services { get; }
 
+    private static readonly TimeSpan EngineConnectTimeout = TimeSpan.FromSeconds(10);
+
     private static ServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
 
-        // The live-transport PR swaps the fake for the pid-verified client
-        services.AddSingleton<IEngineClient, FakeEngineClient>();
         services.AddSingleton<IUiDispatcher, UiDispatcher>();
 
         services.AddSingleton(TimeProvider.System);
@@ -37,8 +37,18 @@ public partial class App : Application
             Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe")));
         services.AddSingleton<ICrashLog>(_ => new FileCrashLog(
             Path.Combine(ApplicationData.GetDefault().LocalPath, "crashes.jsonl")));
-        services.AddSingleton<ISessionState>(sp => sp.GetRequiredService<ConsultationViewModel>());
-        services.AddSingleton<IEngineHost, EngineSupervisor>();
+        services.AddSingleton<ISessionState>(sp => new DeferredSessionState(sp));
+        services.AddSingleton<IEngineHost>(sp => new EngineSupervisor(
+            sp.GetRequiredService<IEngineLauncher>(),
+            sp.GetRequiredService<ISessionState>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ICrashLog>(),
+            () => sp.GetRequiredService<EngineConnection>().MethodInFlight));
+        services.AddSingleton(sp => new EngineConnection(
+            sp.GetRequiredService<IEngineHost>(),
+            static async (pid, ct) => await PipeTransport.ConnectAsync(
+                EngineInfo.PipeName, EngineConnectTimeout, pid, ct).ConfigureAwait(false)));
+        services.AddSingleton<IEngineClient>(sp => sp.GetRequiredService<EngineConnection>());
 
         services.AddSingleton<NavigationService>();
         services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
@@ -60,6 +70,14 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
 
         return services.BuildServiceProvider();
+    }
+
+    // The client, the host and the session state form a cycle, so the view
+    // model behind ISessionState is resolved on first read, not at build
+    private sealed class DeferredSessionState(IServiceProvider services) : ISessionState
+    {
+        public bool ConsultationActive =>
+            services.GetRequiredService<ConsultationViewModel>().ConsultationActive;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
