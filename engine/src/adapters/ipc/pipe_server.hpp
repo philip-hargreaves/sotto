@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_security.hpp"
@@ -23,17 +24,22 @@ class PipeServer {
 
     void RegisterMethod(const std::string& method, MethodHandler handler);
 
+    // Handlers may queue these; each is written to the client right after the reply
+    void QueueNotification(const std::string& method, json params);
+
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
     void ServeOneClient();
 
    private:
     void HandleFrame(const std::string& payload);
     void Reply(const Id& id, const json& envelope);
+    void FlushNotifications();
     bool WriteFrame(const std::string& payload);
 
     PipeSecurity security_;
     void* pipe_ = nullptr;  // HANDLE
     std::map<std::string, MethodHandler> handlers_;
+    std::vector<json> notifications_;
 };
 
 }  // namespace sotto::ipc

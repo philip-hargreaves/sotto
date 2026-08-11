@@ -64,6 +64,10 @@ void PipeServer::RegisterMethod(const std::string& method, MethodHandler handler
     handlers_[method] = std::move(handler);
 }
 
+void PipeServer::QueueNotification(const std::string& method, json params) {
+    notifications_.push_back(MakeNotification(method, std::move(params)));
+}
+
 void PipeServer::ServeOneClient() {
     HANDLE pipe = static_cast<HANDLE>(pipe_);
 
@@ -133,6 +137,22 @@ void PipeServer::HandleFrame(const std::string& payload) {
         std::fprintf(stderr, "sotto-engine: handler failed: %s\n", e.what());
         Reply(request.id, MakeError(request.id, Error{kInternalError, "Internal error"}));
     }
+    FlushNotifications();
+}
+
+void PipeServer::FlushNotifications() {
+    for (const auto& notification : notifications_) {
+        const std::string payload = Serialize(notification);
+        if (payload.size() > kMaxFrameBytes) {
+            std::fputs("sotto-engine: notification exceeded frame cap, dropped\n", stderr);
+            continue;
+        }
+        if (!WriteFrame(payload)) {
+            std::fputs("sotto-engine: notification write failed, client gone\n", stderr);
+            break;
+        }
+    }
+    notifications_.clear();
 }
 
 void PipeServer::Reply(const Id& id, const json& envelope) {
