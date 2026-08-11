@@ -21,6 +21,19 @@ dotnet test sotto.slnx
 
 Builds the C# solution and runs its tests.
 
+## Tests
+
+Unit tests cover the view models and the supervision policy with fakes at the ports.
+Integration tests exercise the real Win32 adapters (job objects, process launch, kill and
+restart) by spawning short-lived stand-in processes, and carry the `Integration` trait:
+
+```powershell
+dotnet test sotto.slnx --filter "Category!=Integration"
+```
+
+runs the unit tests alone. Both kinds run on every build. There is no UI automation; the
+views hold no logic to test.
+
 ## Notes
 
 C++ follows the Google C++ Style Guide, with a 4-space indent and a 100 column limit set in

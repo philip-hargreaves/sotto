@@ -2,6 +2,7 @@ using Sotto.App.Core.Hosting;
 
 namespace Sotto.App.Tests;
 
+[Trait("Category", "Integration")]
 public class ProcessEngineLauncherTest
 {
     private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(5);

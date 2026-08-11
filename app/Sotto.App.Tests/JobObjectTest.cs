@@ -3,6 +3,7 @@ using Sotto.App.Core.Hosting;
 
 namespace Sotto.App.Tests;
 
+[Trait("Category", "Integration")]
 public class JobObjectTest
 {
     // A process that stays alive without needing a console or stdin.
