@@ -35,7 +35,9 @@ public class FixtureTest
         var result = LoadFixture("hello-response.json").RootElement.GetProperty("result");
         var peer = result.Deserialize<PeerInfo>(Protocol.JsonOptions);
 
-        Assert.Equal(new PeerInfo("sotto", "0.1.0", 1), peer);
+        // Against the constants, so drift from the shared fixture fails here
+        Assert.Equal(
+            new PeerInfo(EngineInfo.Name, EngineInfo.Version, Protocol.ProtocolVersion), peer);
     }
 
     [Fact]

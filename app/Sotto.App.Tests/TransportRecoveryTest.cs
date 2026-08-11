@@ -10,6 +10,7 @@ namespace Sotto.App.Tests;
 /// connection together. A kill mid-idle must heal without a new client.
 /// </summary>
 [Trait("Category", "Integration")]
+[Trait("Requires", "Engine")]
 public class TransportRecoveryTest
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
@@ -19,22 +20,36 @@ public class TransportRecoveryTest
         public bool ConsultationActive { get; set; }
     }
 
+    // An explicit override, else the most recently built binary under any
+    // preset, so a fresh build is never shadowed by a stale one.
     private static string FindEngine()
     {
+        const string exe = "sotto_engine.exe";
+        var overridePath = Environment.GetEnvironmentVariable("SOTTO_ENGINE_PATH");
+        if (!string.IsNullOrEmpty(overridePath))
+        {
+            return overridePath;
+        }
+
         for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))
         {
-            foreach (var preset in new[] { "dev", "release" })
+            var buildRoot = Path.Combine(dir, "build");
+            if (Directory.Exists(buildRoot))
             {
-                var candidate = Path.Combine(dir, "build", preset, "engine", "sotto_engine.exe");
-                if (File.Exists(candidate))
+                var newest = Directory
+                    .EnumerateFiles(buildRoot, exe, SearchOption.AllDirectories)
+                    .Select(path => new FileInfo(path))
+                    .OrderByDescending(info => info.LastWriteTimeUtc)
+                    .FirstOrDefault();
+                if (newest is not null)
                 {
-                    return candidate;
+                    return newest.FullName;
                 }
             }
         }
 
         throw new FileNotFoundException(
-            "sotto_engine.exe not found, build it with: cmake --workflow --preset dev");
+            $"{exe} not found, build it with: cmake --workflow --preset dev");
     }
 
     // Requests fail fast while the connection is (re)dialling, so poll

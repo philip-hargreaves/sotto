@@ -11,15 +11,17 @@ namespace Sotto.Contract.Tests;
 /// </summary>
 internal sealed class EngineProcess : IAsyncDisposable
 {
-    private const string PipeName = "LOCAL\\sotto-engine";
+    private const string DefaultPipeName = "LOCAL\\sotto-engine";
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
     private readonly Process _process;
+    private readonly string _pipeName;
     private readonly StringBuilder _stderr = new();
 
-    private EngineProcess(Process process)
+    private EngineProcess(Process process, string pipeName)
     {
         _process = process;
+        _pipeName = pipeName;
         // Drain stderr continuously: an undrained pipe fills and blocks the
         // engine's own logging, and the text is the only startup diagnostic.
         _process.ErrorDataReceived += (_, e) =>
@@ -35,14 +37,23 @@ internal sealed class EngineProcess : IAsyncDisposable
         _process.BeginErrorReadLine();
     }
 
-    public static EngineProcess Start()
+    // A private pipe name keeps a test off the fixed one, so it neither waits on
+    // the engine collection nor collides with an app running on this machine.
+    public static EngineProcess Start(string? pipeName = null)
     {
-        var process = Process.Start(new ProcessStartInfo(LocateEngine())
+        var startInfo = new ProcessStartInfo(LocateEngine())
         {
             UseShellExecute = false,
             RedirectStandardError = true,
-        }) ?? throw new InvalidOperationException("engine failed to start");
-        return new EngineProcess(process);
+        };
+        if (pipeName is not null)
+        {
+            startInfo.ArgumentList.Add(pipeName);
+        }
+
+        var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("engine failed to start");
+        return new EngineProcess(process, pipeName ?? DefaultPipeName);
     }
 
     public bool IsRunning => !_process.HasExited;
@@ -73,7 +84,7 @@ internal sealed class EngineProcess : IAsyncDisposable
                 $"engine exited (code {_process.ExitCode}) before a client could connect: {StandardError}");
         }
 
-        return PipeTransport.ConnectAsync(PipeName, ConnectTimeout, (uint)_process.Id);
+        return PipeTransport.ConnectAsync(_pipeName, ConnectTimeout, (uint)_process.Id);
     }
 
     // The engine is built by CMake, not copied beside these tests, so its path is

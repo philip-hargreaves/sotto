@@ -11,6 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
 
+# Applies to every target below; the tests exempt googletest around its fetch
+set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
+
 add_library(sotto_warnings INTERFACE)
 target_compile_options(sotto_warnings INTERFACE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /utf-8>)
