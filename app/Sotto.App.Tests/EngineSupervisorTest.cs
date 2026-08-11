@@ -88,11 +88,13 @@ public class EngineSupervisorTest
 
         public List<EngineStatus> Statuses { get; } = [];
 
+        public string? InFlight { get; set; }
+
         public EngineSupervisor Host { get; }
 
         public Harness()
         {
-            Host = new EngineSupervisor(Launcher, Session, Clock, Log);
+            Host = new EngineSupervisor(Launcher, Session, Clock, Log, () => InFlight);
             Host.StatusChanged += Statuses.Add;
         }
 
@@ -109,6 +111,7 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Running, h.Host.Status);
         Assert.Single(h.Launcher.Launched);
         Assert.Equal(new[] { EngineStatus.Running }, h.Statuses);
+        Assert.Equal(1234, h.Host.EnginePid);
     }
 
     [Fact]
@@ -187,6 +190,7 @@ public class EngineSupervisorTest
         Assert.True(h.Current.Killed);
         Assert.Single(h.Launcher.Launched);
         Assert.Null(h.Host.Fault);
+        Assert.Null(h.Host.EnginePid);
     }
 
     [Fact]
@@ -225,6 +229,7 @@ public class EngineSupervisorTest
         var h = new Harness();
         h.Host.Start();
         h.Clock.Now += TimeSpan.FromSeconds(90);
+        h.InFlight = "session/stop";
 
         h.Current.Crash(-7);
 
@@ -234,6 +239,7 @@ public class EngineSupervisorTest
         Assert.Equal(1, report.CrashCount);
         Assert.Equal(RecoveryAction.Restart, report.Action);
         Assert.Equal(h.Clock.Now, report.Timestamp);
+        Assert.Equal("session/stop", report.MethodInFlight);
     }
 
     [Fact]

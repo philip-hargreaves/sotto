@@ -10,18 +10,23 @@ Requires Visual Studio 2022 or 2026 with the Desktop development with C++ worklo
 3.25 or later, and the .NET 10 SDK.
 
 ```powershell
-cmake --workflow --preset dev
+cmake --preset dev
+cmake --build --preset dev
+dotnet build sotto.slnx
 ```
 
-Configures, builds and runs the engine tests. Use `--preset release` for an optimised build.
+Configures and builds the engine, then the shell. Use the `release` presets for an optimised
+engine build.
+
+## Tests
 
 ```powershell
+cmake --workflow --preset dev
 dotnet test sotto.slnx
 ```
 
-Builds the C# solution and runs its tests.
-
-## Tests
+The workflow runs configure, build and the engine tests in one step. `dotnet test` builds and
+runs the C# suites; the integration tests launch `sotto_engine.exe`, so build the engine first.
 
 Unit tests cover the view models and the supervision policy with fakes at the ports.
 Integration tests exercise the real Win32 adapters (job objects, process launch, kill and

@@ -9,8 +9,9 @@ set(BUILD_GMOCK OFF)
 set(INSTALL_GTEST OFF)
 # gtest defaults to the static CRT; this build is dynamic
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# googletest is not ours to keep warning-clean
+set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
 FetchContent_MakeAvailable(googletest)
-
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 add_executable(engine_tests

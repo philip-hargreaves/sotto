@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Sotto.Client;
 
-namespace Sotto.App.Core;
+namespace Sotto.App.Tests;
 
 /// <summary>
-/// Stand-in engine until supervision wires the real transport. After
-/// session/stop it pushes note/ready then patient/ready, like the real pipeline.
+/// Test-double engine. After session/stop it pushes note/ready then
+/// patient/ready, like the real pipeline.
 /// </summary>
 public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 {

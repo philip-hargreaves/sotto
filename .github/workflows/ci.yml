@@ -40,10 +40,11 @@ jobs:
         run: dotnet format sotto.slnx --verify-no-changes
       - name: Build
         run: dotnet build sotto.slnx
+      # This job has no engine binary; the contract job runs what needs one.
       - name: Test
         run: dotnet test app/Sotto.Client.Tests --no-build --blame-hang-timeout 120s
       - name: Test app view models
-        run: dotnet test app/Sotto.App.Tests --no-build --blame-hang-timeout 120s
+        run: dotnet test app/Sotto.App.Tests --no-build --filter "Requires!=Engine" --blame-hang-timeout 120s
 
   contract:
     runs-on: windows-latest
@@ -63,6 +64,7 @@ jobs:
             -DevCmdArguments '-arch=x64 -host_arch=x64'
           cmake --workflow --preset dev
           dotnet test app/Sotto.Contract.Tests --blame-hang-timeout 120s
+          dotnet test app/Sotto.App.Tests --filter "Requires=Engine" --blame-hang-timeout 120s
 
   build:
     runs-on: windows-latest

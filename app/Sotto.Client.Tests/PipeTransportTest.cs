@@ -131,12 +131,9 @@ public class PipeTransportTest
         });
         await using var transport = await PipeTransport.ConnectAsync(name, Timeout);
 
-        // A generous timeout: if this throws quickly it faulted; a timeout would
-        // take the full 5 s and surface OperationCanceledException instead.
-        var start = System.Diagnostics.Stopwatch.StartNew();
-        await Assert.ThrowsAnyAsync<Exception>(
+        // The missing result member, not the cancellation a timeout would raise
+        await Assert.ThrowsAsync<KeyNotFoundException>(
             () => transport.RequestAsync("engine/echo", null, Timeout));
-        Assert.True(start.Elapsed < TimeSpan.FromSeconds(2), $"took {start.ElapsedMilliseconds} ms");
     }
 
     [Fact]

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <stdexcept>
 #include <string>
 
 namespace sotto::ipc {
@@ -10,7 +11,10 @@ namespace {
 
 json LoadFixture(const std::string& name) {
     std::ifstream in(std::string(SOTTO_FIXTURE_DIR) + "/" + name);
-    EXPECT_TRUE(in.is_open()) << "missing fixture: " << name;
+    // Throwing here names the missing file; parsing a closed stream would not
+    if (!in.is_open()) {
+        throw std::runtime_error("missing fixture: " + name);
+    }
     return json::parse(in);
 }
 
