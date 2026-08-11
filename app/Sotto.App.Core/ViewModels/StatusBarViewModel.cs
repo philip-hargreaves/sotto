@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Sotto.App.Core.Hosting;
 
 namespace Sotto.App.Core.ViewModels;
 
@@ -17,6 +18,28 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public partial string PerformanceLine { get; set; } = "";
 
     public ObservableCollection<string> LogEntries { get; } = [];
+
+    public void SetEngineState(EngineStatus status, EngineFault? fault)
+    {
+        EngineStateLabel = status switch
+        {
+            EngineStatus.Running => "engine: running",
+            EngineStatus.Restarting => "engine: restarting",
+            EngineStatus.Faulted => fault?.Kind switch
+            {
+                EngineFaultKind.SessionInterrupted => "engine: crashed mid-consultation",
+                EngineFaultKind.LaunchFailed => "engine: unavailable (failed to start)",
+                _ => "engine: unavailable (crashing repeatedly)",
+            },
+            _ => "engine: stopped",
+        };
+
+        // Silent restarts stay out of the activity log; faults go in
+        if (status == EngineStatus.Faulted)
+        {
+            Append(EngineStateLabel);
+        }
+    }
 
     public void Append(string line)
     {

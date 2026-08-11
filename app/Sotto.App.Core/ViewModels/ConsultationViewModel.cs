@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Sotto.App.Core.Hosting;
 using Sotto.Client;
 
 namespace Sotto.App.Core.ViewModels;
@@ -7,7 +8,7 @@ namespace Sotto.App.Core.ViewModels;
 /// <summary>
 /// Owns the session lifecycle.
 /// </summary>
-public sealed partial class ConsultationViewModel : ObservableObject
+public sealed partial class ConsultationViewModel : ObservableObject, ISessionState
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
@@ -15,6 +16,8 @@ public sealed partial class ConsultationViewModel : ObservableObject
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
+
+    public bool ConsultationActive => State != SessionState.Idle;
 
     public TranscriptViewModel Transcript { get; }
 
