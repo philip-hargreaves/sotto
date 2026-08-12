@@ -11,11 +11,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_executable(sotto_engine
-    src/main.cpp
+# A library, not sources on the executable, so the tests can link the adapters.
+# Static rather than object: object files do not survive an intermediate target,
+# and nothing here self-registers, so the unreferenced-object rule cannot bite.
+add_library(sotto_ipc STATIC
+    src/adapters/ipc/handlers.cpp
     src/adapters/ipc/pipe_security.cpp
     src/adapters/ipc/pipe_server.cpp)
-target_link_libraries(sotto_engine PRIVATE
-    sotto_core sotto_warnings nlohmann_json::nlohmann_json advapi32)
+target_link_libraries(sotto_ipc
+    PUBLIC sotto_core nlohmann_json::nlohmann_json
+    PRIVATE sotto_warnings advapi32)
+
+add_executable(sotto_engine src/main.cpp)
+target_link_libraries(sotto_engine PRIVATE sotto_ipc sotto_warnings)
 
 add_subdirectory(tests)

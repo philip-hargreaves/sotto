@@ -22,7 +22,7 @@ target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
     SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
 target_link_libraries(engine_tests PRIVATE
-    sotto_core sotto_warnings nlohmann_json::nlohmann_json GTest::gtest_main)
+    sotto_ipc sotto_warnings GTest::gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(engine_tests)
