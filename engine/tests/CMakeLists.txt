@@ -17,7 +17,8 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 add_executable(engine_tests
     core/version_test.cpp
     adapters/framing_test.cpp
-    adapters/messages_test.cpp)
+    adapters/messages_test.cpp
+    adapters/pipe_security_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
     SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
