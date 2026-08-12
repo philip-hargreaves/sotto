@@ -8,7 +8,7 @@
       <Platform Solution="*|x64" Project="x64" />
     </Project>
     <Project Path="app/Sotto.App.Tests/Sotto.App.Tests.csproj">
-      <Build Solution="*|x64" Project="false" />
+      <Platform Solution="*|x64" Project="x64" />
     </Project>
     <Project Path="app/Sotto.App/Sotto.App.csproj">
       <Platform Project="x64" />
