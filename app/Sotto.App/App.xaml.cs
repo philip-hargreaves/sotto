@@ -94,5 +94,27 @@ public partial class App : Application
         _window.Closed += (_, _) => host.Shutdown();
         _window.Activate();
         host.Start();
+        _ = RequestMicrophoneAccessAsync();
+    }
+
+    // Registers the app on the Settings microphone page and shows the system
+    // prompt where Windows requires one. Enforcement is the engine's job: it
+    // reads the toggle this page writes before every capture.
+    private static async Task RequestMicrophoneAccessAsync()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))
+        {
+            return;
+        }
+
+        try
+        {
+            await Windows.Security.Authorization.AppCapabilityAccess.AppCapability
+                .Create("microphone").RequestAccessAsync();
+        }
+        catch (Exception)
+        {
+            // The toggle stays wherever it was; the engine still honours it
+        }
     }
 }

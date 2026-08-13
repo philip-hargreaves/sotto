@@ -4,11 +4,8 @@
 
 namespace sotto::audio {
 
-// Turns WASAPI packet metadata into the port's "frames lost". Device
-// positions stay in the device's NATIVE rate even under AUTOCONVERTPCM
-// (measured, not documented), so deltas are compared in a scaled unit and
-// losses reported in target frames. One instance per stream: positions
-// restart from a new origin on any client rebuild.
+// Turns WASAPI packet metadata into the port's "frames lost"
+// One instance per stream: positions restart from a new origin on any client rebuild.
 class CaptureTimeline {
    public:
     explicit CaptureTimeline(std::uint32_t native_rate, std::uint32_t target_rate = 16000)

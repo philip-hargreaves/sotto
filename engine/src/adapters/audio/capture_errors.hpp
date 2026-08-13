@@ -8,8 +8,6 @@
 
 namespace sotto::audio {
 
-// The audio-client codes this adapter distinguishes. Values are ABI-frozen;
-// the test asserts each against the SDK's own macros.
 namespace hresults {
 inline constexpr std::uint32_t kDeviceInvalidated = 0x88890004;
 inline constexpr std::uint32_t kServiceNotRunning = 0x88890010;
@@ -18,10 +16,7 @@ inline constexpr std::uint32_t kResourcesInvalidated = 0x88890026;
 inline constexpr std::uint32_t kAccessDenied = 0x80070005;
 }  // namespace hresults
 
-// Maps a failed call to the port's end reason. The four device-gone codes
-// are kDeviceLost (ENDPOINT_CREATE_FAILED shares DEVICE_INVALIDATED's cause
-// wording, so the documented surface cannot split them); denial names the
-// privacy settings; everything else carries the call and code verbatim.
+// Maps a failed call to the port's end reason
 inline SourceEnd EndForCaptureError(const char* call, std::uint32_t hr) {
     char code[16];
     std::snprintf(code, sizeof(code), "0x%08X", hr);

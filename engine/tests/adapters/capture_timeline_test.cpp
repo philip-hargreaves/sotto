@@ -8,7 +8,7 @@
 namespace sotto::audio {
 namespace {
 
-// The dev machine's shape: 48 kHz native, 16 kHz target, 10 ms packets
+// 48 kHz native, 16 kHz target, 10 ms packets
 constexpr std::uint32_t kNative = 48000;
 constexpr std::uint32_t kFrames = 160;              // Target frames per packet
 constexpr std::uint64_t kNativeStep = kFrames * 3;  // Native frames per packet
