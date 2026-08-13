@@ -15,6 +15,7 @@ FetchContent_MakeAvailable(googletest)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 add_executable(engine_tests
+    core/audio_ring_test.cpp
     core/version_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
