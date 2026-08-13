@@ -27,7 +27,19 @@
     ],
     "testPresets": [
         { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
-        { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } }
+        { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+        {
+            "name": "ci-dev",
+            "configurePreset": "dev",
+            "output": { "outputOnFailure": true },
+            "filter": { "exclude": { "label": "microphone" } }
+        },
+        {
+            "name": "ci-release",
+            "configurePreset": "release",
+            "output": { "outputOnFailure": true },
+            "filter": { "exclude": { "label": "microphone" } }
+        }
     ],
     "workflowPresets": [
         {
@@ -46,6 +58,24 @@
                 { "type": "configure", "name": "release" },
                 { "type": "build", "name": "release" },
                 { "type": "test", "name": "release" }
+            ]
+        },
+        {
+            "name": "ci-dev",
+            "displayName": "CI dev: no microphone-labelled tests",
+            "steps": [
+                { "type": "configure", "name": "dev" },
+                { "type": "build", "name": "dev" },
+                { "type": "test", "name": "ci-dev" }
+            ]
+        },
+        {
+            "name": "ci-release",
+            "displayName": "CI release: no microphone-labelled tests",
+            "steps": [
+                { "type": "configure", "name": "release" },
+                { "type": "build", "name": "release" },
+                { "type": "test", "name": "ci-release" }
             ]
         }
     ]
