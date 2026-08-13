@@ -2,18 +2,21 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+// clang-format off: appmodel.h needs windows.h first
+#include <windows.h>
+#include <appmodel.h>
+// clang-format on
 #include <audioclient.h>
 #include <mmdeviceapi.h>
-#include <windows.h>
 #include <wrl/client.h>
 
-#include <cstdio>
 #include <cstring>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "adapters/audio/capture_errors.hpp"
 #include "adapters/audio/capture_timeline.hpp"
 
 namespace sotto::audio {
@@ -26,23 +29,39 @@ constexpr DWORD kStreamFlags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
                                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                                AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
 
-std::string Hex(HRESULT hr) {
-    char text[16];
-    std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(hr));
-    return text;
-}
-
 SourceEnd Fail(const char* what, HRESULT hr) {
-    return {SourceEndReason::kFailed, std::string(what) + " failed, hr=" + Hex(hr)};
+    return EndForCaptureError(what, static_cast<std::uint32_t>(hr));
 }
 
-// Minimal split for this commit; the full taxonomy lands with capture_errors
-SourceEnd EndForStreamError(const char* what, HRESULT hr) {
-    if (hr == AUDCLNT_E_DEVICE_INVALIDATED || hr == AUDCLNT_E_SERVICE_NOT_RUNNING ||
-        hr == AUDCLNT_E_ENDPOINT_CREATE_FAILED || hr == AUDCLNT_E_RESOURCES_INVALIDATED) {
-        return {SourceEndReason::kDeviceLost, std::string(what) + " reported " + Hex(hr)};
+std::wstring ConsentStoreValue(const std::wstring& subkey) {
+    wchar_t value[16]{};
+    DWORD size = sizeof(value);
+    if (RegGetValueW(HKEY_CURRENT_USER, subkey.c_str(), L"Value", RRF_RT_REG_SZ, nullptr, value,
+                     &size) != ERROR_SUCCESS) {
+        return L"";
     }
-    return Fail(what, hr);
+    return value;
+}
+
+// Windows records the Settings microphone toggle but does not enforce it
+// against a full-trust process, and CheckAccess reports the unenforced
+// truth: Allowed even under an explicit deny (both measured). The store the
+// Settings page writes is therefore the only signal of what the user chose,
+// so a clinical recorder reads it and enforces it itself.
+bool ConsentDenied() {
+    const std::wstring store =
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore"
+        L"\\microphone";
+    if (ConsentStoreValue(store) == L"Deny") {
+        return true;
+    }
+
+    wchar_t family[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1]{};
+    UINT32 length = PACKAGE_FAMILY_NAME_MAX_LENGTH + 1;
+    if (GetCurrentPackageFamilyName(&length, family) == ERROR_SUCCESS) {
+        return ConsentStoreValue(store + L"\\" + family) == L"Deny";
+    }
+    return ConsentStoreValue(store + L"\\NonPackaged") == L"Deny";
 }
 
 struct ComApartment {
@@ -102,6 +121,10 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return Fail("CoInitializeEx", com.hr);
     }
 
+    if (ConsentDenied()) {
+        return {SourceEndReason::kFailed, "microphone access denied in Windows privacy settings"};
+    }
+
     ComPtr<IMMDeviceEnumerator> enumerator;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   IID_PPV_ARGS(&enumerator));
@@ -121,13 +144,13 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     ComPtr<IAudioClient> client;
     hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &client);
     if (FAILED(hr)) {
-        return EndForStreamError("Activate", hr);
+        return Fail("Activate", hr);
     }
 
     WAVEFORMATEX* mix = nullptr;
     hr = client->GetMixFormat(&mix);
     if (FAILED(hr)) {
-        return EndForStreamError("GetMixFormat", hr);
+        return Fail("GetMixFormat", hr);
     }
     const std::uint32_t native_rate = mix->nSamplesPerSec;
     CoTaskMemFree(mix);
@@ -142,7 +165,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
 
     hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, kStreamFlags, 0, 0, &wanted, nullptr);
     if (FAILED(hr)) {
-        return EndForStreamError("Initialize", hr);
+        return Fail("Initialize", hr);
     }
 
     OwnedHandle audio_event{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
@@ -151,25 +174,25 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     }
     hr = client->SetEventHandle(audio_event.handle);
     if (FAILED(hr)) {
-        return EndForStreamError("SetEventHandle", hr);
+        return Fail("SetEventHandle", hr);
     }
 
     ComPtr<IAudioCaptureClient> capture;
     hr = client->GetService(IID_PPV_ARGS(&capture));
     if (FAILED(hr)) {
-        return EndForStreamError("GetService", hr);
+        return Fail("GetService", hr);
     }
 
     UINT32 buffer_frames = 0;
     hr = client->GetBufferSize(&buffer_frames);
     if (FAILED(hr)) {
-        return EndForStreamError("GetBufferSize", hr);
+        return Fail("GetBufferSize", hr);
     }
     std::vector<float> packet(buffer_frames);
 
     hr = client->Start();
     if (FAILED(hr)) {
-        return EndForStreamError("Start", hr);
+        return Fail("Start", hr);
     }
     const StopOnExit stopper{client.Get()};
 
@@ -190,7 +213,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
             UINT32 next = 0;
             hr = capture->GetNextPacketSize(&next);
             if (FAILED(hr)) {
-                return EndForStreamError("GetNextPacketSize", hr);
+                return Fail("GetNextPacketSize", hr);
             }
             if (next == 0) {
                 break;
@@ -203,7 +226,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
             UINT64 qpc = 0;
             hr = capture->GetBuffer(&data, &frames, &flags, &position, &qpc);
             if (FAILED(hr)) {
-                return EndForStreamError("GetBuffer", hr);
+                return Fail("GetBuffer", hr);
             }
 
             const std::uint64_t lost = timeline.OnPacket(
@@ -220,7 +243,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
             // Release inside the buffer period; the sink runs after, on our copy
             hr = capture->ReleaseBuffer(frames);
             if (FAILED(hr)) {
-                return EndForStreamError("ReleaseBuffer", hr);
+                return Fail("ReleaseBuffer", hr);
             }
             sink.OnAudio(std::span<const float>(packet.data(), frames), lost);
         }
