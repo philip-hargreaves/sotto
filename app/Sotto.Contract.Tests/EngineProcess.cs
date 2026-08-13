@@ -39,16 +39,21 @@ internal sealed class EngineProcess : IAsyncDisposable
 
     // A private pipe name keeps a test off the fixed one, so it neither waits on
     // the engine collection nor collides with an app running on this machine.
-    public static EngineProcess Start(string? pipeName = null)
+    // A replay wav makes sessions run without a microphone.
+    public static EngineProcess Start(string? pipeName = null, string? replayWavPath = null)
     {
         var startInfo = new ProcessStartInfo(LocateEngine())
         {
             UseShellExecute = false,
             RedirectStandardError = true,
         };
-        if (pipeName is not null)
+        if (pipeName is not null || replayWavPath is not null)
         {
-            startInfo.ArgumentList.Add(pipeName);
+            startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
+        }
+        if (replayWavPath is not null)
+        {
+            startInfo.ArgumentList.Add(replayWavPath);
         }
 
         var process = Process.Start(startInfo)

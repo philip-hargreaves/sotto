@@ -81,14 +81,16 @@ public class TransportRecoveryTest
             await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
         try
         {
+            // Echo, not a session: this test is about the transport, and echo
+            // needs no microphone on a CI runner
             host.Start();
-            await RetryAsync(() => connection.RequestAsync("session/start", null, Timeout));
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
             var firstPid = host.EnginePid;
             Assert.NotNull(firstPid);
 
             Process.GetProcessById(firstPid.Value).Kill();
 
-            await RetryAsync(() => connection.RequestAsync("session/start", null, Timeout));
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
             Assert.NotEqual(firstPid, host.EnginePid);
             Assert.Single(File.ReadAllLines(crashPath));
 
