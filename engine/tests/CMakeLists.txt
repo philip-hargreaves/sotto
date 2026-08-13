@@ -18,6 +18,7 @@ add_executable(engine_tests
     core/audio_ring_test.cpp
     core/level_meter_test.cpp
     core/version_test.cpp
+    adapters/capture_timeline_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
