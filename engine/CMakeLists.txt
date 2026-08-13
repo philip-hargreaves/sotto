@@ -22,6 +22,12 @@ target_link_libraries(sotto_ipc
     PUBLIC sotto_core nlohmann_json::nlohmann_json
     PRIVATE sotto_warnings advapi32)
 
+add_library(sotto_audio STATIC
+    src/adapters/audio/wav_source.cpp)
+target_link_libraries(sotto_audio
+    PUBLIC sotto_core
+    PRIVATE sotto_warnings)
+
 add_executable(sotto_engine src/main.cpp)
 target_link_libraries(sotto_engine PRIVATE sotto_ipc sotto_warnings)
 

@@ -15,16 +15,19 @@ FetchContent_MakeAvailable(googletest)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 add_executable(engine_tests
+    core/audio_ring_test.cpp
+    core/level_meter_test.cpp
     core/version_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
-    adapters/pipe_security_test.cpp)
+    adapters/pipe_security_test.cpp
+    adapters/wav_source_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
     SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_warnings GTest::gtest_main)
+    sotto_ipc sotto_audio sotto_warnings GTest::gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(engine_tests)
