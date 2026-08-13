@@ -18,6 +18,8 @@ add_executable(engine_tests
     core/audio_ring_test.cpp
     core/level_meter_test.cpp
     core/version_test.cpp
+    adapters/capture_errors_test.cpp
+    adapters/capture_timeline_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
@@ -29,5 +31,13 @@ target_compile_definitions(engine_tests PRIVATE
 target_link_libraries(engine_tests PRIVATE
     sotto_ipc sotto_audio sotto_warnings GTest::gtest_main)
 
+# Real-microphone tests live in their own binary under the microphone label,
+# so the ci presets can exclude what a runner without audio cannot execute
+add_executable(capture_tests
+    adapters/wasapi_capture_test.cpp)
+target_link_libraries(capture_tests PRIVATE
+    sotto_audio sotto_warnings GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(engine_tests)
+gtest_discover_tests(capture_tests PROPERTIES LABELS microphone)

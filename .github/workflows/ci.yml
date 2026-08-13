@@ -62,7 +62,7 @@ jobs:
           Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
           Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
             -DevCmdArguments '-arch=x64 -host_arch=x64'
-          cmake --workflow --preset dev
+          cmake --workflow --preset ci-dev
           dotnet test app/Sotto.Contract.Tests --blame-hang-timeout 120s
           dotnet test app/Sotto.App.Tests --filter "Requires=Engine" --blame-hang-timeout 120s
 
@@ -70,8 +70,9 @@ jobs:
     runs-on: windows-latest
     strategy:
       fail-fast: false
+      # ci presets skip microphone-labelled tests; runners have no audio
       matrix:
-        preset: [dev, release]
+        preset: [ci-dev, ci-release]
     steps:
       - uses: actions/checkout@v4
 

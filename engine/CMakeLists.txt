@@ -23,10 +23,11 @@ target_link_libraries(sotto_ipc
     PRIVATE sotto_warnings advapi32)
 
 add_library(sotto_audio STATIC
+    src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(sotto_audio
     PUBLIC sotto_core
-    PRIVATE sotto_warnings)
+    PRIVATE sotto_warnings ole32 advapi32)
 
 add_executable(sotto_engine src/main.cpp)
 target_link_libraries(sotto_engine PRIVATE sotto_ipc sotto_warnings)

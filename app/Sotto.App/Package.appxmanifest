@@ -49,5 +49,7 @@
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <systemai:Capability Name="systemAIModels"/>
+    <!-- Lists the app on the Settings microphone page; the engine enforces the toggle -->
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>
