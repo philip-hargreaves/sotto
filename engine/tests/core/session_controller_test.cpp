@@ -98,8 +98,6 @@ struct RecordingEvents : ISessionEvents {
         last_detail = detail;
     }
 
-    // A stop that races the death is treated as the user's stop, so tests
-    // must see the interruption land before they stop the controller
     bool WaitForInterruption() {
         for (int i = 0; i < 400; ++i) {
             {
@@ -142,7 +140,6 @@ TEST(SessionController, StartFailsWhenTheSourceDiesFirst) {
 
     EXPECT_EQ(controller.LastEnd().reason, SourceEndReason::kFailed);
     EXPECT_EQ(controller.LastEnd().detail, "would not open");
-    // A failure to start is reported to the caller, never as an interruption
     EXPECT_TRUE(events.interruptions.empty());
 }
 

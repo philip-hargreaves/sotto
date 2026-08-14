@@ -16,10 +16,19 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{ThemeResource CaptionTextBlockStyle}"
-                Text="{x:Bind ViewModel.EngineStateLabel, Mode=OneWay}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Text="{x:Bind ViewModel.EngineStateLabel, Mode=OneWay}" />
+                <ProgressBar
+                    Width="72"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource RecordingBrush}"
+                    Maximum="1"
+                    Minimum="0"
+                    Value="{x:Bind ViewModel.MicLevel, Mode=OneWay}" />
+            </StackPanel>
 
             <TextBlock
                 Grid.Column="1"

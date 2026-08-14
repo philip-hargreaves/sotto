@@ -12,8 +12,6 @@
 
 namespace {
 
-// Session events onto the wire; called from the capture thread, which the
-// pipe server's write lock makes safe
 class WireEvents : public sotto::audio::ISessionEvents {
    public:
     explicit WireEvents(sotto::ipc::PipeServer& server) : server_(server) {}
@@ -49,8 +47,7 @@ int main(int argc, char* argv[]) {
         sotto::ipc::PipeServer server(pipe_name);
         WireEvents events(server);
 
-        // A wav path replays through the same port instead of the microphone,
-        // so sessions run deterministically and on machines with no audio
+        // A wav path replays through the same port instead of the microphone
         sotto::audio::SourceFactory factory;
         if (argc > 2) {
             factory = [path = std::string(argv[2])] {

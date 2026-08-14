@@ -23,16 +23,13 @@ class ISessionEvents {
 
     virtual void OnLevel(const LevelReading& reading) = 0;
 
-    // A death mid-session, never a user stop or a completed replay
+    // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
 };
 
 using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
 
-// One capture session at a time: a fresh source per start on a guarded
-// thread, levels out through the events, and Start blocking until audio
-// actually flows so a session clock never starts inside the startup
-// transient.
+// One capture session at a time
 class SessionController {
    public:
     SessionController(SourceFactory factory, ISessionEvents& events,
@@ -72,8 +69,6 @@ class SessionController {
         lock.unlock();
         Stop();
 
-        // After the join: a stop-shaped end here was ours, so the caller
-        // sees the deadline rather than the stop it never asked for
         std::lock_guard<std::mutex> relock(mutex_);
         if (end_.reason == SourceEndReason::kStopped) {
             end_ = {SourceEndReason::kFailed, "no audio arrived before the deadline"};

@@ -45,7 +45,7 @@ class PipeServer {
     void* pipe_ = nullptr;  // HANDLE
     std::map<std::string, MethodHandler> handlers_;
     std::vector<json> notifications_;
-    std::mutex write_mutex_;  // One frame on the wire at a time, whoever writes
+    std::mutex write_mutex_;
 };
 
 }  // namespace sotto::ipc

@@ -33,7 +33,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.Stop();
         return json::object();
     });
-    // Stub pipeline: the real one will write the note before these fire
+    // Stub pipeline:
     server.RegisterMethod("session/stop", [&server, &controller](const json&) {
         controller.Stop();
         server.QueueNotification("note/ready", json::object());
