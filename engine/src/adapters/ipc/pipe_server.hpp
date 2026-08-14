@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include <variant>
 #include <vector>
@@ -27,6 +28,10 @@ class PipeServer {
     // Handlers may queue these; each is written to the client right after the reply
     void QueueNotification(const std::string& method, json params);
 
+    // Written immediately, callable from any thread; reads and writes share a
+    // duplex pipe independently, so the serve loop needs no waking
+    void PushNotification(const std::string& method, json params);
+
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
     void ServeOneClient();
 
@@ -40,6 +45,7 @@ class PipeServer {
     void* pipe_ = nullptr;  // HANDLE
     std::map<std::string, MethodHandler> handlers_;
     std::vector<json> notifications_;
+    std::mutex write_mutex_;
 };
 
 }  // namespace sotto::ipc

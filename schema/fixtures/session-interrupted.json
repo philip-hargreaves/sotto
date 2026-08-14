@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "session/interrupted",
+    "params": {
+        "reason": "deviceLost",
+        "detail": "GetBuffer reported 0x88890004"
+    }
+}

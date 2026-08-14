@@ -17,6 +17,7 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 add_executable(engine_tests
     core/audio_ring_test.cpp
     core/level_meter_test.cpp
+    core/session_controller_test.cpp
     core/version_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp

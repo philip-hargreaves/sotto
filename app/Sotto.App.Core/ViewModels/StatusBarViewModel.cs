@@ -17,7 +17,19 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [ObservableProperty]
     public partial string PerformanceLine { get; set; } = "";
 
+    [ObservableProperty]
+    public partial double MicLevel { get; private set; }
+
+    [ObservableProperty]
+    public partial bool MicClipped { get; private set; }
+
     public ObservableCollection<string> LogEntries { get; } = [];
+
+    public void SetMicLevel(double level, bool clipped)
+    {
+        MicLevel = level;
+        MicClipped = clipped;
+    }
 
     public void SetEngineState(EngineStatus status, EngineFault? fault)
     {

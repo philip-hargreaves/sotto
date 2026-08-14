@@ -20,13 +20,22 @@ std::variant<json, Error> HandleEcho(const json& params) {
     return json{{"payload", params["payload"]}};
 }
 
-void RegisterMethods(PipeServer& server) {
+void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
-    server.RegisterMethod("session/start", [](const json&) { return json::object(); });
-    server.RegisterMethod("session/cancel", [](const json&) { return json::object(); });
-    // Stub pipeline: the real one will write the note before these fire
-    server.RegisterMethod("session/stop", [&server](const json&) {
+    server.RegisterMethod("session/start", [&controller](const json&) -> std::variant<json, Error> {
+        if (!controller.Start()) {
+            return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
+        }
+        return json::object();
+    });
+    server.RegisterMethod("session/cancel", [&controller](const json&) {
+        controller.Stop();
+        return json::object();
+    });
+    // Stub pipeline:
+    server.RegisterMethod("session/stop", [&server, &controller](const json&) {
+        controller.Stop();
         server.QueueNotification("note/ready", json::object());
         server.QueueNotification("patient/ready", json::object());
         return json::object();

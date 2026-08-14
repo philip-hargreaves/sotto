@@ -34,7 +34,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Note = note;
         Status = status;
         _engine.NotificationReceived +=
-            (method, _) => dispatcher.Post(() => HandleNotification(method));
+            (method, parameters) => dispatcher.Post(() => HandleNotification(method, parameters));
     }
 
     public async Task StartRecordingAsync()
@@ -87,7 +87,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Status.Append("ready for a new consultation");
     }
 
-    private void HandleNotification(string method)
+    private void HandleNotification(string method, JsonElement parameters)
     {
         switch (method)
         {
@@ -99,6 +99,20 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             case "patient/ready":
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
                 Status.Append("patient information ready");
+                break;
+            case "audio.level" when parameters.ValueKind == JsonValueKind.Object:
+                Status.SetMicLevel(
+                    parameters.GetProperty("level").GetDouble(),
+                    parameters.GetProperty("clipped").GetBoolean());
+                break;
+            case "session/interrupted"
+                when State is SessionState.Recording or SessionState.Finalising:
+                State = SessionState.Idle;
+                Note.Reset();
+                Status.SetMicLevel(0, false);
+                Status.Append(parameters.ValueKind == JsonValueKind.Object
+                    ? $"session interrupted: {parameters.GetProperty("detail").GetString()}"
+                    : "session interrupted");
                 break;
             default:
                 break;

@@ -53,6 +53,27 @@ public class FixtureTest
     }
 
     [Fact]
+    public void AudioLevelFixtureCarriesLevelAndClip()
+    {
+        var root = LoadFixture("audio-level.json").RootElement;
+
+        Assert.Equal("audio.level", root.GetProperty("method").GetString());
+        Assert.Equal(0.5, root.GetProperty("params").GetProperty("level").GetDouble());
+        Assert.False(root.GetProperty("params").GetProperty("clipped").GetBoolean());
+    }
+
+    [Fact]
+    public void SessionInterruptedFixtureCarriesReasonAndDetail()
+    {
+        var root = LoadFixture("session-interrupted.json").RootElement;
+
+        Assert.Equal("session/interrupted", root.GetProperty("method").GetString());
+        Assert.Equal("deviceLost", root.GetProperty("params").GetProperty("reason").GetString());
+        Assert.False(
+            string.IsNullOrEmpty(root.GetProperty("params").GetProperty("detail").GetString()));
+    }
+
+    [Fact]
     public void ErrorFixtureCarriesReservedCode()
     {
         var error = LoadFixture("error-method-not-found.json").RootElement.GetProperty("error");

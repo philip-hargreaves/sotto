@@ -68,6 +68,17 @@ void PipeServer::QueueNotification(const std::string& method, json params) {
     notifications_.push_back(MakeNotification(method, std::move(params)));
 }
 
+void PipeServer::PushNotification(const std::string& method, json params) {
+    const std::string payload = Serialize(MakeNotification(method, std::move(params)));
+    if (payload.size() > kMaxFrameBytes) {
+        std::fputs("sotto-engine: pushed notification exceeded frame cap, dropped\n", stderr);
+        return;
+    }
+    if (!WriteFrame(payload)) {
+        std::fputs("sotto-engine: notification push failed, client gone\n", stderr);
+    }
+}
+
 void PipeServer::ServeOneClient() {
     HANDLE pipe = static_cast<HANDLE>(pipe_);
 
@@ -167,6 +178,7 @@ void PipeServer::Reply(const Id& id, const json& envelope) {
 }
 
 bool PipeServer::WriteFrame(const std::string& payload) {
+    const std::lock_guard<std::mutex> lock(write_mutex_);
     const std::string frame = EncodeFrame(payload);
     HANDLE pipe = static_cast<HANDLE>(pipe_);
     std::size_t written_total = 0;

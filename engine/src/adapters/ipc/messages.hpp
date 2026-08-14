@@ -18,6 +18,7 @@ inline constexpr int kInvalidRequest = -32600;
 inline constexpr int kMethodNotFound = -32601;
 inline constexpr int kInvalidParams = -32602;
 inline constexpr int kInternalError = -32603;
+inline constexpr int kCaptureFailed = -32000;
 
 inline constexpr int kProtocolVersion = 1;
 

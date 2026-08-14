@@ -48,6 +48,20 @@ TEST(Messages, EchoRoundTripsNonAsciiFixture) {
     EXPECT_EQ(built, LoadFixture("echo-response-nonascii.json"));
 }
 
+TEST(Messages, AudioLevelNotificationMatchesFixture) {
+    const auto built = MakeNotification("audio.level", {{"level", 0.5}, {"clipped", false}});
+
+    EXPECT_EQ(built, LoadFixture("audio-level.json"));
+}
+
+TEST(Messages, SessionInterruptedNotificationMatchesFixture) {
+    const auto built =
+        MakeNotification("session/interrupted",
+                         {{"reason", "deviceLost"}, {"detail", "GetBuffer reported 0x88890004"}});
+
+    EXPECT_EQ(built, LoadFixture("session-interrupted.json"));
+}
+
 TEST(Messages, ErrorResponseMatchesFixture) {
     const json built = MakeError(std::int64_t{7}, Error{kMethodNotFound, "Method not found"});
     EXPECT_EQ(built, LoadFixture("error-method-not-found.json"));
