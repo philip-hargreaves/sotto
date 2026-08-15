@@ -19,6 +19,7 @@ add_executable(engine_tests
     core/level_meter_test.cpp
     core/session_controller_test.cpp
     core/version_test.cpp
+    core/window_cutter_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
@@ -29,6 +30,7 @@ add_executable(engine_tests
     adapters/model_store_test.cpp
     adapters/ov_smoke_test.cpp
     adapters/pipe_security_test.cpp
+    adapters/scripted_transcriber_test.cpp
     adapters/session_store_test.cpp
     adapters/store_recovery_test.cpp
     adapters/wav_source_test.cpp)
