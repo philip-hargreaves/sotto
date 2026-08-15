@@ -21,6 +21,8 @@ add_executable(engine_tests
     core/version_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
+    adapters/chunk_cipher_test.cpp
+    adapters/db_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
@@ -30,7 +32,7 @@ target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
     SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_audio sotto_warnings GTest::gtest_main)
+    sotto_ipc sotto_audio sotto_storage sotto_warnings GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute

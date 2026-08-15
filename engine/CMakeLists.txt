@@ -22,6 +22,34 @@ target_link_libraries(sotto_ipc
     PUBLIC sotto_core nlohmann_json::nlohmann_json
     PRIVATE sotto_warnings advapi32)
 
+# The amalgamation zip carries no build files; the target is declared here.
+# Defines are from sqlite.org's recommended list; PRAGMAs live in Db alone
+FetchContent_Declare(
+    sqlite3
+    URL https://sqlite.org/2026/sqlite-amalgamation-3530400.zip
+    URL_HASH SHA256=1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(sqlite3)
+
+enable_language(C)
+add_library(sqlite3 STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+target_include_directories(sqlite3 SYSTEM PUBLIC ${sqlite3_SOURCE_DIR})
+target_compile_definitions(sqlite3 PRIVATE
+    SQLITE_DQS=0
+    SQLITE_DEFAULT_MEMSTATUS=0
+    SQLITE_MAX_EXPR_DEPTH=0
+    SQLITE_OMIT_LOAD_EXTENSION)
+# Not ours to keep warning-clean
+set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+
+add_library(sotto_storage STATIC
+    src/adapters/storage/chunk_cipher.cpp
+    src/adapters/storage/db.cpp)
+target_link_libraries(sotto_storage
+    PUBLIC sotto_core
+    PRIVATE sotto_warnings sqlite3 bcrypt crypt32)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
