@@ -16,11 +16,9 @@
 namespace sotto::store {
 
 // The session store on disk: a catalog (main.db) beside one SQLite file and
-// one DPAPI-wrapped key per session under sessions/ (ADR-0017). Appended
+// one DPAPI-wrapped key per session under sessions. Appended
 // audio buffers in memory and a writer thread seals it into an encrypted
-// chunk once per commit interval, so capture never waits on a disk flush;
-// the interval is the D3 loss bound and is a parameter only so tests can
-// shrink it.
+// chunk once per commit interval.
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(

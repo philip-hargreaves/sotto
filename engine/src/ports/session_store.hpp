@@ -22,8 +22,8 @@ struct RecoverableSession {
 };
 
 // The clinical store for one recording session at a time. Appended audio is
-// durable within one second (D3); Finalise keeps the recording, Cancel
-// retains nothing (D5); a session neither finalised nor cancelled is a crash
+// durable within one second. Finalise keeps the recording, Cancel
+// retains nothing; a session neither finalised nor cancelled is a crash
 // and stays discoverable. Layout, SQL and encryption live behind this port.
 class ISessionStore {
    public:
@@ -39,9 +39,6 @@ class ISessionStore {
     virtual void Finalise(const SessionId& id) = 0;
     virtual void Cancel(const SessionId& id) = 0;
 
-    // The session ended abnormally: keep every committed chunk, leave the
-    // session in the recording state for the recovery scan, free the store
-    // for the next Begin
     virtual void Abandon(const SessionId& id) = 0;
 
     virtual std::vector<RecoverableSession> ScanRecoverable() = 0;

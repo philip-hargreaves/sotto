@@ -88,7 +88,7 @@ public class SessionContractTest
             Assert.Equal(0, await engine.WaitForExitAsync(Timeout));
 
             // Two sessions ran: the cancelled one left nothing, the stopped one
-            // is on disk encrypted with its key beside it (D5 / audit F5)
+            // is on disk encrypted with its key beside it
             var sessionsDir = Path.Combine(engine.StoreRoot, "sessions");
             Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "main.db")));
             Assert.Single(Directory.GetFiles(sessionsDir, "*.db"));

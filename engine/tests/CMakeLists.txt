@@ -28,10 +28,18 @@ add_executable(engine_tests
     adapters/messages_test.cpp
     adapters/pipe_security_test.cpp
     adapters/session_store_test.cpp
+    adapters/store_recovery_test.cpp
     adapters/wav_source_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
-    SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures")
+    SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures"
+    SOTTO_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
+
+# The recovery test's kill victim
+add_executable(store_crash_helper
+    adapters/store_crash_helper.cpp)
+target_link_libraries(store_crash_helper PRIVATE sotto_storage sotto_warnings)
+add_dependencies(engine_tests store_crash_helper)
 target_link_libraries(engine_tests PRIVATE
     sotto_ipc sotto_audio sotto_storage sotto_warnings GTest::gtest_main)
 

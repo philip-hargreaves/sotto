@@ -6,8 +6,6 @@ namespace Sotto.Contract.Tests;
 
 /// <summary>
 /// Launches the real sotto_engine.exe and connects a verified client to it.
-/// Naive spawn-and-kill: process supervision is a later concern, this only
-/// needs a live engine to talk to.
 /// </summary>
 internal sealed class EngineProcess : IAsyncDisposable
 {

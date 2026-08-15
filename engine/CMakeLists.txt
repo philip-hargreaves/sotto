@@ -11,9 +11,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# A library, not sources on the executable, so the tests can link the adapters.
-# Static rather than object: object files do not survive an intermediate target,
-# and nothing here self-registers, so the unreferenced-object rule cannot bite.
 add_library(sotto_ipc STATIC
     src/adapters/ipc/handlers.cpp
     src/adapters/ipc/pipe_security.cpp
@@ -22,8 +19,6 @@ target_link_libraries(sotto_ipc
     PUBLIC sotto_core nlohmann_json::nlohmann_json
     PRIVATE sotto_warnings advapi32)
 
-# The amalgamation zip carries no build files; the target is declared here.
-# Defines are from sqlite.org's recommended list; PRAGMAs live in Db alone
 FetchContent_Declare(
     sqlite3
     URL https://sqlite.org/2026/sqlite-amalgamation-3530400.zip
