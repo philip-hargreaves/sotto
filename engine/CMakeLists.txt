@@ -45,7 +45,7 @@ add_library(sotto_ipc STATIC
     src/adapters/ipc/pipe_security.cpp
     src/adapters/ipc/pipe_server.cpp)
 target_link_libraries(sotto_ipc
-    PUBLIC sotto_core nlohmann_json::nlohmann_json
+    PUBLIC sotto_core sotto_models nlohmann_json::nlohmann_json
     PRIVATE sotto_warnings advapi32)
 
 FetchContent_Declare(

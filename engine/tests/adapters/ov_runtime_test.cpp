@@ -29,8 +29,7 @@ struct TempRoot {
 };
 
 // A model with known behaviour (doubles 8 floats), synthesised so the test
-// depends on no external weights; real models enter the store only through
-// the PR that validates them
+// depends on no external weights
 void SynthesiseModel(const std::filesystem::path& dir, const std::string& device) {
     std::filesystem::create_directories(dir);
 

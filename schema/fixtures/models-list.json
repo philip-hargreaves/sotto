@@ -1,0 +1,15 @@
+{
+    "jsonrpc": "2.0",
+    "id": 7,
+    "result": {
+        "models": [
+            {
+                "id": "whisper-turbo-int8",
+                "task": "asr",
+                "tier": "default",
+                "device": "GPU",
+                "licence": "MIT"
+            }
+        ]
+    }
+}
