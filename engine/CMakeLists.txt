@@ -45,7 +45,8 @@ set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
 add_library(sotto_storage STATIC
     src/adapters/storage/chunk_cipher.cpp
-    src/adapters/storage/db.cpp)
+    src/adapters/storage/db.cpp
+    src/adapters/storage/sqlite_session_store.cpp)
 target_link_libraries(sotto_storage
     PUBLIC sotto_core
     PRIVATE sotto_warnings sqlite3 bcrypt crypt32)

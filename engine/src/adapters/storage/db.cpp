@@ -32,6 +32,16 @@ Db::Db(const std::filesystem::path& path) {
     Exec("PRAGMA foreign_keys=ON");
 }
 
+Db::Db(Db&& other) noexcept : db_(std::exchange(other.db_, nullptr)) {}
+
+Db& Db::operator=(Db&& other) noexcept {
+    if (this != &other) {
+        sqlite3_close(db_);
+        db_ = std::exchange(other.db_, nullptr);
+    }
+    return *this;
+}
+
 Db::~Db() {
     sqlite3_close(db_);
 }
@@ -54,6 +64,14 @@ std::int64_t Db::QueryInt64(const char* sql) {
 
 std::int64_t Db::LastInsertRowId() const {
     return sqlite3_last_insert_rowid(db_);
+}
+
+std::int64_t Db::UserVersion() {
+    return QueryInt64("PRAGMA user_version");
+}
+
+void Db::SetUserVersion(std::int64_t version) {
+    Exec(("PRAGMA user_version=" + std::to_string(version)).c_str());
 }
 
 Db::Stmt::Stmt(sqlite3_stmt* stmt, sqlite3* db) : stmt_(stmt), db_(db) {}

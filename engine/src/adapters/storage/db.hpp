@@ -60,14 +60,18 @@ class Db {
     };
 
     explicit Db(const std::filesystem::path& path);
+    Db(Db&& other) noexcept;
+    Db& operator=(Db&& other) noexcept;
     ~Db();
-    Db(const Db&) = delete;
-    Db& operator=(const Db&) = delete;
 
     void Exec(const char* sql);
     Stmt Prepare(const char* sql);
     std::int64_t QueryInt64(const char* sql);
     std::int64_t LastInsertRowId() const;
+
+    // The schema version this file was created or last migrated at
+    std::int64_t UserVersion();
+    void SetUserVersion(std::int64_t version);
 
    private:
     sqlite3* db_ = nullptr;

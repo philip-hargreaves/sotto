@@ -27,6 +27,7 @@ add_executable(engine_tests
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
     adapters/pipe_security_test.cpp
+    adapters/session_store_test.cpp
     adapters/wav_source_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     SOTTO_CMAKE_VERSION="${sotto_VERSION}"
