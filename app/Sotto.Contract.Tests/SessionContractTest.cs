@@ -50,16 +50,21 @@ public class SessionContractTest
             await using var engine =
                 EngineProcess.Start($"LOCAL\\sotto-session-{Guid.NewGuid():N}", wav);
             var notifications = new List<string>();
+            var turnTexts = new List<string>();
             var patientReady = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using (var client = await engine.ConnectAsync())
             {
-                client.NotificationReceived += (method, _) =>
+                client.NotificationReceived += (method, parameters) =>
                 {
                     lock (notifications)
                     {
                         notifications.Add(method);
+                        if (method == "transcript.turn")
+                        {
+                            turnTexts.Add(parameters.GetProperty("text").GetString() ?? "");
+                        }
                     }
 
                     if (method == "patient/ready")
@@ -76,11 +81,17 @@ public class SessionContractTest
                 await patientReady.Task.WaitAsync(Timeout);
                 lock (notifications)
                 {
-                    // Sessions now stream levels; the pipeline ordering holds among the rest
+                    // Sessions stream levels and turns; the pipeline ordering holds among the rest
                     Assert.Contains("audio.level", notifications);
                     Assert.Equal(
                         ExpectedNotifications,
-                        notifications.Where(n => n != "audio.level").ToArray());
+                        notifications
+                            .Where(n => n != "audio.level" && n != "transcript.turn")
+                            .ToArray());
+
+                    // The cancelled session emits no turn; the stopped one flushes its tail
+                    var turn = Assert.Single(turnTexts);
+                    Assert.StartsWith("scripted turn 0", turn);
                 }
             }
 

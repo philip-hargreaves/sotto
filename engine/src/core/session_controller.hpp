@@ -12,8 +12,10 @@
 #include <utility>
 
 #include "core/level_meter.hpp"
+#include "core/window_cutter.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/session_store.hpp"
+#include "ports/transcriber.hpp"
 
 namespace sotto::audio {
 
@@ -23,6 +25,8 @@ class ISessionEvents {
     virtual ~ISessionEvents() = default;
 
     virtual void OnLevel(const LevelReading& reading) = 0;
+
+    virtual void OnTurn(const asr::Turn& turn) = 0;
 
     // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
@@ -37,10 +41,12 @@ using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
 class SessionController {
    public:
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
+                      asr::ITranscriber& transcriber,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3))
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
+          transcriber_(transcriber),
           settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
@@ -69,6 +75,8 @@ class SessionController {
             const store::SessionId id = store_.Begin({kSampleRate, "", ""});
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
+            cutter_ = WindowCutter{};
+            transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(mutex_);
             running_ = false;
@@ -125,6 +133,30 @@ class SessionController {
    private:
     enum class Outcome { kFinalise, kCancel, kAbandon };
 
+    // Turns may arrive on the transcriber's own thread; a turn after the
+    // session closed is dropped, and one the store refuses is not announced
+    struct TurnSink : asr::ITurnSink {
+        SessionController& controller;
+
+        explicit TurnSink(SessionController& owner) : controller(owner) {}
+
+        void OnTurn(const asr::Turn& turn) override {
+            store::SessionId id;
+            {
+                std::lock_guard<std::mutex> lock(controller.mutex_);
+                id = controller.session_id_;
+            }
+            if (id.empty()) {
+                return;
+            }
+            try {
+                controller.store_.AppendTurn(id, turn);
+                controller.events_.OnTurn(turn);
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+        }
+    };
+
     struct Sink : IAudioSink {
         SessionController& controller;
 
@@ -141,6 +173,9 @@ class SessionController {
             controller.cv_.notify_all();
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
+                for (const auto& window : controller.cutter_.Push(frames)) {
+                    controller.transcriber_.Submit(window.frames, window.first_frame);
+                }
             }
             for (const auto& reading : controller.meter_.Push(frames)) {
                 controller.events_.OnLevel(reading);
@@ -201,6 +236,22 @@ class SessionController {
     // and file before the catalog row, so the erase holds even if bookkeeping
     // fails, and a failed finalise leaves the session recoverable
     void FinishSession(Outcome outcome) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (session_id_.empty()) {
+                return;
+            }
+        }
+        // The transcript completes before the session seals: the tail window
+        // is transcribed unless the recording is being discarded, and every
+        // turn is stored before the outcome below runs
+        if (outcome != Outcome::kCancel) {
+            if (const auto tail = cutter_.Flush()) {
+                transcriber_.Submit(tail->frames, tail->first_frame);
+            }
+        }
+        transcriber_.Finish();
+
         store::SessionId id;
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -228,10 +279,13 @@ class SessionController {
     SourceFactory factory_;
     ISessionEvents& events_;
     store::ISessionStore& store_;
+    asr::ITranscriber& transcriber_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
     LevelMeter meter_;
+    WindowCutter cutter_;
+    TurnSink turn_sink_{*this};
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     bool running_ = false;

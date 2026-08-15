@@ -54,6 +54,16 @@ TEST(Messages, AudioLevelNotificationMatchesFixture) {
     EXPECT_EQ(built, LoadFixture("audio-level.json"));
 }
 
+TEST(Messages, TranscriptTurnNotificationMatchesFixture) {
+    const auto built =
+        MakeNotification("transcript.turn", {{"firstFrame", std::uint64_t{480000}},
+                                             {"frameCount", std::uint64_t{48000}},
+                                             {"speaker", ""},
+                                             {"text", "about three weeks now, mostly mornings"}});
+
+    EXPECT_EQ(built, LoadFixture("transcript-turn.json"));
+}
+
 TEST(Messages, SessionInterruptedNotificationMatchesFixture) {
     const auto built =
         MakeNotification("session/interrupted",

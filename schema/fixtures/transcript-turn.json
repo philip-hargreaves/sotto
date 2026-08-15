@@ -1,0 +1,10 @@
+{
+    "jsonrpc": "2.0",
+    "method": "transcript.turn",
+    "params": {
+        "firstFrame": 480000,
+        "frameCount": 48000,
+        "speaker": "",
+        "text": "about three weeks now, mostly mornings"
+    }
+}

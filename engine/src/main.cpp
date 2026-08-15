@@ -17,6 +17,7 @@
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
+#include "adapters/transcription/scripted_transcriber.hpp"
 #include "core/session_controller.hpp"
 
 namespace {
@@ -28,6 +29,13 @@ class WireEvents : public sotto::audio::ISessionEvents {
     void OnLevel(const sotto::audio::LevelReading& reading) override {
         server_.PushNotification("audio.level",
                                  {{"level", reading.level}, {"clipped", reading.clipped}});
+    }
+
+    void OnTurn(const sotto::asr::Turn& turn) override {
+        server_.PushNotification("transcript.turn", {{"firstFrame", turn.first_frame},
+                                                     {"frameCount", turn.frame_count},
+                                                     {"speaker", turn.speaker},
+                                                     {"text", turn.text}});
     }
 
     void OnInterrupted(sotto::audio::SourceEndReason reason, const std::string& detail) override {
@@ -92,7 +100,9 @@ int main(int argc, char* argv[]) {
         } else {
             factory = [] { return std::make_unique<sotto::audio::WasapiCapture>(); };
         }
-        sotto::audio::SessionController controller(std::move(factory), events, session_store);
+        sotto::asr::ScriptedTranscriber transcriber;
+        sotto::audio::SessionController controller(std::move(factory), events, session_store,
+                                                   transcriber);
 
         sotto::ipc::RegisterMethods(server, controller, model_store);
         server.ServeOneClient();
