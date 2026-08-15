@@ -2,6 +2,35 @@
 add_library(sotto_core INTERFACE)
 target_include_directories(sotto_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+# Toolchain is fetched and pinned by tools/get-openvino.ps1
+if(NOT EXISTS "${sotto_SOURCE_DIR}/external/openvino")
+    message(FATAL_ERROR "OpenVINO not found: run tools/get-openvino.ps1 first")
+endif()
+find_package(OpenVINOGenAI REQUIRED)
+
+# Archive ships Debug and Release runtimes. Shipping trims this to the minimal set
+set(_ov_root "${sotto_SOURCE_DIR}/external/openvino/runtime")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    file(GLOB _ov_dlls "${_ov_root}/bin/intel64/Debug/*.dll"
+         "${_ov_root}/bin/intel64/Debug/cache.json"
+         "${_ov_root}/3rdparty/tbb/bin/*_debug.dll")
+else()
+    file(GLOB _ov_dlls "${_ov_root}/bin/intel64/Release/*.dll"
+         "${_ov_root}/bin/intel64/Release/cache.json")
+    file(GLOB _tbb_dlls "${_ov_root}/3rdparty/tbb/bin/*.dll")
+    list(FILTER _tbb_dlls EXCLUDE REGEX "_debug")
+    list(APPEND _ov_dlls ${_tbb_dlls})
+endif()
+# One deployment per output directory; targets there depend on the stamp
+function(sotto_deploy_openvino stamp_target)
+    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_ov_dlls}
+                "${CMAKE_CURRENT_BINARY_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed"
+        VERBATIM)
+    add_custom_target(${stamp_target} DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed")
+endfunction()
+
 include(FetchContent)
 FetchContent_Declare(
     nlohmann_json

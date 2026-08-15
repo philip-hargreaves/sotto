@@ -28,6 +28,9 @@ BundleArtifacts/
 *.cer
 *.pfx
 
+# Toolchains fetched by tools/ scripts
+external/
+
 # Weights
 models/
 *.onnx
