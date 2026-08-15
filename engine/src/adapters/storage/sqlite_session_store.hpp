@@ -33,6 +33,7 @@ class SqliteSessionStore : public ISessionStore {
                 std::uint64_t lost_frames) override;
     void Finalise(const SessionId& id) override;
     void Cancel(const SessionId& id) override;
+    void Abandon(const SessionId& id) override;
     std::vector<RecoverableSession> ScanRecoverable() override;
 
    private:

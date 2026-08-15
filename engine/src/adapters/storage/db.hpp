@@ -11,14 +11,8 @@ struct sqlite3_stmt;
 
 namespace sotto::store {
 
-// One SQLite connection, and the only place PRAGMAs are issued: every database
-// this process opens gets the same page size, WAL journal and FULL sync
-// (ADR-0017; FULL because NORMAL can roll back committed transactions on
-// power loss). A connection serves one thread at a time.
 class Db {
    public:
-    // A prepared statement. Bind indices are 1-based, column indices 0-based,
-    // following SQLite itself.
     class Stmt {
        public:
         Stmt(Stmt&& other) noexcept;

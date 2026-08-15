@@ -39,6 +39,11 @@ class ISessionStore {
     virtual void Finalise(const SessionId& id) = 0;
     virtual void Cancel(const SessionId& id) = 0;
 
+    // The session ended abnormally: keep every committed chunk, leave the
+    // session in the recording state for the recovery scan, free the store
+    // for the next Begin
+    virtual void Abandon(const SessionId& id) = 0;
+
     virtual std::vector<RecoverableSession> ScanRecoverable() = 0;
 };
 

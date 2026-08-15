@@ -112,14 +112,68 @@ struct RecordingEvents : ISessionEvents {
     }
 };
 
+// Records the call sequence; the tests assert which storage outcome each way
+// of ending a session produced
+struct FakeSessionStore : store::ISessionStore {
+    std::mutex mutex;
+    std::vector<std::string> calls;
+    std::vector<float> frames;
+    std::uint64_t lost = 0;
+    bool refuse_begin = false;
+    int begins = 0;
+
+    store::SessionId Begin(const store::SessionMeta& meta) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        if (refuse_begin) {
+            throw std::runtime_error("store is broken");
+        }
+        EXPECT_EQ(meta.sample_rate, kSampleRate);
+        const auto id = "s" + std::to_string(++begins);
+        calls.push_back("begin " + id);
+        return id;
+    }
+
+    void Append(const store::SessionId&, std::span<const float> audio,
+                std::uint64_t lost_frames) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        frames.insert(frames.end(), audio.begin(), audio.end());
+        lost += lost_frames;
+    }
+
+    void Finalise(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("finalise " + id);
+    }
+
+    void Cancel(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("cancel " + id);
+    }
+
+    void Abandon(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("abandon " + id);
+    }
+
+    std::vector<store::RecoverableSession> ScanRecoverable() override {
+        return {};
+    }
+
+    std::vector<std::string> Calls() {
+        const std::lock_guard<std::mutex> lock(mutex);
+        return calls;
+    }
+};
+
 SourceFactory FactoryFor(ScriptedSource::Script script) {
     return [script] { return std::make_unique<ScriptedSource>(script); };
 }
 
 TEST(SessionController, StartAcksOnlyAfterAudioFlowsAndLevelsFollow) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     EXPECT_TRUE(controller.Running());
@@ -133,7 +187,8 @@ TEST(SessionController, StartAcksOnlyAfterAudioFlowsAndLevelsFollow) {
 
 TEST(SessionController, StartFailsWhenTheSourceDiesFirst) {
     RecordingEvents events;
-    SessionController controller(FactoryFor(ScriptedSource::Script::kDieImmediately), events,
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kDieImmediately), events, store,
                                  kTestSettle);
 
     EXPECT_FALSE(controller.Start());
@@ -141,21 +196,71 @@ TEST(SessionController, StartFailsWhenTheSourceDiesFirst) {
     EXPECT_EQ(controller.LastEnd().reason, SourceEndReason::kFailed);
     EXPECT_EQ(controller.LastEnd().detail, "would not open");
     EXPECT_TRUE(events.interruptions.empty());
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}))
+        << "a session that never produced audio leaves no trace";
 }
 
 TEST(SessionController, StartFailsWhenNoAudioArrivesBeforeTheDeadline) {
     RecordingEvents events;
-    SessionController controller(FactoryFor(ScriptedSource::Script::kNeverAudio), events,
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kNeverAudio), events, store,
                                  kTestSettle);
 
     EXPECT_FALSE(controller.Start());
 
     EXPECT_NE(controller.LastEnd().detail.find("deadline"), std::string::npos);
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}));
 }
 
-TEST(SessionController, MidSessionDeathRaisesInterrupted) {
+TEST(SessionController, StartFailsWhenTheStoreRefusesASession) {
     RecordingEvents events;
-    SessionController controller(FactoryFor(ScriptedSource::Script::kDieAfterAudio), events,
+    FakeSessionStore store;
+    store.refuse_begin = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, kTestSettle);
+
+    EXPECT_FALSE(controller.Start());
+    EXPECT_FALSE(controller.Running());
+    EXPECT_EQ(controller.LastEnd().reason, SourceEndReason::kFailed);
+    EXPECT_NE(controller.LastEnd().detail.find("store"), std::string::npos);
+
+    // The refusal is not sticky: the next start works
+    store.refuse_begin = false;
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+}
+
+TEST(SessionController, StopFinalisesTheSession) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "finalise s1"}));
+    EXPECT_FALSE(store.frames.empty()) << "captured audio must reach the store";
+}
+
+TEST(SessionController, CancelErasesTheSession) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Cancel();
+
+    EXPECT_FALSE(controller.Running());
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}));
+    EXPECT_TRUE(events.interruptions.empty()) << "a user cancel is not an interruption";
+}
+
+TEST(SessionController, MidSessionDeathRaisesInterruptedAndAbandons) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kDieAfterAudio), events, store,
                                  kTestSettle);
 
     ASSERT_TRUE(controller.Start());
@@ -165,12 +270,15 @@ TEST(SessionController, MidSessionDeathRaisesInterrupted) {
     ASSERT_EQ(events.interruptions.size(), 1u);
     EXPECT_EQ(events.interruptions[0], SourceEndReason::kDeviceLost);
     EXPECT_EQ(events.last_detail, "unplugged");
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "abandon s1"}))
+        << "an interrupted recording is kept for recovery, not finalised";
 }
 
 TEST(SessionController, AThrowingSourceIsGuardedAndReported) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kThrowAfterAudio), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     ASSERT_TRUE(events.WaitForInterruption());
@@ -179,52 +287,77 @@ TEST(SessionController, AThrowingSourceIsGuardedAndReported) {
     ASSERT_EQ(events.interruptions.size(), 1u);
     EXPECT_EQ(events.interruptions[0], SourceEndReason::kFailed);
     EXPECT_NE(events.last_detail.find("driver exploded"), std::string::npos);
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "abandon s1"}));
 }
 
-TEST(SessionController, ACompletedReplayEndsQuietly) {
+TEST(SessionController, ACompletedReplayEndsQuietlyAndFinalises) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
 
     EXPECT_TRUE(events.interruptions.empty());
     EXPECT_EQ(controller.LostFrames(), 3u);
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "finalise s1"}));
+    EXPECT_EQ(store.frames.size(), Window().size());
+    EXPECT_EQ(store.lost, 3u) << "loss accounting must reach the store";
+}
+
+TEST(SessionController, CancelAfterACompletedReplayStillErases) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Cancel();
+
+    EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}))
+        << "the source completing is not the user's keep-or-discard decision";
 }
 
 TEST(SessionController, StartWhileRunningIsRefused) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     EXPECT_FALSE(controller.Start());
     controller.Stop();
+
+    EXPECT_EQ(store.begins, 1) << "the refused start must not open a second session";
 }
 
 TEST(SessionController, RestartAfterAStopGetsAFreshSource) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
     ASSERT_TRUE(controller.Start());
     controller.Stop();
 
-    // Two runs, two windows, two level readings
+    // Two runs, two windows, two level readings, two stored sessions
     EXPECT_EQ(events.levels.size(), 2u);
+    EXPECT_EQ(store.begins, 2);
 }
 
 TEST(SessionController, StopBeforeStartIsANoOp) {
     RecordingEvents events;
+    FakeSessionStore store;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 kTestSettle);
+                                 store, kTestSettle);
 
     controller.Stop();
 
     EXPECT_FALSE(controller.Running());
+    EXPECT_TRUE(store.Calls().empty());
 }
 
 }  // namespace

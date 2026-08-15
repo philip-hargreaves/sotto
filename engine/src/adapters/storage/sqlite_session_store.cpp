@@ -158,6 +158,14 @@ void SqliteSessionStore::Finalise(const SessionId& id) {
     open_.reset();
 }
 
+void SqliteSessionStore::Abandon(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+    if (!session.pending.empty() || session.pending_lost != 0) CommitPending();
+    // No catalog update: the recording state is what marks it recoverable
+    open_.reset();
+}
+
 void SqliteSessionStore::Cancel(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);

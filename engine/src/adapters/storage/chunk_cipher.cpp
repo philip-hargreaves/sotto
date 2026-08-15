@@ -8,7 +8,7 @@
 #define NOMINMAX
 // clang-format off
 #include <windows.h>
-#include <bcrypt.h>  // Needs windows.h first
+#include <bcrypt.h>
 #include <dpapi.h>
 // clang-format on
 
@@ -27,7 +27,6 @@ void Check(NTSTATUS status, const char* what) {
     }
 }
 
-// Nonce and the trailing AAD bytes are both the big-endian sequence number
 void PutSeq(std::uint8_t* out, std::uint64_t seq) {
     for (int i = 7; i >= 0; --i) {
         out[i] = static_cast<std::uint8_t>(seq & 0xFF);

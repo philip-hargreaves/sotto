@@ -200,6 +200,27 @@ TEST(SessionStore, AnUnfinalisedSessionIsRecoverable) {
     EXPECT_FALSE(DecryptSession(root, id).empty());
 }
 
+TEST(SessionStore, AbandonKeepsTheAudioAndFreesTheStore) {
+    TempRoot root;
+    const auto audio = Ramp(16000);
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Append(id, audio, 0);
+    store.Abandon(id);
+
+    // The recording survives, still in the recording state for recovery
+    const auto recoverable = store.ScanRecoverable();
+    ASSERT_EQ(recoverable.size(), 1u);
+    EXPECT_EQ(recoverable[0].id, id);
+    const auto chunks = DecryptSession(root, id);
+    ASSERT_EQ(chunks.size(), 1u);
+    EXPECT_EQ(chunks[0].frames, audio);
+
+    // And the store is free for the next session
+    const SessionId next = store.Begin({16000, "", ""});
+    store.Finalise(next);
+}
+
 TEST(SessionStore, FinalisedAndLiveSessionsAreNotRecoverable) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);

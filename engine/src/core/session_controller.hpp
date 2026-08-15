@@ -13,6 +13,7 @@
 
 #include "core/level_meter.hpp"
 #include "ports/audio_source.hpp"
+#include "ports/session_store.hpp"
 
 namespace sotto::audio {
 
@@ -29,12 +30,18 @@ class ISessionEvents {
 
 using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
 
-// One capture session at a time
+// One capture session at a time. Every way a session can end has a storage
+// outcome: Stop finalises, Cancel erases, an interruption abandons (kept,
+// recoverable), and a failed start erases. A source that completes on its
+// own keeps the session open for the user's Stop or Cancel to decide.
 class SessionController {
    public:
-    SessionController(SourceFactory factory, ISessionEvents& events,
+    SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3))
-        : factory_(std::move(factory)), events_(events), settle_timeout_(settle_timeout) {}
+        : factory_(std::move(factory)),
+          events_(events),
+          store_(store),
+          settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
         Stop();
@@ -58,6 +65,17 @@ class SessionController {
             end_ = {};
             meter_ = LevelMeter{};
         }
+        try {
+            const store::SessionId id = store_.Begin({kSampleRate, "", ""});
+            std::lock_guard<std::mutex> lock(mutex_);
+            session_id_ = id;
+        } catch (const std::exception& e) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            running_ = false;
+            end_ = {SourceEndReason::kFailed,
+                    std::string("store refused the session: ") + e.what()};
+            return false;
+        }
         source_ = factory_();
         worker_ = std::thread([this] { GuardedRun(); });
 
@@ -67,7 +85,7 @@ class SessionController {
             return true;
         }
         lock.unlock();
-        Stop();
+        Cancel();  // a session that never produced audio leaves no trace
 
         std::lock_guard<std::mutex> relock(mutex_);
         if (end_.reason == SourceEndReason::kStopped) {
@@ -76,20 +94,17 @@ class SessionController {
         return false;
     }
 
-    // Idempotent; a stop is the user's, so it never counts as an interruption
+    // Idempotent; a stop is the user's, so it never counts as an interruption.
+    // The recording is kept
     void Stop() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            stop_requested_ = true;
-        }
-        if (source_) {
-            source_->RequestStop();
-        }
-        if (worker_.joinable()) {
-            worker_.join();
-        }
-        std::lock_guard<std::mutex> lock(mutex_);
-        running_ = false;
+        EndCapture();
+        FinishSession(Outcome::kFinalise);
+    }
+
+    // Idempotent; the recording is erased (D5)
+    void Cancel() {
+        EndCapture();
+        FinishSession(Outcome::kCancel);
     }
 
     bool Running() const {
@@ -108,18 +123,25 @@ class SessionController {
     }
 
    private:
+    enum class Outcome { kFinalise, kCancel, kAbandon };
+
     struct Sink : IAudioSink {
         SessionController& controller;
 
         explicit Sink(SessionController& owner) : controller(owner) {}
 
         void OnAudio(std::span<const float> frames, std::uint64_t lost_frames) override {
+            store::SessionId id;
             {
                 std::lock_guard<std::mutex> lock(controller.mutex_);
                 controller.lost_frames_ += lost_frames;
                 controller.got_audio_ = true;
+                id = controller.session_id_;
             }
             controller.cv_.notify_all();
+            if (!id.empty()) {
+                controller.store_.Append(id, frames, lost_frames);
+            }
             for (const auto& reading : controller.meter_.Push(frames)) {
                 controller.events_.OnLevel(reading);
             }
@@ -136,7 +158,12 @@ class SessionController {
                                end.reason == SourceEndReason::kFailed);
             }
             controller.cv_.notify_all();
+            // Only an interruption decides its own storage outcome: the audio
+            // is gone and the recording must survive for recovery. A stopped
+            // or completed source leaves keep-or-discard to Stop or Cancel;
+            // audio ending is not the user's decision about the recording
             if (interrupted) {
+                controller.FinishSession(Outcome::kAbandon);
                 controller.events_.OnInterrupted(end.reason, end.detail);
             }
         }
@@ -155,8 +182,52 @@ class SessionController {
         }
     }
 
+    void EndCapture() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_requested_ = true;
+        }
+        if (source_) {
+            source_->RequestStop();
+        }
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        running_ = false;
+    }
+
+    // A store failure here is swallowed on purpose: Cancel deletes the key
+    // and file before the catalog row, so the erase holds even if bookkeeping
+    // fails, and a failed finalise leaves the session recoverable
+    void FinishSession(Outcome outcome) {
+        store::SessionId id;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            id = std::exchange(session_id_, {});
+        }
+        if (id.empty()) {
+            return;
+        }
+        try {
+            switch (outcome) {
+                case Outcome::kFinalise:
+                    store_.Finalise(id);
+                    break;
+                case Outcome::kCancel:
+                    store_.Cancel(id);
+                    break;
+                case Outcome::kAbandon:
+                    store_.Abandon(id);
+                    break;
+            }
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
     SourceFactory factory_;
     ISessionEvents& events_;
+    store::ISessionStore& store_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
@@ -168,6 +239,7 @@ class SessionController {
     bool ended_ = false;
     bool stop_requested_ = false;
     std::uint64_t lost_frames_ = 0;
+    store::SessionId session_id_;
     SourceEnd end_{};
 };
 
