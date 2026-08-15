@@ -17,7 +17,7 @@ namespace sotto::store {
 namespace {
 
 constexpr std::size_t kKeyBytes = 32;
-constexpr std::size_t kNonceBytes = 12;
+constexpr std::size_t kIvBytes = 12;
 constexpr std::size_t kTagBytes = 16;
 
 void Check(NTSTATUS status, const char* what) {
@@ -110,20 +110,22 @@ std::vector<std::uint8_t> ChunkCipher::Wrapped() const {
     return wrapped;
 }
 
-std::vector<std::uint8_t> ChunkCipher::Seal(std::string_view session_id, std::uint64_t seq,
+std::vector<std::uint8_t> ChunkCipher::Seal(Domain domain, std::string_view session_id,
+                                            std::uint64_t seq,
                                             std::span<const std::uint8_t> plain) const {
-    std::uint8_t nonce[kNonceBytes] = {};
-    PutSeq(nonce + 4, seq);
-    std::vector<std::uint8_t> aad(session_id.size() + 8);
-    std::memcpy(aad.data(), session_id.data(), session_id.size());
-    PutSeq(aad.data() + session_id.size(), seq);
+    std::uint8_t iv[kIvBytes] = {static_cast<std::uint8_t>(domain)};
+    PutSeq(iv + 4, seq);
+    std::vector<std::uint8_t> aad(1 + session_id.size() + 8);
+    aad[0] = static_cast<std::uint8_t>(domain);
+    std::memcpy(aad.data() + 1, session_id.data(), session_id.size());
+    PutSeq(aad.data() + 1 + session_id.size(), seq);
 
     std::vector<std::uint8_t> sealed(plain.size() + kTagBytes);
 
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
     BCRYPT_INIT_AUTH_MODE_INFO(info);
-    info.pbNonce = nonce;
-    info.cbNonce = kNonceBytes;
+    info.pbNonce = iv;
+    info.cbNonce = kIvBytes;
     info.pbAuthData = aad.data();
     info.cbAuthData = static_cast<ULONG>(aad.size());
     info.pbTag = sealed.data() + plain.size();
@@ -137,21 +139,23 @@ std::vector<std::uint8_t> ChunkCipher::Seal(std::string_view session_id, std::ui
     return sealed;
 }
 
-std::vector<std::uint8_t> ChunkCipher::Open(std::string_view session_id, std::uint64_t seq,
+std::vector<std::uint8_t> ChunkCipher::Open(Domain domain, std::string_view session_id,
+                                            std::uint64_t seq,
                                             std::span<const std::uint8_t> sealed) const {
     if (sealed.size() < kTagBytes) throw std::runtime_error("chunk failed authentication");
     const std::size_t plain_size = sealed.size() - kTagBytes;
 
-    std::uint8_t nonce[kNonceBytes] = {};
-    PutSeq(nonce + 4, seq);
-    std::vector<std::uint8_t> aad(session_id.size() + 8);
-    std::memcpy(aad.data(), session_id.data(), session_id.size());
-    PutSeq(aad.data() + session_id.size(), seq);
+    std::uint8_t iv[kIvBytes] = {static_cast<std::uint8_t>(domain)};
+    PutSeq(iv + 4, seq);
+    std::vector<std::uint8_t> aad(1 + session_id.size() + 8);
+    aad[0] = static_cast<std::uint8_t>(domain);
+    std::memcpy(aad.data() + 1, session_id.data(), session_id.size());
+    PutSeq(aad.data() + 1 + session_id.size(), seq);
 
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
     BCRYPT_INIT_AUTH_MODE_INFO(info);
-    info.pbNonce = nonce;
-    info.cbNonce = kNonceBytes;
+    info.pbNonce = iv;
+    info.cbNonce = kIvBytes;
     info.pbAuthData = aad.data();
     info.cbAuthData = static_cast<ULONG>(aad.size());
     info.pbTag = const_cast<std::uint8_t*>(sealed.data() + plain_size);

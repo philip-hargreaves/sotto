@@ -2,6 +2,7 @@
 
 #include <format>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <stdexcept>
 #include <utility>
@@ -71,8 +72,7 @@ SqliteSessionStore::~SqliteSessionStore() {
     }
     cv_.notify_all();
     writer_.join();
-    // An open session stays in the recording state: destruction is not
-    // finalisation, and the recovery scan must still find it
+    // Destruction is not finalisation; an open session stays recoverable
 }
 
 SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
@@ -83,9 +83,8 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
     session.id = RandomId();
     const std::string started_at = Iso8601Now();
 
-    // Session file and key first, catalog row last: the catalog is
-    // authoritative, so a crash here leaves an orphan file, never a
-    // catalog row that promises audio the file does not hold
+    // File and key first, catalog row last: a crash leaves an orphan file,
+    // never a row promising audio the file does not hold
     session.db.emplace(root_ / "sessions" / (session.id + ".db"));
     PrepareSchema(*session.db,
                   "CREATE TABLE chunks("
@@ -93,6 +92,11 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
                   "  first_frame  INTEGER NOT NULL,"
                   "  frame_count  INTEGER NOT NULL,"
                   "  lost_before  INTEGER NOT NULL,"
+                  "  payload      BLOB NOT NULL);"
+                  "CREATE TABLE turns("
+                  "  seq          INTEGER PRIMARY KEY,"
+                  "  first_frame  INTEGER NOT NULL,"
+                  "  frame_count  INTEGER NOT NULL,"
                   "  payload      BLOB NOT NULL);"
                   "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     {
@@ -143,6 +147,30 @@ void SqliteSessionStore::Append(const SessionId& id, std::span<const float> fram
     session.pending.insert(session.pending.end(), frames.begin(), frames.end());
 }
 
+void SqliteSessionStore::AppendTurn(const SessionId& id, const asr::Turn& turn) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+
+    // Timing is queryable shape; speaker and text are content, so encrypted
+    const std::string content =
+        nlohmann::json{{"speaker", turn.speaker}, {"text", turn.text}}.dump();
+    const std::vector<std::uint8_t> sealed = session.cipher->Seal(
+        Domain::kTurns, session.id, static_cast<std::uint64_t>(session.next_turn_seq),
+        {reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
+
+    Db::Transaction txn(*session.db);
+    Db::Stmt insert = session.db->Prepare(
+        "INSERT INTO turns(seq, first_frame, frame_count, payload) VALUES(?, ?, ?, ?)");
+    insert.BindInt64(1, session.next_turn_seq);
+    insert.BindInt64(2, static_cast<std::int64_t>(turn.first_frame));
+    insert.BindInt64(3, static_cast<std::int64_t>(turn.frame_count));
+    insert.BindBlob(4, sealed);
+    insert.Step();
+    txn.Commit();
+
+    session.next_turn_seq += 1;
+}
+
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
@@ -170,7 +198,7 @@ void SqliteSessionStore::Cancel(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
 
-    // Key first: whatever survives of the file afterwards is noise (D5)
+    // Key first: whatever survives of the file afterwards is unreadable
     session.db.reset();
     const std::filesystem::path base = root_ / "sessions" / session.id;
     std::error_code ignored;
@@ -210,7 +238,8 @@ SqliteSessionStore::Open& SqliteSessionStore::RequireOpen(const SessionId& id) {
 void SqliteSessionStore::CommitPending() {
     Open& session = *open_;
     const std::vector<std::uint8_t> sealed = session.cipher->Seal(
-        session.id, static_cast<std::uint64_t>(session.next_seq), AsBytes(session.pending));
+        Domain::kAudio, session.id, static_cast<std::uint64_t>(session.next_seq),
+        AsBytes(session.pending));
 
     Db::Transaction txn(*session.db);
     Db::Stmt insert = session.db->Prepare(

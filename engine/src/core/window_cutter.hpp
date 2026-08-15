@@ -10,8 +10,6 @@
 namespace sotto::audio {
 
 // Cuts the capture stream into large background-transcription windows.
-// The size says core configuration, not live streaming; VAD-aligned
-// boundaries replace this policy later.
 class WindowCutter {
    public:
     static constexpr std::size_t kWindowFrames = 30 * static_cast<std::size_t>(kSampleRate);

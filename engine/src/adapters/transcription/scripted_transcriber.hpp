@@ -6,8 +6,7 @@
 
 namespace sotto::asr {
 
-// Stand-in until the Whisper adapter lands: one deterministic line per
-// window, answered inline. Unmistakably fake by content
+// Stand-in until the Whisper adapter 
 class ScriptedTranscriber : public ITranscriber {
    public:
     void Begin(ITurnSink& sink) override {

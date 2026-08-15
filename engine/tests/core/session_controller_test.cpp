@@ -118,6 +118,7 @@ struct FakeSessionStore : store::ISessionStore {
     std::mutex mutex;
     std::vector<std::string> calls;
     std::vector<float> frames;
+    std::vector<asr::Turn> turns;
     std::uint64_t lost = 0;
     bool refuse_begin = false;
     int begins = 0;
@@ -138,6 +139,11 @@ struct FakeSessionStore : store::ISessionStore {
         const std::lock_guard<std::mutex> lock(mutex);
         frames.insert(frames.end(), audio.begin(), audio.end());
         lost += lost_frames;
+    }
+
+    void AppendTurn(const store::SessionId&, const asr::Turn& turn) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        turns.push_back(turn);
     }
 
     void Finalise(const store::SessionId& id) override {

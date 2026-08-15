@@ -155,7 +155,8 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
         ASSERT_EQ(select.ColumnInt64(0), expected_seq) << "a committed chunk is missing";
         ASSERT_EQ(select.ColumnInt64(1), static_cast<std::int64_t>(expected_frame));
         const std::vector<std::uint8_t> plain =
-            cipher.Open(session_id, static_cast<std::uint64_t>(expected_seq), select.ColumnBlob(3));
+            cipher.Open(Domain::kAudio, session_id, static_cast<std::uint64_t>(expected_seq),
+                        select.ColumnBlob(3));
         ASSERT_EQ(plain.size(), static_cast<std::size_t>(select.ColumnInt64(2)) * sizeof(float));
         std::vector<float> frames(plain.size() / sizeof(float));
         std::memcpy(frames.data(), plain.data(), plain.size());
@@ -166,6 +167,19 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
         ++expected_seq;
     }
     EXPECT_GE(expected_seq, acked) << "an acked commit was lost";
+
+    // Turns commit synchronously, so every one before the kill survives too
+    Db::Stmt turns = db.Prepare("SELECT seq, payload FROM turns ORDER BY seq");
+    std::int64_t turn_seq = 0;
+    while (turns.Step()) {
+        ASSERT_EQ(turns.ColumnInt64(0), turn_seq);
+        const auto plain = cipher.Open(Domain::kTurns, session_id,
+                                       static_cast<std::uint64_t>(turn_seq), turns.ColumnBlob(1));
+        const std::string content(plain.begin(), plain.end());
+        EXPECT_NE(content.find("turn " + std::to_string(turn_seq)), std::string::npos);
+        ++turn_seq;
+    }
+    EXPECT_GT(turn_seq, 0) << "the killed session wrote no turns";
 }
 
 TEST(StoreRecovery, AHardKillAfterCancelLeavesNothing) {

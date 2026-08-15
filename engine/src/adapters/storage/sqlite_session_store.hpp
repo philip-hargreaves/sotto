@@ -15,10 +15,8 @@
 
 namespace sotto::store {
 
-// The session store on disk: a catalog (main.db) beside one SQLite file and
-// one DPAPI-wrapped key per session under sessions. Appended
-// audio buffers in memory and a writer thread seals it into an encrypted
-// chunk once per commit interval.
+// A catalog (main.db) beside one encrypted db and wrapped key per session.
+// Appends buffer in memory; a writer thread commits once per interval.
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(
@@ -29,6 +27,7 @@ class SqliteSessionStore : public ISessionStore {
     SessionId Begin(const SessionMeta& meta) override;
     void Append(const SessionId& id, std::span<const float> frames,
                 std::uint64_t lost_frames) override;
+    void AppendTurn(const SessionId& id, const asr::Turn& turn) override;
     void Finalise(const SessionId& id) override;
     void Cancel(const SessionId& id) override;
     void Abandon(const SessionId& id) override;
@@ -40,6 +39,7 @@ class SqliteSessionStore : public ISessionStore {
         std::optional<Db> db;
         std::optional<ChunkCipher> cipher;
         std::int64_t next_seq = 0;
+        std::int64_t next_turn_seq = 0;
         std::uint64_t frames_committed = 0;
         std::uint64_t lost_committed = 0;
         std::vector<float> pending;

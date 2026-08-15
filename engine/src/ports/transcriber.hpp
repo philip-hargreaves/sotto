@@ -9,7 +9,7 @@ namespace sotto::asr {
 struct Turn {
     std::uint64_t first_frame = 0;
     std::uint64_t frame_count = 0;
-    std::string speaker;  // Empty until diarisation
+    std::string speaker;
     std::string text;
 };
 
@@ -21,9 +21,6 @@ class ITurnSink {
     virtual void OnTurn(const Turn& turn) = 0;
 };
 
-// One session's transcription. Windows arrive in order while capture runs;
-// Finish flushes pending work and blocks until every turn reached the sink.
-// Nothing but Finish may assume the session is over.
 class ITranscriber {
    public:
     virtual ~ITranscriber() = default;

@@ -48,9 +48,12 @@ int main(int argc, char* argv[]) {
     // A second connection watches the committed count; the acked number is
     // what the test holds recovery to
     sotto::store::Db reader(root / "sessions" / (id + ".db"));
+    std::uint64_t turn = 0;
     for (;;) {
         for (auto& sample : audio) sample = PatternAt(frame++);
         store.Append(id, audio, 0);
+        store.AppendTurn(
+            id, {frame - audio.size(), audio.size(), "", "turn " + std::to_string(turn++)});
         try {
             std::printf("CHUNKS %lld\n",
                         static_cast<long long>(reader.QueryInt64("SELECT COUNT(*) FROM chunks")));

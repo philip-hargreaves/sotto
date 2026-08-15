@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <thread>
 #include <vector>
 
@@ -70,8 +71,8 @@ std::vector<StoredChunk> DecryptSession(const TempRoot& root, const SessionId& i
     std::int64_t expected_seq = 0;
     while (select.Step()) {
         EXPECT_EQ(select.ColumnInt64(0), expected_seq);
-        const std::vector<std::uint8_t> plain =
-            cipher.Open(id, static_cast<std::uint64_t>(expected_seq), select.ColumnBlob(3));
+        const std::vector<std::uint8_t> plain = cipher.Open(
+            Domain::kAudio, id, static_cast<std::uint64_t>(expected_seq), select.ColumnBlob(3));
         StoredChunk chunk{select.ColumnInt64(1), select.ColumnInt64(2),
                           std::vector<float>(plain.size() / sizeof(float))};
         std::memcpy(chunk.frames.data(), plain.data(), plain.size());
@@ -79,6 +80,70 @@ std::vector<StoredChunk> DecryptSession(const TempRoot& root, const SessionId& i
         ++expected_seq;
     }
     return chunks;
+}
+
+struct StoredTurn {
+    std::int64_t first_frame;
+    std::int64_t frame_count;
+    std::string speaker;
+    std::string text;
+};
+
+std::vector<StoredTurn> DecryptTurns(const TempRoot& root, const SessionId& id) {
+    const ChunkCipher cipher =
+        ChunkCipher::FromWrapped(ReadFileBytes(root.SessionFile(id, ".key")));
+    Db db(root.SessionFile(id, ".db"));
+    Db::Stmt select =
+        db.Prepare("SELECT seq, first_frame, frame_count, payload FROM turns ORDER BY seq");
+    std::vector<StoredTurn> turns;
+    std::int64_t expected_seq = 0;
+    while (select.Step()) {
+        EXPECT_EQ(select.ColumnInt64(0), expected_seq);
+        const auto plain = cipher.Open(Domain::kTurns, id, static_cast<std::uint64_t>(expected_seq),
+                                       select.ColumnBlob(3));
+        const auto content = nlohmann::json::parse(plain.begin(), plain.end());
+        turns.push_back({select.ColumnInt64(1), select.ColumnInt64(2),
+                         content.at("speaker").get<std::string>(),
+                         content.at("text").get<std::string>()});
+        ++expected_seq;
+    }
+    return turns;
+}
+
+TEST(SessionStore, TurnsRoundTripEncrypted) {
+    TempRoot root;
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.AppendTurn(id, {0, 16000, "", "how long have you had the pain"});
+        store.AppendTurn(id, {16000, 8000, "", "about three weeks"});
+        store.Finalise(id);
+    }
+
+    const auto turns = DecryptTurns(root, id);
+    ASSERT_EQ(turns.size(), 2u);
+    EXPECT_EQ(turns[0].first_frame, 0);
+    EXPECT_EQ(turns[0].frame_count, 16000);
+    EXPECT_EQ(turns[0].text, "how long have you had the pain");
+    EXPECT_EQ(turns[1].first_frame, 16000);
+    EXPECT_EQ(turns[1].text, "about three weeks");
+}
+
+TEST(SessionStore, TurnTextIsNotPlaintextAtRest) {
+    TempRoot root;
+    const std::string sentinel = "SENTINEL-HYPERTENSION-PHRASE";
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.AppendTurn(id, {0, 16000, "doctor", sentinel});
+        store.Finalise(id);
+    }
+
+    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
+    const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
+    EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
 }
 
 TEST(SessionStore, LifecycleRoundTripsTheAudio) {
