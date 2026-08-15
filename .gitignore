@@ -31,8 +31,8 @@ BundleArtifacts/
 # Toolchains fetched by tools/ scripts
 external/
 
-# Weights
-models/
+# Weights (repo root only; source dirs may be named models)
+/models/
 *.onnx
 *.bin
 *.xml.data
