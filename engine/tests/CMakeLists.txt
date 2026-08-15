@@ -55,9 +55,10 @@ target_link_libraries(capture_tests PRIVATE
 
 # Same mechanism for tests needing the Intel GPU
 add_executable(gpu_tests
-    adapters/ov_device_test.cpp)
+    adapters/ov_device_test.cpp
+    adapters/ov_runtime_test.cpp)
 target_link_libraries(gpu_tests PRIVATE
-    sotto_warnings openvino::genai GTest::gtest_main)
+    sotto_models sotto_warnings openvino::genai GTest::gtest_main)
 
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)

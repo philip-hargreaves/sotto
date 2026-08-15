@@ -76,9 +76,10 @@ target_link_libraries(sotto_storage
     PRIVATE sotto_warnings sqlite3 bcrypt crypt32)
 
 add_library(sotto_models STATIC
-    src/adapters/models/model_store.cpp)
+    src/adapters/models/model_store.cpp
+    src/adapters/models/ov_runtime.cpp)
 target_link_libraries(sotto_models
-    PUBLIC sotto_core nlohmann_json::nlohmann_json
+    PUBLIC sotto_core nlohmann_json::nlohmann_json openvino::genai
     PRIVATE sotto_warnings bcrypt)
 
 add_library(sotto_audio STATIC
