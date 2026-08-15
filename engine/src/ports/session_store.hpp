@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "ports/transcriber.hpp"
+
 namespace sotto::store {
 
 using SessionId = std::string;
@@ -35,6 +37,8 @@ class ISessionStore {
     // arrived, mirroring the audio port
     virtual void Append(const SessionId& id, std::span<const float> frames,
                         std::uint64_t lost_frames) = 0;
+
+    virtual void AppendTurn(const SessionId& id, const asr::Turn& turn) = 0;
 
     virtual void Finalise(const SessionId& id) = 0;
     virtual void Cancel(const SessionId& id) = 0;

@@ -73,7 +73,7 @@ add_library(sotto_storage STATIC
     src/adapters/storage/sqlite_session_store.cpp)
 target_link_libraries(sotto_storage
     PUBLIC sotto_core
-    PRIVATE sotto_warnings sqlite3 bcrypt crypt32)
+    PRIVATE sotto_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
 
 add_library(sotto_models STATIC
     src/adapters/models/model_store.cpp
