@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+
 #include "core/version.hpp"
 
 namespace sotto::ipc {
@@ -70,6 +73,35 @@ TEST(Handlers, EchoPreservesClinicalNonAscii) {
 
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
     EXPECT_EQ(ResultOf(outcome)["payload"], clinical);
+}
+
+json LoadFixture(const std::string& name) {
+    std::ifstream in(std::string(SOTTO_FIXTURE_DIR) + "/" + name);
+    if (!in.is_open()) throw std::runtime_error("missing fixture: " + name);
+    return json::parse(in);
+}
+
+TEST(Handlers, ModelsListMatchesTheFixture) {
+    const auto root = std::filesystem::temp_directory_path() / "sotto-handlers-models";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "whisper-turbo-int8");
+    std::ofstream(root / "whisper-turbo-int8" / "manifest.json")
+        << R"({"manifestVersion": 1, "id": "whisper-turbo-int8", "task": "asr",)"
+        << R"( "tier": "default", "licence": "MIT", "runtime": {"device": "GPU"},)"
+        << R"( "files": {"model.xml": "00"}})";
+
+    const sotto::models::ModelStore store(root);
+    const json built = MakeResult(std::int64_t{7}, HandleModels(store));
+    EXPECT_EQ(built, LoadFixture("models-list.json"));
+    std::filesystem::remove_all(root);
+}
+
+TEST(Handlers, AnEmptyModelStoreListsNothing) {
+    const sotto::models::ModelStore store(std::filesystem::temp_directory_path() /
+                                          "sotto-no-models");
+    const json result = HandleModels(store);
+    EXPECT_TRUE(result["models"].is_array());
+    EXPECT_TRUE(result["models"].empty());
 }
 
 TEST(Handlers, EchoRejectsAMissingOrNonStringPayload) {

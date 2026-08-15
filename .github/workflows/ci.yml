@@ -54,6 +54,13 @@ jobs:
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+      - uses: actions/cache@v4
+        with:
+          path: external/openvino
+          key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
+      - name: Get OpenVINO
+        shell: pwsh
+        run: tools/get-openvino.ps1
       - name: Build engine and run the contract suite
         shell: pwsh
         run: |
@@ -75,7 +82,13 @@ jobs:
         preset: [ci-dev, ci-release]
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/cache@v4
+        with:
+          path: external/openvino
+          key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
+      - name: Get OpenVINO
+        shell: pwsh
+        run: tools/get-openvino.ps1
       - name: Build and test
         shell: pwsh
         run: |

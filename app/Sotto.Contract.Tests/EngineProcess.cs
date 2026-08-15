@@ -21,8 +21,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         _process = process;
         _pipeName = pipeName;
         StoreRoot = storeRoot;
-        // Drain stderr continuously: an undrained pipe fills and blocks the
-        // engine's own logging, and the text is the only startup diagnostic.
+        // An undrained stderr pipe blocks the engine
         _process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is not null)
@@ -36,12 +35,10 @@ internal sealed class EngineProcess : IAsyncDisposable
         _process.BeginErrorReadLine();
     }
 
-    // A private pipe name keeps a test off the fixed one, so it neither waits on
-    // the engine collection nor collides with an app running on this machine.
-    // Every run gets a private store root for the same reason: the engine writes
-    // its session store eagerly, and tests must never touch the real one.
-    // A replay wav makes sessions run without a microphone.
-    public static EngineProcess Start(string? pipeName = null, string? replayWavPath = null)
+    // Private pipe and roots per run so tests never touch the app's; a replay
+    // wav stands in for the microphone
+    public static EngineProcess Start(
+        string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null)
     {
         var storeRoot = Path.Combine(Path.GetTempPath(), $"sotto-store-{Guid.NewGuid():N}");
         var startInfo = new ProcessStartInfo(LocateEngine())
@@ -51,6 +48,8 @@ internal sealed class EngineProcess : IAsyncDisposable
         };
         startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
         startInfo.ArgumentList.Add(storeRoot);
+        startInfo.ArgumentList.Add(
+            modelsRoot ?? Path.Combine(Path.GetTempPath(), $"sotto-models-{Guid.NewGuid():N}"));
         if (replayWavPath is not null)
         {
             startInfo.ArgumentList.Add(replayWavPath);
@@ -63,7 +62,6 @@ internal sealed class EngineProcess : IAsyncDisposable
 
     public bool IsRunning => !_process.HasExited;
 
-    /// <summary>The private store root this engine writes sessions under.</summary>
     public string StoreRoot { get; }
 
     public string StandardError
@@ -95,9 +93,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         return PipeTransport.ConnectAsync(_pipeName, ConnectTimeout, (uint)_process.Id);
     }
 
-    // The engine is built by CMake, not copied beside these tests, so its path is
-    // resolved: an explicit override, else the most recently built binary under
-    // any preset (newest wins, so a fresh build is never shadowed by a stale one).
+    // SOTTO_ENGINE_PATH override, else the newest built engine under any preset
     private static string LocateEngine()
     {
         const string exe = "sotto_engine.exe";

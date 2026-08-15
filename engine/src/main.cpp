@@ -7,10 +7,15 @@
 #include <stdexcept>
 #include <string>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
+#include "adapters/models/model_store.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "core/session_controller.hpp"
 
@@ -42,8 +47,9 @@ class WireEvents : public sotto::audio::ISessionEvents {
 
 int main(int argc, char* argv[]) {
     try {
-        // argv: [1] private pipe name, [2] store root, [3] replay wav path;
-        // tests pass all three so runs collide with neither the app nor its store
+        // argv: [1] private pipe name, [2] store root, [3] models root,
+        // [4] replay wav path; tests pass their own so runs collide with
+        // neither the app nor its stores
         std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\sotto-engine";
         if (argc > 1) {
             pipe_name = L"\\\\.\\pipe\\" + std::wstring(argv[1], argv[1] + std::strlen(argv[1]));
@@ -62,14 +68,25 @@ int main(int argc, char* argv[]) {
             std::free(local_app_data);
         }
 
+        // Beside the executable is the production shape: the MSIX package dir
+        std::filesystem::path models_root;
+        if (argc > 3) {
+            models_root = argv[3];
+        } else {
+            wchar_t exe_path[MAX_PATH];
+            GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+            models_root = std::filesystem::path(exe_path).parent_path() / "models";
+        }
+
         sotto::ipc::PipeServer server(pipe_name);
         WireEvents events(server);
         sotto::store::SqliteSessionStore session_store(store_root);
+        sotto::models::ModelStore model_store(models_root);
 
         // A wav path replays through the same port instead of the microphone
         sotto::audio::SourceFactory factory;
-        if (argc > 3) {
-            factory = [path = std::string(argv[3])] {
+        if (argc > 4) {
+            factory = [path = std::string(argv[4])] {
                 return std::make_unique<sotto::audio::WavSource>(path);
             };
         } else {
@@ -77,7 +94,7 @@ int main(int argc, char* argv[]) {
         }
         sotto::audio::SessionController controller(std::move(factory), events, session_store);
 
-        sotto::ipc::RegisterMethods(server, controller);
+        sotto::ipc::RegisterMethods(server, controller, model_store);
         server.ServeOneClient();
         controller.Stop();
         return 0;

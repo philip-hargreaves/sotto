@@ -28,8 +28,11 @@ BundleArtifacts/
 *.cer
 *.pfx
 
-# Weights
-models/
+# Toolchains fetched by tools/ scripts
+external/
+
+# Weights (repo root only; source dirs may be named models)
+/models/
 *.onnx
 *.bin
 *.xml.data

@@ -6,7 +6,10 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-            "architecture": { "value": "x64", "strategy": "external" }
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "${sourceDir}/external/openvino/runtime/cmake"
+            }
         },
         {
             "name": "dev",
@@ -32,13 +35,13 @@
             "name": "ci-dev",
             "configurePreset": "dev",
             "output": { "outputOnFailure": true },
-            "filter": { "exclude": { "label": "microphone" } }
+            "filter": { "exclude": { "label": "microphone|gpu" } }
         },
         {
             "name": "ci-release",
             "configurePreset": "release",
             "output": { "outputOnFailure": true },
-            "filter": { "exclude": { "label": "microphone" } }
+            "filter": { "exclude": { "label": "microphone|gpu" } }
         }
     ],
     "workflowPresets": [
@@ -62,7 +65,7 @@
         },
         {
             "name": "ci-dev",
-            "displayName": "CI dev: no microphone-labelled tests",
+            "displayName": "CI dev: no hardware-labelled tests",
             "steps": [
                 { "type": "configure", "name": "dev" },
                 { "type": "build", "name": "dev" },
@@ -71,7 +74,7 @@
         },
         {
             "name": "ci-release",
-            "displayName": "CI release: no microphone-labelled tests",
+            "displayName": "CI release: no hardware-labelled tests",
             "steps": [
                 { "type": "configure", "name": "release" },
                 { "type": "build", "name": "release" },

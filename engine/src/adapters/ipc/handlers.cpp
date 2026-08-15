@@ -20,9 +20,23 @@ std::variant<json, Error> HandleEcho(const json& params) {
     return json{{"payload", params["payload"]}};
 }
 
-void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller) {
+json HandleModels(const sotto::models::ModelStore& models) {
+    json list = json::array();
+    for (const auto& model : models.List()) {
+        list.push_back({{"id", model.id},
+                        {"task", model.task},
+                        {"tier", model.tier},
+                        {"device", model.device},
+                        {"licence", model.licence}});
+    }
+    return json{{"models", std::move(list)}};
+}
+
+void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
+                     const sotto::models::ModelStore& models) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
+    server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
     server.RegisterMethod("session/start", [&controller](const json&) -> std::variant<json, Error> {
         if (!controller.Start()) {
             return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
