@@ -26,6 +26,7 @@ add_executable(engine_tests
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
+    adapters/model_store_test.cpp
     adapters/ov_smoke_test.cpp
     adapters/pipe_security_test.cpp
     adapters/session_store_test.cpp
@@ -42,7 +43,8 @@ add_executable(store_crash_helper
 target_link_libraries(store_crash_helper PRIVATE sotto_storage sotto_warnings)
 add_dependencies(engine_tests store_crash_helper)
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_audio sotto_storage sotto_warnings openvino::genai GTest::gtest_main)
+    sotto_ipc sotto_audio sotto_models sotto_storage sotto_warnings openvino::genai
+    GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute

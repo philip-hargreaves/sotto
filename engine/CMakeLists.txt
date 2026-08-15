@@ -75,6 +75,12 @@ target_link_libraries(sotto_storage
     PUBLIC sotto_core
     PRIVATE sotto_warnings sqlite3 bcrypt crypt32)
 
+add_library(sotto_models STATIC
+    src/adapters/models/model_store.cpp)
+target_link_libraries(sotto_models
+    PUBLIC sotto_core nlohmann_json::nlohmann_json
+    PRIVATE sotto_warnings bcrypt)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
