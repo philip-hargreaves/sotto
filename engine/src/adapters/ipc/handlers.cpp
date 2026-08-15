@@ -30,7 +30,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         return json::object();
     });
     server.RegisterMethod("session/cancel", [&controller](const json&) {
-        controller.Stop();
+        controller.Cancel();
         return json::object();
     });
     // Stub pipeline:

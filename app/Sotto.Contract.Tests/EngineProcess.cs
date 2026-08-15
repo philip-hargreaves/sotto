@@ -6,8 +6,6 @@ namespace Sotto.Contract.Tests;
 
 /// <summary>
 /// Launches the real sotto_engine.exe and connects a verified client to it.
-/// Naive spawn-and-kill: process supervision is a later concern, this only
-/// needs a live engine to talk to.
 /// </summary>
 internal sealed class EngineProcess : IAsyncDisposable
 {
@@ -18,10 +16,11 @@ internal sealed class EngineProcess : IAsyncDisposable
     private readonly string _pipeName;
     private readonly StringBuilder _stderr = new();
 
-    private EngineProcess(Process process, string pipeName)
+    private EngineProcess(Process process, string pipeName, string storeRoot)
     {
         _process = process;
         _pipeName = pipeName;
+        StoreRoot = storeRoot;
         // Drain stderr continuously: an undrained pipe fills and blocks the
         // engine's own logging, and the text is the only startup diagnostic.
         _process.ErrorDataReceived += (_, e) =>
@@ -39,18 +38,19 @@ internal sealed class EngineProcess : IAsyncDisposable
 
     // A private pipe name keeps a test off the fixed one, so it neither waits on
     // the engine collection nor collides with an app running on this machine.
+    // Every run gets a private store root for the same reason: the engine writes
+    // its session store eagerly, and tests must never touch the real one.
     // A replay wav makes sessions run without a microphone.
     public static EngineProcess Start(string? pipeName = null, string? replayWavPath = null)
     {
+        var storeRoot = Path.Combine(Path.GetTempPath(), $"sotto-store-{Guid.NewGuid():N}");
         var startInfo = new ProcessStartInfo(LocateEngine())
         {
             UseShellExecute = false,
             RedirectStandardError = true,
         };
-        if (pipeName is not null || replayWavPath is not null)
-        {
-            startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
-        }
+        startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
+        startInfo.ArgumentList.Add(storeRoot);
         if (replayWavPath is not null)
         {
             startInfo.ArgumentList.Add(replayWavPath);
@@ -58,10 +58,13 @@ internal sealed class EngineProcess : IAsyncDisposable
 
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("engine failed to start");
-        return new EngineProcess(process, pipeName ?? DefaultPipeName);
+        return new EngineProcess(process, pipeName ?? DefaultPipeName, storeRoot);
     }
 
     public bool IsRunning => !_process.HasExited;
+
+    /// <summary>The private store root this engine writes sessions under.</summary>
+    public string StoreRoot { get; }
 
     public string StandardError
     {
@@ -137,5 +140,14 @@ internal sealed class EngineProcess : IAsyncDisposable
 
         await _process.WaitForExitAsync().ConfigureAwait(false);
         _process.Dispose();
+
+        try
+        {
+            Directory.Delete(StoreRoot, recursive: true);
+        }
+        catch (IOException)
+        {
+            // A leftover temp store is noise, not a failure
+        }
     }
 }

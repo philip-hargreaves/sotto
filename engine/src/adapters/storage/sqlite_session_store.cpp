@@ -1,0 +1,245 @@
+#include "adapters/storage/sqlite_session_store.hpp"
+
+#include <format>
+#include <fstream>
+#include <random>
+#include <stdexcept>
+#include <utility>
+
+namespace sotto::store {
+
+namespace {
+
+constexpr std::int64_t kSchemaVersion = 1;
+
+std::string Iso8601Now() {
+    const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+    return std::format("{:%FT%T}Z", now);
+}
+
+std::string RandomId() {
+    std::random_device device;
+    std::string id;
+    for (int i = 0; i < 4; ++i) id += std::format("{:08x}", device());
+    return id;
+}
+
+std::span<const std::uint8_t> AsBytes(std::span<const float> frames) {
+    return {reinterpret_cast<const std::uint8_t*>(frames.data()), frames.size_bytes()};
+}
+
+// A file created by a newer build is refused, never best-effort read
+void PrepareSchema(Db& db, const char* create_sql) {
+    const std::int64_t version = db.UserVersion();
+    if (version == 0) {
+        Db::Transaction txn(db);
+        db.Exec(create_sql);
+        txn.Commit();
+        db.SetUserVersion(kSchemaVersion);
+    } else if (version > kSchemaVersion) {
+        throw std::runtime_error("store schema is newer than this build");
+    }
+}
+
+std::filesystem::path EnsureLayout(const std::filesystem::path& root) {
+    std::filesystem::create_directories(root / "sessions");
+    return root / "main.db";
+}
+
+}  // namespace
+
+SqliteSessionStore::SqliteSessionStore(const std::filesystem::path& root,
+                                       std::chrono::milliseconds commit_interval)
+    : root_(root), commit_interval_(commit_interval), catalog_(EnsureLayout(root)) {
+    PrepareSchema(catalog_,
+                  "CREATE TABLE sessions("
+                  "  id           TEXT PRIMARY KEY,"
+                  "  started_at   TEXT NOT NULL,"
+                  "  ended_at     TEXT,"
+                  "  state        TEXT NOT NULL,"
+                  "  sample_rate  INTEGER NOT NULL,"
+                  "  device_id    TEXT,"
+                  "  device_name  TEXT,"
+                  "  lost_frames  INTEGER NOT NULL DEFAULT 0)");
+    writer_ = std::thread([this] { WriterLoop(); });
+}
+
+SqliteSessionStore::~SqliteSessionStore() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stopping_ = true;
+    }
+    cv_.notify_all();
+    writer_.join();
+    // An open session stays in the recording state: destruction is not
+    // finalisation, and the recovery scan must still find it
+}
+
+SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (open_.has_value()) throw std::runtime_error("a session is already recording");
+
+    Open session;
+    session.id = RandomId();
+    const std::string started_at = Iso8601Now();
+
+    // Session file and key first, catalog row last: the catalog is
+    // authoritative, so a crash here leaves an orphan file, never a
+    // catalog row that promises audio the file does not hold
+    session.db.emplace(root_ / "sessions" / (session.id + ".db"));
+    PrepareSchema(*session.db,
+                  "CREATE TABLE chunks("
+                  "  seq          INTEGER PRIMARY KEY,"
+                  "  first_frame  INTEGER NOT NULL,"
+                  "  frame_count  INTEGER NOT NULL,"
+                  "  lost_before  INTEGER NOT NULL,"
+                  "  payload      BLOB NOT NULL);"
+                  "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    {
+        Db::Transaction txn(*session.db);
+        Db::Stmt insert = session.db->Prepare("INSERT INTO meta(key, value) VALUES(?, ?)");
+        const std::pair<const char*, std::string> rows[] = {
+            {"id", session.id},
+            {"started_at", started_at},
+            {"sample_rate", std::to_string(meta.sample_rate)},
+        };
+        for (const auto& [key, value] : rows) {
+            insert.BindText(1, key);
+            insert.BindText(2, value);
+            insert.Step();
+            insert.Reset();
+        }
+        txn.Commit();
+    }
+
+    session.cipher.emplace(ChunkCipher::Generate());
+    {
+        const std::vector<std::uint8_t> wrapped = session.cipher->Wrapped();
+        std::ofstream key_file(root_ / "sessions" / (session.id + ".key"), std::ios::binary);
+        key_file.write(reinterpret_cast<const char*>(wrapped.data()),
+                       static_cast<std::streamsize>(wrapped.size()));
+        if (!key_file) throw std::runtime_error("could not persist the session key");
+    }
+
+    Db::Stmt insert = catalog_.Prepare(
+        "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name)"
+        " VALUES(?, ?, 'recording', ?, ?, ?)");
+    insert.BindText(1, session.id);
+    insert.BindText(2, started_at);
+    insert.BindInt64(3, meta.sample_rate);
+    insert.BindText(4, meta.device_id);
+    insert.BindText(5, meta.device_name);
+    insert.Step();
+
+    open_.emplace(std::move(session));
+    return open_->id;
+}
+
+void SqliteSessionStore::Append(const SessionId& id, std::span<const float> frames,
+                                std::uint64_t lost_frames) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+    session.pending_lost += lost_frames;
+    session.pending.insert(session.pending.end(), frames.begin(), frames.end());
+}
+
+void SqliteSessionStore::Finalise(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+    if (!session.pending.empty() || session.pending_lost != 0) CommitPending();
+
+    Db::Stmt update = catalog_.Prepare(
+        "UPDATE sessions SET ended_at = ?, state = 'finalised', lost_frames = ? WHERE id = ?");
+    update.BindText(1, Iso8601Now());
+    update.BindInt64(2, static_cast<std::int64_t>(session.lost_committed));
+    update.BindText(3, session.id);
+    update.Step();
+
+    open_.reset();
+}
+
+void SqliteSessionStore::Abandon(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+    if (!session.pending.empty() || session.pending_lost != 0) CommitPending();
+    // No catalog update: the recording state is what marks it recoverable
+    open_.reset();
+}
+
+void SqliteSessionStore::Cancel(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+
+    // Key first: whatever survives of the file afterwards is noise (D5)
+    session.db.reset();
+    const std::filesystem::path base = root_ / "sessions" / session.id;
+    std::error_code ignored;
+    std::filesystem::remove(base.string() + ".key", ignored);
+    std::filesystem::remove(base.string() + ".db", ignored);
+    std::filesystem::remove(base.string() + ".db-wal", ignored);
+    std::filesystem::remove(base.string() + ".db-shm", ignored);
+
+    Db::Stmt erase = catalog_.Prepare("DELETE FROM sessions WHERE id = ?");
+    erase.BindText(1, session.id);
+    erase.Step();
+
+    open_.reset();
+}
+
+std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<RecoverableSession> found;
+    Db::Stmt select = catalog_.Prepare(
+        "SELECT id, started_at, sample_rate FROM sessions WHERE state = 'recording'");
+    while (select.Step()) {
+        RecoverableSession session{select.ColumnText(0), select.ColumnText(1),
+                                   static_cast<int>(select.ColumnInt64(2))};
+        if (open_.has_value() && session.id == open_->id) continue;  // live, not crashed
+        found.push_back(std::move(session));
+    }
+    return found;
+}
+
+SqliteSessionStore::Open& SqliteSessionStore::RequireOpen(const SessionId& id) {
+    if (!open_.has_value() || open_->id != id) {
+        throw std::runtime_error("no open session with id " + id);
+    }
+    return *open_;
+}
+
+void SqliteSessionStore::CommitPending() {
+    Open& session = *open_;
+    const std::vector<std::uint8_t> sealed = session.cipher->Seal(
+        session.id, static_cast<std::uint64_t>(session.next_seq), AsBytes(session.pending));
+
+    Db::Transaction txn(*session.db);
+    Db::Stmt insert = session.db->Prepare(
+        "INSERT INTO chunks(seq, first_frame, frame_count, lost_before, payload)"
+        " VALUES(?, ?, ?, ?, ?)");
+    insert.BindInt64(1, session.next_seq);
+    insert.BindInt64(2, static_cast<std::int64_t>(session.frames_committed));
+    insert.BindInt64(3, static_cast<std::int64_t>(session.pending.size()));
+    insert.BindInt64(4, static_cast<std::int64_t>(session.pending_lost));
+    insert.BindBlob(5, sealed);
+    insert.Step();
+    txn.Commit();
+
+    session.next_seq += 1;
+    session.frames_committed += session.pending.size();
+    session.lost_committed += session.pending_lost;
+    session.pending.clear();
+    session.pending_lost = 0;
+}
+
+void SqliteSessionStore::WriterLoop() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    while (!stopping_) {
+        cv_.wait_for(lock, commit_interval_, [this] { return stopping_; });
+        if (stopping_) break;
+        if (open_.has_value() && (!open_->pending.empty() || open_->pending_lost != 0)) {
+            CommitPending();
+        }
+    }
+}
+
+}  // namespace sotto::store

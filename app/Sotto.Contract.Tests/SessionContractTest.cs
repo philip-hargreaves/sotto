@@ -86,6 +86,13 @@ public class SessionContractTest
 
             // Disconnect ends ServeOneClient; supervised restarts rely on this exit
             Assert.Equal(0, await engine.WaitForExitAsync(Timeout));
+
+            // Two sessions ran: the cancelled one left nothing, the stopped one
+            // is on disk encrypted with its key beside it
+            var sessionsDir = Path.Combine(engine.StoreRoot, "sessions");
+            Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "main.db")));
+            Assert.Single(Directory.GetFiles(sessionsDir, "*.db"));
+            Assert.Single(Directory.GetFiles(sessionsDir, "*.key"));
         }
         finally
         {
