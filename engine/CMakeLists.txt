@@ -88,6 +88,12 @@ target_link_libraries(sotto_transcription
     PUBLIC sotto_core
     PRIVATE sotto_models sotto_warnings openvino::genai)
 
+add_library(sotto_vad STATIC
+    src/adapters/vad/silero_vad.cpp)
+target_link_libraries(sotto_vad
+    PUBLIC sotto_core
+    PRIVATE sotto_models sotto_warnings openvino::genai)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
