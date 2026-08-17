@@ -25,7 +25,16 @@
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(EngineBinary)')">
     <Content Include="$(EngineBinary)" Link="sotto_engine.exe" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build -->
+    <Content Include="..\..\build\$(EnginePreset)\engine\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\build\$(EnginePreset)\engine\cache.json" Link="cache.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Dev runs see the repo model store via a junction; packaging replaces this -->
+  <Target Name="LinkModelStore" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And !Exists('$(TargetDir)models')">
+    <Exec Command='mklink /J "$(TargetDir)models" "$(MSBuildProjectDirectory)\..\..\models"' />
+  </Target>
 
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />

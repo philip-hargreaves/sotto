@@ -1,9 +1,75 @@
+using System.Text.Json;
 using Sotto.App.Core.ViewModels;
+using Sotto.Client;
 
 namespace Sotto.App.Tests;
 
 public class SessionStateMachineTest
 {
+    private sealed class TimingOutClient : IEngineClient
+    {
+        public event Action<string, JsonElement>? NotificationReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<JsonElement> RequestAsync(
+            string method, object? parameters, TimeSpan timeout,
+            CancellationToken cancellationToken = default) =>
+            method == "session/stop"
+                ? Task.FromException<JsonElement>(new TaskCanceledException())
+                : Task.FromResult(JsonSerializer.SerializeToElement(new { }));
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class RefusingClient : IEngineClient
+    {
+        public event Action<string, JsonElement>? NotificationReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<JsonElement> RequestAsync(
+            string method, object? parameters, TimeSpan timeout,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<JsonElement>(
+                new InvalidOperationException("the speech model is still loading"));
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task AFailedStartStaysIdleWithTheReasonLogged()
+    {
+        var status = new StatusBarViewModel();
+        var session = new ConsultationViewModel(
+            new RefusingClient(), new InlineDispatcher(), new TranscriptViewModel(),
+            new NoteViewModel(), status);
+
+        await session.StartRecordingAsync();
+
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Contains(status.LogEntries, line => line.Contains("still loading"));
+    }
+
+    [Fact]
+    public async Task ATimedOutStopIsLoggedNotThrown()
+    {
+        var status = new StatusBarViewModel();
+        var session = new ConsultationViewModel(
+            new TimingOutClient(), new InlineDispatcher(), new TranscriptViewModel(),
+            new NoteViewModel(), status);
+        await session.StartRecordingAsync();
+
+        await session.StopRecordingAsync();
+
+        Assert.Contains(status.LogEntries, line => line.Contains("timed out"));
+        Assert.Equal(SessionState.Finalising, session.State);
+    }
+
     [Fact]
     public async Task FullLifecycleAdvancesThroughEveryState()
     {

@@ -99,6 +99,44 @@ TEST(WhisperWorker, AThrowingDecodeLosesOnlyItsWindow) {
     EXPECT_EQ(sink.turns[1].first_frame, 20u);
 }
 
+TEST(WhisperWorker, WindowsQueuedDuringTheLoadDecodeOnceItCompletes) {
+    std::promise<void> release;
+    auto released = release.get_future().share();
+    RecordingSink sink;
+    // The loader stands in for pipeline compilation; the session records
+    // and submits throughout
+    WhisperTranscriber transcriber(DecodeLoader([released]() -> DecodeFn {
+        released.wait();
+        return [](std::span<const float> f, std::uint64_t first) {
+            return std::vector<Turn>{Labelled(first, f.size())};
+        };
+    }));
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(10);
+    for (std::uint64_t i = 0; i < 4; ++i) transcriber.Submit(window, i * 10);
+    EXPECT_TRUE(sink.turns.empty()) << "nothing decodes before the model is ready";
+
+    release.set_value();
+    transcriber.Finish();
+
+    ASSERT_EQ(sink.turns.size(), 4u);
+    for (std::uint64_t i = 0; i < 4; ++i) EXPECT_EQ(sink.turns[i].first_frame, i * 10);
+}
+
+TEST(WhisperWorker, AFailedLoadDrainsWindowsWithoutTurnsOrHangs) {
+    RecordingSink sink;
+    WhisperTranscriber transcriber(
+        DecodeLoader([]() -> DecodeFn { throw std::runtime_error("no GPU"); }));
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(10);
+    for (std::uint64_t i = 0; i < 3; ++i) transcriber.Submit(window, i * 10);
+    transcriber.Finish();
+
+    EXPECT_TRUE(sink.turns.empty());
+}
+
 TEST(WhisperWorker, BeginPointsTurnsAtTheNewSink) {
     RecordingSink first_sink;
     RecordingSink second_sink;
