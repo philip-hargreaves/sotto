@@ -15,7 +15,8 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
-#include "core/window_cutter.hpp"
+#include "adapters/vad/silero_vad.hpp"
+#include "core/endpointer.hpp"
 #include "ports/audio_source.hpp"
 
 namespace sotto::asr {
@@ -26,9 +27,9 @@ constexpr const char* kWav =
 constexpr const char* kRef =
     "C:/dev/intelliscribe/bench/transcription/references/day1_consultation01.json";
 
-// Parity baseline for this consult was 21.28%; tolerance covers the hard
-// 30 s window cuts vs the pipeline's own long-form chunking
-constexpr double kMaxWer = 0.24;
+// Long-form parity on this consult is 21.28%; VAD endpointing measured
+// 20.37%, so the gate holds the reclaim, not just the baseline
+constexpr double kMaxWer = 0.22;
 
 std::vector<float> LoadWav(const char* path) {
     std::ifstream in(path, std::ios::binary);
@@ -111,14 +112,15 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     const auto load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - load_start);
 
+    audio::SileroVad vad(store, runtime);
+    audio::Endpointer endpointer(vad);
     RecordingSink sink;
     transcriber.Begin(sink);
-    audio::WindowCutter cutter;
     const auto decode_start = std::chrono::steady_clock::now();
-    for (const auto& window : cutter.Push(frames)) {
+    for (const auto& window : endpointer.Push(frames)) {
         transcriber.Submit(window.frames, window.first_frame);
     }
-    if (const auto tail = cutter.Flush()) {
+    if (const auto tail = endpointer.Flush()) {
         transcriber.Submit(tail->frames, tail->first_frame);
     }
     transcriber.Finish();
@@ -136,7 +138,9 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
         "%zu turns\n",
         wer * 100, speed, static_cast<long long>(load_ms.count()), sink.turns.size());
     EXPECT_LE(wer, kMaxWer);
-    EXPECT_GT(speed, 5.0) << "steady-state decode should be well past realtime";
+    // Release measures ~29x; the floor tolerates the Debug harness, and the
+    // decode span now includes the worker's background model load
+    EXPECT_GT(speed, 3.0) << "decode must stay well past realtime";
 }
 
 }  // namespace

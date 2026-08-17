@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "adapters/transcription/scripted_transcriber.hpp"
+#include "adapters/vad/passthrough_vad.hpp"
 
 namespace sotto::audio {
 namespace {
@@ -216,8 +217,9 @@ TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
     RecordingEvents events;
     FakeSessionStore store;
     RecordingTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -238,8 +240,9 @@ TEST(SessionController, TurnsReachTheStoreAndTheEvents) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -255,8 +258,9 @@ TEST(SessionController, StartAcksOnlyAfterAudioFlowsAndLevelsFollow) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     EXPECT_TRUE(controller.Running());
@@ -272,8 +276,9 @@ TEST(SessionController, StartFailsWhenTheSourceDiesFirst) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kDieImmediately), events, store,
-                                 transcriber, kTestSettle);
+                                 transcriber, vad, kTestSettle);
 
     EXPECT_FALSE(controller.Start());
 
@@ -288,8 +293,9 @@ TEST(SessionController, StartFailsWhenNoAudioArrivesBeforeTheDeadline) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kNeverAudio), events, store,
-                                 transcriber, kTestSettle);
+                                 transcriber, vad, kTestSettle);
 
     EXPECT_FALSE(controller.Start());
 
@@ -301,9 +307,10 @@ TEST(SessionController, StartFailsWhenTheStoreRefusesASession) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     store.refuse_begin = true;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     EXPECT_FALSE(controller.Start());
     EXPECT_FALSE(controller.Running());
@@ -320,8 +327,9 @@ TEST(SessionController, StopFinalisesTheSession) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -335,8 +343,9 @@ TEST(SessionController, CancelErasesTheSession) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Cancel();
@@ -350,8 +359,9 @@ TEST(SessionController, MidSessionDeathRaisesInterruptedAndAbandons) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kDieAfterAudio), events, store,
-                                 transcriber, kTestSettle);
+                                 transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     ASSERT_TRUE(events.WaitForInterruption());
@@ -368,8 +378,9 @@ TEST(SessionController, AThrowingSourceIsGuardedAndReported) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kThrowAfterAudio), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     ASSERT_TRUE(events.WaitForInterruption());
@@ -385,8 +396,9 @@ TEST(SessionController, ACompletedReplayEndsQuietlyAndFinalises) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -402,8 +414,9 @@ TEST(SessionController, CancelAfterACompletedReplayStillErases) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Cancel();
@@ -416,8 +429,9 @@ TEST(SessionController, StartWhileRunningIsRefused) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     EXPECT_FALSE(controller.Start());
@@ -430,8 +444,9 @@ TEST(SessionController, RestartAfterAStopGetsAFreshSource) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -447,8 +462,9 @@ TEST(SessionController, StopBeforeStartIsANoOp) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
-                                 store, transcriber, kTestSettle);
+                                 store, transcriber, vad, kTestSettle);
 
     controller.Stop();
 

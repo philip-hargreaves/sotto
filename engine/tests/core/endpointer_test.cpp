@@ -168,7 +168,7 @@ TEST(Endpointer, WindowsAndTailCoverTheSpeechExactly) {
     }
 }
 
-TEST(Endpointer, AlwaysSpeechDegeneratesToCappedCuts) {
+TEST(Endpointer, UnbrokenSpeechDegeneratesToCappedCuts) {
     ScriptedVad vad;
     Add(vad.probabilities, 1, 0.90f);
     Endpointer endpointer(vad);  // holds 0.90 forever

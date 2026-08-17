@@ -20,7 +20,6 @@ add_executable(engine_tests
     core/level_meter_test.cpp
     core/session_controller_test.cpp
     core/version_test.cpp
-    core/window_cutter_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
