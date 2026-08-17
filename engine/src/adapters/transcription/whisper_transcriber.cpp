@@ -1,5 +1,6 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 
+#include <cstdio>
 #include <memory>
 #include <openvino/genai/whisper_pipeline.hpp>
 #include <utility>
@@ -63,9 +64,14 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 }  // namespace
 
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime)
-    : WhisperTranscriber(MakeWhisperDecode(store, runtime)) {}
+    : WhisperTranscriber(
+          DecodeLoader([&store, &runtime] { return MakeWhisperDecode(store, runtime); })) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
+    worker_ = std::thread([this] { WorkerLoop(); });
+}
+
+WhisperTranscriber::WhisperTranscriber(DecodeLoader loader) : loader_(std::move(loader)) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
@@ -97,6 +103,17 @@ void WhisperTranscriber::Finish() {
 }
 
 void WhisperTranscriber::WorkerLoop() {
+    // Load here, not in the constructor: the engine serves and sessions
+    // record while the pipeline compiles; queued windows decode afterwards.
+    // A failed load drains windows without turns, so nothing hangs
+    if (loader_) {
+        try {
+            decode_ = loader_();
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
+        }
+    }
+
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
         cv_.wait(lock, [this] { return !queue_.empty() || stopping_; });
@@ -111,8 +128,10 @@ void WhisperTranscriber::WorkerLoop() {
         // A failed decode loses this window's turns, never the session;
         // the audio is already stored
         try {
-            for (const auto& turn : decode_(window.frames, window.first_frame)) {
-                if (sink != nullptr) sink->OnTurn(turn);
+            if (decode_) {
+                for (const auto& turn : decode_(window.frames, window.first_frame)) {
+                    if (sink != nullptr) sink->OnTurn(turn);
+                }
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }

@@ -11,7 +11,7 @@ public class SessionContractTest
     private static readonly string[] ExpectedNotifications = ["note/ready", "patient/ready"];
 
     // Two seconds of PCM16 silence: sessions replay it instead of a microphone
-    private static string WriteSilenceWav()
+    internal static string WriteSilenceWav()
     {
         const int frames = 2 * 16000;
         var bytes = new byte[44 + frames * 2];

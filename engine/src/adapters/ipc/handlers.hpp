@@ -15,8 +15,17 @@ std::variant<json, Error> HandleEcho(const json& params);
 
 json HandleModels(const sotto::models::ModelStore& models);
 
+json HandleSessionList(sotto::store::ISessionStore& sessions);
+
+std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& sessions,
+                                                  const json& params);
+
+std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessions,
+                                              const json& params);
+
 // Every method the engine serves
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models);
+                     const sotto::models::ModelStore& models,
+                     sotto::store::ISessionStore& sessions);
 
 }  // namespace sotto::ipc

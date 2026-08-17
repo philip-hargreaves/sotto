@@ -60,12 +60,14 @@ public partial class App : Application
         services.AddSingleton<SessionControlsViewModel>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<SessionsViewModel>();
 
         services.AddTransient<SessionControlsView>();
         services.AddTransient<TranscriptPaneView>();
         services.AddTransient<NotePaneView>();
         services.AddTransient<StatusBarView>();
         services.AddTransient<ConsultationView>();
+        services.AddTransient<SessionsView>();
         services.AddTransient<SettingsView>();
         services.AddTransient<MainWindow>();
 

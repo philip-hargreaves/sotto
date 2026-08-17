@@ -16,6 +16,7 @@ public sealed class NavigationService(IServiceProvider services) : INavigationSe
     private static readonly Dictionary<string, Type> Pages = new()
     {
         ["consultation"] = typeof(ConsultationView),
+        ["sessions"] = typeof(SessionsView),
         ["settings"] = typeof(SettingsView),
     };
 

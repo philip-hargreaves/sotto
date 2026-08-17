@@ -23,6 +23,14 @@ struct RecoverableSession {
     int sample_rate = 0;
 };
 
+struct SessionSummary {
+    SessionId id;
+    std::string started_at;  // ISO 8601 UTC
+    std::string ended_at;    // Empty while recording or after a crash
+    std::string state;       // recording | finalised
+    int sample_rate = 0;
+};
+
 // The clinical store for one recording session at a time. Appended audio is
 // durable within one second. Finalise keeps the recording, Cancel
 // retains nothing; a session neither finalised nor cancelled is a crash
@@ -46,6 +54,12 @@ class ISessionStore {
     virtual void Abandon(const SessionId& id) = 0;
 
     virtual std::vector<RecoverableSession> ScanRecoverable() = 0;
+
+    virtual std::vector<SessionSummary> ListSessions() = 0;
+
+    // Read-back and disposal; both refuse the session currently recording
+    virtual std::vector<asr::Turn> ReadTurns(const SessionId& id) = 0;
+    virtual void Delete(const SessionId& id) = 0;
 };
 
 }  // namespace sotto::store

@@ -85,7 +85,12 @@ int main(int argc, char* argv[]) {
         } else {
             wchar_t exe_path[MAX_PATH];
             GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-            models_root = std::filesystem::path(exe_path).parent_path() / "models";
+            const auto exe_dir = std::filesystem::path(exe_path).parent_path();
+            models_root = exe_dir / "models";
+            // Packaged debug runs put the exe one level below the layout
+            if (!std::filesystem::exists(models_root)) {
+                models_root = exe_dir.parent_path() / "models";
+            }
         }
 
         sotto::ipc::PipeServer server(pipe_name);
@@ -103,7 +108,9 @@ int main(int argc, char* argv[]) {
             factory = [] { return std::make_unique<sotto::audio::WasapiCapture>(); };
         }
         // The store's contents decide: real transcription when the ASR role
-        // is staged, scripted otherwise (CI, fresh installs)
+        // is staged, scripted otherwise (CI, fresh installs). Whisper loads
+        // on its worker thread, so the engine serves and records immediately
+        // and queued windows decode once the model is ready
         sotto::models::OvRuntime ov_runtime;
         std::unique_ptr<sotto::asr::ITranscriber> transcriber;
         try {
@@ -116,7 +123,7 @@ int main(int argc, char* argv[]) {
         sotto::audio::SessionController controller(std::move(factory), events, session_store,
                                                    *transcriber);
 
-        sotto::ipc::RegisterMethods(server, controller, model_store);
+        sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
         server.ServeOneClient();
         controller.Stop();
         return 0;

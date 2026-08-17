@@ -12,6 +12,9 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
+    // Stop waits for the tail window's decode, seconds of GPU work
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(60);
+
     private readonly IEngineClient _engine;
 
     [ObservableProperty]
@@ -44,7 +47,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             return;
         }
 
-        await RequestAsync("session/start").ConfigureAwait(true);
+        if (!await RequestAsync("session/start").ConfigureAwait(true))
+        {
+            return;
+        }
+
         State = SessionState.Recording;
         Status.Append("recording started");
     }
@@ -59,7 +66,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Finalising;
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("finalising");
-        await RequestAsync("session/stop").ConfigureAwait(true);
+        await RequestAsync("session/stop", StopTimeout).ConfigureAwait(true);
     }
 
     public async Task CancelRecordingAsync()
@@ -69,7 +76,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             return;
         }
 
-        await RequestAsync("session/cancel").ConfigureAwait(true);
+        if (!await RequestAsync("session/cancel").ConfigureAwait(true))
+        {
+            return;
+        }
+
         State = SessionState.Idle;
         Status.Append("recording cancelled");
     }
@@ -119,15 +130,23 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
     }
 
-    private async Task RequestAsync(string method)
+    private async Task<bool> RequestAsync(string method, TimeSpan? timeout = null)
     {
         try
         {
-            _ = await _engine.RequestAsync(method, null, RequestTimeout).ConfigureAwait(true);
+            _ = await _engine.RequestAsync(method, null, timeout ?? RequestTimeout)
+                .ConfigureAwait(true);
+            return true;
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            Status.Append($"engine request {method} timed out");
+            return false;
+        }
+        catch (Exception e)
         {
             Status.Append($"engine request {method} failed: {e.Message}");
+            return false;
         }
     }
 }

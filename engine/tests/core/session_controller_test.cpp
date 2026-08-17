@@ -174,6 +174,16 @@ struct FakeSessionStore : store::ISessionStore {
         return {};
     }
 
+    std::vector<store::SessionSummary> ListSessions() override {
+        return {};
+    }
+
+    std::vector<asr::Turn> ReadTurns(const store::SessionId&) override {
+        return {};
+    }
+
+    void Delete(const store::SessionId&) override {}
+
     std::vector<std::string> Calls() {
         const std::lock_guard<std::mutex> lock(mutex);
         return calls;

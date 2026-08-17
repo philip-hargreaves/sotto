@@ -1,0 +1,9 @@
+{
+    "jsonrpc": "2.0",
+    "id": 9,
+    "error": {
+        "code": -32001,
+        "message": "Session error",
+        "data": "no session nope"
+    }
+}
