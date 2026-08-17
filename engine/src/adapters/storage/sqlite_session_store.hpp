@@ -32,6 +32,9 @@ class SqliteSessionStore : public ISessionStore {
     void Cancel(const SessionId& id) override;
     void Abandon(const SessionId& id) override;
     std::vector<RecoverableSession> ScanRecoverable() override;
+    std::vector<SessionSummary> ListSessions() override;
+    std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
+    void Delete(const SessionId& id) override;
 
    private:
     struct Open {
@@ -47,6 +50,8 @@ class SqliteSessionStore : public ISessionStore {
     };
 
     Open& RequireOpen(const SessionId& id);
+    void RequireNotRecording(const SessionId& id);  // caller holds mutex_
+    void EraseOnDisk(const SessionId& id);          // key, file, catalog row
     void CommitPending();  // seals pending as one chunk; caller holds mutex_
     void WriterLoop();
 

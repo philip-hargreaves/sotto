@@ -146,6 +146,85 @@ TEST(SessionStore, TurnTextIsNotPlaintextAtRest) {
     EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
 }
 
+TEST(SessionStore, ReadTurnsReturnsWhatWasAppended) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.AppendTurn(id, {0, 16000, "doctor", "how long have you had the pain"});
+    store.AppendTurn(id, {16000, 8000, "patient", "about three weeks"});
+    store.Finalise(id);
+
+    const auto turns = store.ReadTurns(id);
+    ASSERT_EQ(turns.size(), 2u);
+    EXPECT_EQ(turns[0].first_frame, 0u);
+    EXPECT_EQ(turns[0].speaker, "doctor");
+    EXPECT_EQ(turns[0].text, "how long have you had the pain");
+    EXPECT_EQ(turns[1].first_frame, 16000u);
+    EXPECT_EQ(turns[1].text, "about three weeks");
+}
+
+TEST(SessionStore, AnAbandonedSessionsTurnsAreReadable) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.AppendTurn(id, {0, 16000, "", "kept for recovery"});
+    store.Abandon(id);
+
+    const auto turns = store.ReadTurns(id);
+    ASSERT_EQ(turns.size(), 1u);
+    EXPECT_EQ(turns[0].text, "kept for recovery");
+}
+
+TEST(SessionStore, ListSessionsIsNewestFirstWithStates) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId first = store.Begin({16000, "", ""});
+    store.Finalise(first);
+    const SessionId second = store.Begin({16000, "", ""});
+    store.Abandon(second);
+
+    const auto sessions = store.ListSessions();
+    ASSERT_EQ(sessions.size(), 2u);
+    EXPECT_EQ(sessions[1].id, first);
+    EXPECT_EQ(sessions[1].state, "finalised");
+    EXPECT_FALSE(sessions[1].ended_at.empty());
+    EXPECT_EQ(sessions[0].state, "recording") << "abandoned stays recoverable";
+    EXPECT_TRUE(sessions[0].ended_at.empty());
+}
+
+TEST(SessionStore, DeleteErasesAFinishedSession) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Append(id, Ramp(16000), 0);
+    store.AppendTurn(id, {0, 16000, "", "to be erased"});
+    store.Finalise(id);
+
+    store.Delete(id);
+
+    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".db")));
+    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".key")));
+    EXPECT_TRUE(store.ListSessions().empty());
+    EXPECT_THROW(store.ReadTurns(id), std::runtime_error);
+}
+
+TEST(SessionStore, TheRecordingSessionCannotBeReadOrDeleted) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+
+    EXPECT_THROW(store.ReadTurns(id), std::runtime_error);
+    EXPECT_THROW(store.Delete(id), std::runtime_error);
+    store.Finalise(id);
+}
+
+TEST(SessionStore, UnknownIdsAreRefused) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    EXPECT_THROW(store.ReadTurns("nope"), std::runtime_error);
+    EXPECT_THROW(store.Delete("nope"), std::runtime_error);
+}
+
 TEST(SessionStore, LifecycleRoundTripsTheAudio) {
     TempRoot root;
     const auto audio = Ramp(40000);  // 2.5 s at 16 kHz

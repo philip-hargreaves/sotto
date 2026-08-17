@@ -197,10 +197,20 @@ void SqliteSessionStore::Abandon(const SessionId& id) {
 void SqliteSessionStore::Cancel(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
-
-    // Key first: whatever survives of the file afterwards is unreadable
     session.db.reset();
-    const std::filesystem::path base = root_ / "sessions" / session.id;
+    EraseOnDisk(session.id);
+    open_.reset();
+}
+
+void SqliteSessionStore::Delete(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RequireNotRecording(id);
+    EraseOnDisk(id);
+}
+
+void SqliteSessionStore::EraseOnDisk(const SessionId& id) {
+    // Key first: whatever survives of the file afterwards is unreadable
+    const std::filesystem::path base = root_ / "sessions" / id;
     std::error_code ignored;
     std::filesystem::remove(base.string() + ".key", ignored);
     std::filesystem::remove(base.string() + ".db", ignored);
@@ -208,10 +218,11 @@ void SqliteSessionStore::Cancel(const SessionId& id) {
     std::filesystem::remove(base.string() + ".db-shm", ignored);
 
     Db::Stmt erase = catalog_.Prepare("DELETE FROM sessions WHERE id = ?");
-    erase.BindText(1, session.id);
+    erase.BindText(1, id);
     erase.Step();
-
-    open_.reset();
+    if (catalog_.QueryInt64("SELECT changes()") == 0) {
+        throw std::runtime_error("no session " + id);
+    }
 }
 
 std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {
@@ -226,6 +237,57 @@ std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {
         found.push_back(std::move(session));
     }
     return found;
+}
+
+std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<SessionSummary> sessions;
+    Db::Stmt select = catalog_.Prepare(
+        "SELECT id, started_at, ended_at, state, sample_rate FROM sessions"
+        " ORDER BY started_at DESC, rowid DESC");
+    while (select.Step()) {
+        sessions.push_back({select.ColumnText(0), select.ColumnText(1), select.ColumnText(2),
+                            select.ColumnText(3), static_cast<int>(select.ColumnInt64(4))});
+    }
+    return sessions;
+}
+
+std::vector<asr::Turn> SqliteSessionStore::ReadTurns(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RequireNotRecording(id);
+
+    const std::filesystem::path base = root_ / "sessions" / id;
+    if (!std::filesystem::exists(base.string() + ".db")) {
+        throw std::runtime_error("no session " + id);
+    }
+    std::ifstream key_file(base.string() + ".key", std::ios::binary);
+    const std::vector<std::uint8_t> wrapped((std::istreambuf_iterator<char>(key_file)),
+                                            std::istreambuf_iterator<char>());
+    const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
+
+    Db db(base.string() + ".db");
+    Db::Stmt select =
+        db.Prepare("SELECT seq, first_frame, frame_count, payload FROM turns ORDER BY seq");
+    std::vector<asr::Turn> turns;
+    while (select.Step()) {
+        const auto plain =
+            cipher.Open(Domain::kTurns, id, static_cast<std::uint64_t>(select.ColumnInt64(0)),
+                        select.ColumnBlob(3));
+        const auto content = nlohmann::json::parse(plain.begin(), plain.end());
+        asr::Turn turn;
+        turn.first_frame = static_cast<std::uint64_t>(select.ColumnInt64(1));
+        turn.frame_count = static_cast<std::uint64_t>(select.ColumnInt64(2));
+        turn.speaker = content.at("speaker").get<std::string>();
+        turn.text = content.at("text").get<std::string>();
+        turns.push_back(std::move(turn));
+    }
+    return turns;
+}
+
+void SqliteSessionStore::RequireNotRecording(const SessionId& id) {
+    if (open_.has_value() && open_->id == id) {
+        throw std::runtime_error(id + " is still recording");
+    }
 }
 
 SqliteSessionStore::Open& SqliteSessionStore::RequireOpen(const SessionId& id) {
