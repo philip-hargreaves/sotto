@@ -66,11 +66,13 @@ target_link_libraries(gpu_tests PRIVATE
 # And for tests needing staged model weights
 add_executable(models_tests
     adapters/asr_model_test.cpp
+    adapters/asr_wer_test.cpp
     adapters/whisper_real_test.cpp)
 target_compile_definitions(models_tests PRIVATE
     SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models")
 target_link_libraries(models_tests PRIVATE
-    sotto_models sotto_transcription sotto_warnings openvino::genai GTest::gtest_main)
+    sotto_models sotto_transcription sotto_warnings nlohmann_json::nlohmann_json
+    openvino::genai GTest::gtest_main)
 
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)

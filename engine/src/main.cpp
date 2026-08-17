@@ -16,8 +16,10 @@
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
+#include "adapters/models/ov_runtime.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
+#include "adapters/transcription/whisper_transcriber.hpp"
 #include "core/session_controller.hpp"
 
 namespace {
@@ -100,9 +102,19 @@ int main(int argc, char* argv[]) {
         } else {
             factory = [] { return std::make_unique<sotto::audio::WasapiCapture>(); };
         }
-        sotto::asr::ScriptedTranscriber transcriber;
+        // The store's contents decide: real transcription when the ASR role
+        // is staged, scripted otherwise (CI, fresh installs)
+        sotto::models::OvRuntime ov_runtime;
+        std::unique_ptr<sotto::asr::ITranscriber> transcriber;
+        try {
+            model_store.Resolve("asr", "default");
+            transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
+            transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();
+        }
         sotto::audio::SessionController controller(std::move(factory), events, session_store,
-                                                   transcriber);
+                                                   *transcriber);
 
         sotto::ipc::RegisterMethods(server, controller, model_store);
         server.ServeOneClient();
