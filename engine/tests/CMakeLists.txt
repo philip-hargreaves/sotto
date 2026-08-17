@@ -62,11 +62,21 @@ add_executable(gpu_tests
 target_link_libraries(gpu_tests PRIVATE
     sotto_models sotto_warnings openvino::genai GTest::gtest_main)
 
+# And for tests needing staged model weights
+add_executable(models_tests
+    adapters/asr_model_test.cpp)
+target_compile_definitions(models_tests PRIVATE
+    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models")
+target_link_libraries(models_tests PRIVATE
+    sotto_models sotto_warnings openvino::genai GTest::gtest_main)
+
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)
 add_dependencies(gpu_tests ov_test_runtime)
+add_dependencies(models_tests ov_test_runtime)
 
 include(GoogleTest)
 gtest_discover_tests(engine_tests)
 gtest_discover_tests(capture_tests PROPERTIES LABELS microphone)
 gtest_discover_tests(gpu_tests PROPERTIES LABELS gpu)
+gtest_discover_tests(models_tests PROPERTIES LABELS models)

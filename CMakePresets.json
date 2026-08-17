@@ -35,13 +35,13 @@
             "name": "ci-dev",
             "configurePreset": "dev",
             "output": { "outputOnFailure": true },
-            "filter": { "exclude": { "label": "microphone|gpu" } }
+            "filter": { "exclude": { "label": "microphone|gpu|models" } }
         },
         {
             "name": "ci-release",
             "configurePreset": "release",
             "output": { "outputOnFailure": true },
-            "filter": { "exclude": { "label": "microphone|gpu" } }
+            "filter": { "exclude": { "label": "microphone|gpu|models" } }
         }
     ],
     "workflowPresets": [
