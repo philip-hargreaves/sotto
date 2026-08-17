@@ -1,0 +1,15 @@
+{
+    "jsonrpc": "2.0",
+    "id": 7,
+    "result": {
+        "sessions": [
+            {
+                "id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                "startedAt": "2026-08-17T10:15:00Z",
+                "endedAt": "2026-08-17T10:23:41Z",
+                "state": "finalised",
+                "sampleRate": 16000
+            }
+        ]
+    }
+}

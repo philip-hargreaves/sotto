@@ -2,9 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
+#include "adapters/storage/sqlite_session_store.hpp"
 #include "core/version.hpp"
 
 namespace sotto::ipc {
@@ -94,6 +97,71 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
     const json built = MakeResult(std::int64_t{7}, HandleModels(store));
     EXPECT_EQ(built, LoadFixture("models-list.json"));
     std::filesystem::remove_all(root);
+}
+
+struct SessionStoreFixture {
+    std::filesystem::path root;
+    std::unique_ptr<sotto::store::SqliteSessionStore> store;
+
+    SessionStoreFixture() {
+        root = std::filesystem::temp_directory_path() /
+               ("sotto-handlers-sessions-" +
+                std::to_string(::testing::UnitTest::GetInstance()->random_seed()) + "-" +
+                ::testing::UnitTest::GetInstance()->current_test_info()->name());
+        store = std::make_unique<sotto::store::SqliteSessionStore>(root, std::chrono::hours(1));
+    }
+
+    ~SessionStoreFixture() {
+        store.reset();
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+};
+
+TEST(Handlers, SessionListAndTranscriptRoundTrip) {
+    SessionStoreFixture fixture;
+    const auto id = fixture.store->Begin({16000, "", ""});
+    fixture.store->AppendTurn(id, {480000, 48000, "", "about three weeks now, mostly mornings"});
+    fixture.store->Finalise(id);
+
+    const json list = HandleSessionList(*fixture.store);
+    ASSERT_EQ(list["sessions"].size(), 1u);
+    EXPECT_EQ(list["sessions"][0]["id"], id);
+    EXPECT_EQ(list["sessions"][0]["state"], "finalised");
+    EXPECT_EQ(list["sessions"][0]["sampleRate"], 16000);
+    EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
+
+    const auto outcome = HandleSessionTranscript(*fixture.store, json{{"id", id}});
+    ASSERT_TRUE(std::holds_alternative<json>(outcome));
+    // The result payload matches the fixture's shape byte for byte
+    const json built = MakeResult(std::int64_t{8}, std::get<json>(outcome));
+    EXPECT_EQ(built, LoadFixture("session-transcript.json"));
+}
+
+TEST(Handlers, SessionDeleteRemovesAndUnknownIdsError) {
+    SessionStoreFixture fixture;
+    const auto id = fixture.store->Begin({16000, "", ""});
+    fixture.store->Finalise(id);
+
+    const auto deleted = HandleSessionDelete(*fixture.store, json{{"id", id}});
+    ASSERT_TRUE(std::holds_alternative<json>(deleted));
+    EXPECT_TRUE(HandleSessionList(*fixture.store)["sessions"].empty());
+
+    const auto missing = HandleSessionDelete(*fixture.store, json{{"id", "nope"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(missing));
+    const json built = MakeError(std::int64_t{9}, std::get<Error>(missing));
+    EXPECT_EQ(built, LoadFixture("session-error.json"));
+}
+
+TEST(Handlers, SessionMethodsRejectAMissingId) {
+    SessionStoreFixture fixture;
+    for (const json params : {json::object(), json{{"id", 42}}}) {
+        const auto transcript = HandleSessionTranscript(*fixture.store, params);
+        ASSERT_TRUE(std::holds_alternative<Error>(transcript)) << params.dump();
+        EXPECT_EQ(std::get<Error>(transcript).code, kInvalidParams);
+        const auto deleted = HandleSessionDelete(*fixture.store, params);
+        ASSERT_TRUE(std::holds_alternative<Error>(deleted)) << params.dump();
+    }
 }
 
 TEST(Handlers, AnEmptyModelStoreListsNothing) {

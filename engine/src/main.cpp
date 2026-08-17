@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
         sotto::audio::SessionController controller(std::move(factory), events, session_store,
                                                    *transcriber);
 
-        sotto::ipc::RegisterMethods(server, controller, model_store);
+        sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
         server.ServeOneClient();
         controller.Stop();
         return 0;
