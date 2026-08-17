@@ -82,6 +82,12 @@ target_link_libraries(sotto_models
     PUBLIC sotto_core nlohmann_json::nlohmann_json openvino::genai
     PRIVATE sotto_warnings bcrypt)
 
+add_library(sotto_transcription STATIC
+    src/adapters/transcription/whisper_transcriber.cpp)
+target_link_libraries(sotto_transcription
+    PUBLIC sotto_core
+    PRIVATE sotto_models sotto_warnings openvino::genai)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
@@ -90,6 +96,9 @@ target_link_libraries(sotto_audio
     PRIVATE sotto_warnings ole32 advapi32)
 
 add_executable(sotto_engine src/main.cpp)
-target_link_libraries(sotto_engine PRIVATE sotto_ipc sotto_audio sotto_storage sotto_warnings)
+target_link_libraries(sotto_engine PRIVATE
+    sotto_ipc sotto_audio sotto_storage sotto_transcription sotto_warnings)
+sotto_deploy_openvino(ov_engine_runtime)
+add_dependencies(sotto_engine ov_engine_runtime)
 
 add_subdirectory(tests)
