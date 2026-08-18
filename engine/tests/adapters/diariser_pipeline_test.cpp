@@ -61,5 +61,51 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
     std::filesystem::remove_all(anchor_root, ec);
 }
 
+// The bit-identity acceptance for capture-fed finalise: feeding the same
+// audio incrementally must change nothing about the diarised output
+TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
+    const auto audio = LoadWav(kWav);
+    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    models::OvRuntime runtime;
+    const auto root = std::filesystem::temp_directory_path() / "sotto-diar-capture-test";
+    std::filesystem::create_directories(root);
+    SpeakerDiariser batch(store, runtime, root / "a");
+    SpeakerDiariser fed(store, runtime, root / "b");
+
+    // Synthetic reconciled turns, 6 s each; edges double as slice cuts
+    std::vector<asr::Turn> turns;
+    std::vector<std::uint64_t> boundaries;
+    for (std::uint64_t f = 0; f + 96000 <= audio.size(); f += 96000) {
+        asr::Turn turn;
+        turn.first_frame = f;
+        turn.frame_count = 96000;
+        turn.text = "spoken words";
+        turns.push_back(std::move(turn));
+        boundaries.push_back(f);
+        boundaries.push_back(f + 96000);
+    }
+    const DecodeClipFn decode = [](std::span<const float>, std::uint64_t) {
+        return std::string("re-decoded");
+    };
+    for (std::uint64_t fed_to = 80000; fed_to < audio.size(); fed_to += 80000) {  // 5 s steps
+        fed.Advance(std::span(audio).first(fed_to), turns, decode);
+    }
+
+    const auto want = batch.Diarise(audio, boundaries);
+    const auto got = fed.Diarise(audio, boundaries);
+
+    ASSERT_EQ(got.slices.size(), want.slices.size());
+    for (std::size_t i = 0; i < got.slices.size(); ++i) {
+        EXPECT_EQ(got.slices[i].first_frame, want.slices[i].first_frame);
+        EXPECT_EQ(got.slices[i].end_frame, want.slices[i].end_frame);
+        EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
+    }
+    EXPECT_EQ(got.cluster_count, want.cluster_count);
+    EXPECT_FALSE(fed.TakeResplitPieces().empty()) << "capture considered the completed turns";
+    EXPECT_TRUE(batch.TakeResplitPieces().empty()) << "nothing accumulates without Advance";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
 }  // namespace
 }  // namespace sotto::diar

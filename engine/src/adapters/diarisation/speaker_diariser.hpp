@@ -2,9 +2,11 @@
 
 #include <filesystem>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
+#include "adapters/diarisation/diar_worker.hpp"
 #include "adapters/diarisation/segmenter.hpp"
 #include "adapters/diarisation/speaker_embedder.hpp"
 #include "adapters/vad/silero_vad.hpp"
@@ -32,6 +34,16 @@ class SpeakerDiariser : public IDiariser {
     void AccrueDoctor(std::span<const float> audio, const std::vector<LabelledSlice>& slices,
                       int doctor_cluster) override;
 
+    // Capture-phase work; Diarise then finalises from the accumulated state
+    void Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
+                 const DecodeClipFn& decode) override {
+        worker_.Advance(audio, turns, decode);
+    }
+
+    ResplitPieces TakeResplitPieces() override {
+        return std::exchange(pieces_, {});
+    }
+
     SpeakerEmbedder& Embedder() {
         return embedder_;
     }
@@ -41,6 +53,8 @@ class SpeakerDiariser : public IDiariser {
     Segmenter segmenter_;
     SpeakerEmbedder embedder_;
     AnchorStore anchors_;
+    DiarWorker worker_;
+    ResplitPieces pieces_;
 };
 
 }  // namespace sotto::diar

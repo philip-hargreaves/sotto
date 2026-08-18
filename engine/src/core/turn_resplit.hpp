@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <span>
 #include <string>
@@ -17,9 +16,6 @@ namespace sotto::diar {
 inline constexpr std::uint64_t kResplitMinShareFrames = 4800;  // 0.3 s to count as a part
 inline constexpr std::uint64_t kResplitMinClipFrames = 6400;   // 0.4 s: shorter clips hallucinate
 inline constexpr std::size_t kResplitMaxRepeat = 4;            // 5-gram degeneracy guard
-
-// (clip, absolute first frame) -> transcribed text
-using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint64_t)>;
 
 namespace detail {
 
@@ -50,11 +46,10 @@ inline std::size_t MaxNgramRepeat(const std::string& text) {
 
 }  // namespace detail
 
-// A transcribed turn straddling two different-speaker slices has its AUDIO
-// cut at the slice-boundary midpoints and each piece re-transcribed, so no
-// word can land on the wrong speaker - splitting the existing text would
-// have to guess which word was spoken when. Any piece under 0.4 s, or an
-// empty or degenerate decode, aborts the whole turn back to the original
+// A turn straddling two speakers has its AUDIO cut at the slice-boundary
+// midpoints and each piece re-transcribed - splitting the text would guess
+// which word was spoken when. A piece under 0.4 s or an empty or degenerate
+// decode aborts the turn back to the original
 inline std::vector<asr::Turn> ResplitStraddles(const std::vector<asr::Turn>& turns,
                                                const std::vector<LabelledSlice>& slices,
                                                std::span<const float> audio,
@@ -117,6 +112,33 @@ inline std::vector<asr::Turn> ResplitStraddles(const std::vector<asr::Turn>& tur
             out.push_back(turn);  // attribution's straddle split still applies
         }
     }
+    return out;
+}
+
+// Capture-phase pieces replace their source turns; unconsidered turns are
+// re-split against the final slices as usual
+inline std::vector<asr::Turn> SpliceResplits(const std::vector<asr::Turn>& turns,
+                                             const ResplitPieces& pieces,
+                                             const std::vector<LabelledSlice>& slices,
+                                             std::span<const float> audio,
+                                             const DecodeClipFn& decode) {
+    std::vector<asr::Turn> out;
+    std::vector<asr::Turn> remainder;
+    for (const auto& turn : turns) {
+        const auto it = pieces.find({turn.first_frame, turn.frame_count});
+        if (it == pieces.end()) {
+            remainder.push_back(turn);
+        } else if (it->second.empty()) {
+            out.push_back(turn);
+        } else {
+            for (const auto& piece : it->second) out.push_back(piece);
+        }
+    }
+    for (auto& turn : ResplitStraddles(remainder, slices, audio, decode)) {
+        out.push_back(std::move(turn));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const asr::Turn& a, const asr::Turn& b) { return a.first_frame < b.first_frame; });
     return out;
 }
 

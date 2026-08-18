@@ -29,25 +29,39 @@ SpeakerDiariser::SpeakerDiariser(const models::ModelStore& store, models::OvRunt
     : vad_(store, runtime),
       segmenter_(store, runtime),
       embedder_(store, runtime),
-      anchors_(anchor_root) {}
+      anchors_(anchor_root),
+      worker_(vad_, segmenter_, embedder_) {}
 
 DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
                                        std::span<const std::uint64_t> turn_boundaries) {
     DiariseResult result;
     if (audio.empty()) return result;
 
-    vad_.Reset();
+    // With capture-phase state, finalise only completes it; without, the
+    // whole recording is processed here. Either way the maths is identical
+    CaptureDiarisation capture;
     std::vector<float> probabilities;
-    std::vector<float> hop(audio::kVadHopFrames, 0.0f);
-    for (std::size_t offset = 0; offset < audio.size(); offset += audio::kVadHopFrames) {
-        const std::size_t have = std::min<std::size_t>(audio::kVadHopFrames, audio.size() - offset);
-        std::copy_n(audio.begin() + static_cast<std::ptrdiff_t>(offset), have, hop.begin());
-        std::fill(hop.begin() + static_cast<std::ptrdiff_t>(have), hop.end(), 0.0f);
-        probabilities.push_back(vad_.SpeechProbability(hop));
+    SegResult seg;
+    if (worker_.Engaged()) {
+        worker_.Finish(audio);
+        capture = worker_.Take();
+        probabilities = std::move(capture.vad_probabilities);
+        seg = std::move(capture.seg);
+        pieces_ = std::move(capture.resplit_pieces);
+    } else {
+        vad_.Reset();
+        std::vector<float> hop(audio::kVadHopFrames, 0.0f);
+        for (std::size_t offset = 0; offset < audio.size(); offset += audio::kVadHopFrames) {
+            const std::size_t have =
+                std::min<std::size_t>(audio::kVadHopFrames, audio.size() - offset);
+            std::copy_n(audio.begin() + static_cast<std::ptrdiff_t>(offset), have, hop.begin());
+            std::fill(hop.begin() + static_cast<std::ptrdiff_t>(have), hop.end(), 0.0f);
+            probabilities.push_back(vad_.SpeechProbability(hop));
+        }
+        seg = segmenter_.Run(audio);
     }
 
     const auto regions = SpeechRegions(probabilities, audio.size());
-    auto seg = segmenter_.Run(audio);
     seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
                              turn_boundaries.end());
     std::sort(seg.change_points.begin(), seg.change_points.end());
@@ -57,11 +71,17 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
     std::vector<std::uint64_t> durations;
     std::vector<Region> kept;
     for (const Region& slice : slices) {
-        const auto ranges = EmbeddingRanges(slice, seg.overlap_spans);
-        if (ranges.empty()) continue;
-        const auto clip = Gather(audio, ranges);
-        if (clip.size() < 400) continue;  // below one fbank frame
-        embeddings.push_back(embedder_.Embed(clip));
+        const auto it = capture.embeddings.find({slice.first_frame, slice.end_frame});
+        if (it != capture.embeddings.end()) {
+            if (it->second.empty()) continue;  // was too short to embed
+            embeddings.push_back(it->second);
+        } else {
+            const auto ranges = EmbeddingRanges(slice, seg.overlap_spans);
+            if (ranges.empty()) continue;
+            const auto clip = Gather(audio, ranges);
+            if (clip.size() < 400) continue;  // below one fbank frame
+            embeddings.push_back(embedder_.Embed(clip));
+        }
         durations.push_back(slice.end_frame - slice.first_frame);
         kept.push_back(slice);
     }

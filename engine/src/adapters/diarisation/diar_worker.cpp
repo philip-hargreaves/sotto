@@ -9,9 +9,30 @@
 
 namespace sotto::diar {
 
-DiarWorker::DiarWorker(const models::ModelStore& store, models::OvRuntime& runtime)
-    : vad_(store, runtime), segmenter_(store, runtime), embedder_(store, runtime) {
+DiarWorker::DiarWorker(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder)
+    : vad_(vad), segmenter_(segmenter), embedder_(embedder) {
     vad_.Reset();
+}
+
+void DiarWorker::Finish(std::span<const float> audio) {
+    auto& s = state_;
+    std::vector<float> hop(audio::kVadHopFrames, 0.0f);
+    while (s.vad_probabilities.size() * audio::kVadHopFrames < audio.size()) {
+        const auto at = s.vad_probabilities.size() * audio::kVadHopFrames;
+        const auto have = std::min<std::size_t>(audio::kVadHopFrames, audio.size() - at);
+        std::copy_n(audio.begin() + static_cast<std::ptrdiff_t>(at), have, hop.begin());
+        std::fill(hop.begin() + static_cast<std::ptrdiff_t>(have), hop.end(), 0.0f);
+        s.vad_probabilities.push_back(vad_.SpeechProbability(hop));
+    }
+    if (s.seg_done < audio.size()) {
+        const auto part = segmenter_.Run(audio.subspan(s.seg_done));
+        for (const auto c : part.change_points) s.seg.change_points.push_back(c + s.seg_done);
+        for (const auto& span : part.overlap_spans) {
+            s.seg.overlap_spans.push_back(
+                {span.first_frame + s.seg_done, span.end_frame + s.seg_done});
+        }
+        s.seg_done = audio.size();
+    }
 }
 
 const std::vector<float>& DiarWorker::EmbedSlice(std::span<const float> audio,
