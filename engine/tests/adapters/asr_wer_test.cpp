@@ -28,7 +28,8 @@ constexpr const char* kRef =
     "C:/dev/intelliscribe/bench/transcription/references/day1_consultation01.json";
 
 // Long-form parity on this consult is 21.28%; VAD endpointing measured
-// 20.37%, so the gate holds the reclaim, not just the baseline
+// 20.37%, the full boundary stack (anchor + trim + dedup) 20.58%, so the
+// gate holds the reclaim, not just the baseline
 constexpr double kMaxWer = 0.22;
 
 std::vector<float> LoadWav(const char* path) {
