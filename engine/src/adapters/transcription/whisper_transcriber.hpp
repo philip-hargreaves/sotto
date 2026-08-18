@@ -5,6 +5,7 @@
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <thread>
 #include <vector>
@@ -54,6 +55,7 @@ class WhisperTranscriber : public ITranscriber {
     std::condition_variable cv_;
     std::deque<Window> queue_;
     ITurnSink* sink_ = nullptr;
+    std::optional<Turn> previous_turn_;  // for the boundary dedup backstop
     bool busy_ = false;
     bool stopping_ = false;
     std::thread worker_;

@@ -118,10 +118,10 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     transcriber.Begin(sink);
     const auto decode_start = std::chrono::steady_clock::now();
     for (const auto& window : endpointer.Push(frames)) {
-        transcriber.Submit(window.frames, window.first_frame);
+        transcriber.Submit(window.frames, window.first_frame, window.first_new_frame);
     }
     if (const auto tail = endpointer.Flush()) {
-        transcriber.Submit(tail->frames, tail->first_frame);
+        transcriber.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
     }
     transcriber.Finish();
     const auto decode =
