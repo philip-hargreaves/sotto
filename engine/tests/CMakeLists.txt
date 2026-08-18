@@ -20,6 +20,7 @@ add_executable(engine_tests
     core/diar_regions_test.cpp
     core/endpointer_test.cpp
     core/level_meter_test.cpp
+    core/per_turn_test.cpp
     core/role_naming_test.cpp
     core/seg_decode_test.cpp
     core/session_controller_test.cpp

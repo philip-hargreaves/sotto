@@ -14,10 +14,9 @@
 
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
+#include "core/per_turn.hpp"
 #include "core/role_naming.hpp"
-#include "core/speaker_attribution.hpp"
 #include "core/turn_reconcile.hpp"
-#include "core/turn_resplit.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/diariser.hpp"
 #include "ports/session_store.hpp"
@@ -362,25 +361,33 @@ class SessionController {
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
-                // Capture-phase re-splits splice in; only turns capture never
-                // settled re-decode here, off the live stream, so nothing
-                // reaches the store and the replace below carries the repairs
-                transcribed = diar::SpliceResplits(
-                    transcribed, diariser_->TakeResplitPieces(), result.slices, session_audio_,
-                    [this](std::span<const float> clip, std::uint64_t first) {
-                        return transcriber_.DecodeClip(clip, first);
-                    });
-                const auto texts = diar::AssignSliceTexts(transcribed, result.slices);
+                // Each merged turn gets the text of its own audio, decoded
+                // off the live stream; assignment is exact by construction
+                const auto turns = diar::MergeByCluster(result.slices);
+                const auto turn_texts =
+                    diar::DecodeTurnTexts(turns, session_audio_,
+                                          [this](std::span<const float> clip, std::uint64_t first) {
+                                              return transcriber_.DecodeClip(clip, first);
+                                          });
                 std::vector<diar::RoleTurn> role_turns;
-                for (std::size_t i = 0; i < result.slices.size(); ++i) {
-                    role_turns.push_back({result.slices[i].cluster,
-                                          result.slices[i].end_frame - result.slices[i].first_frame,
-                                          texts[i]});
+                for (std::size_t i = 0; i < turns.size(); ++i) {
+                    role_turns.push_back({turns[i].cluster,
+                                          turns[i].end_frame - turns[i].first_frame,
+                                          turn_texts[i]});
                 }
                 const auto roles =
                     diar::NameRoles(role_turns, result.cluster_count, result.anchor_similarity);
-                const auto attributed =
-                    diar::BuildAttributedTurns(result.slices, texts, roles.role_of_cluster);
+                std::vector<asr::Turn> attributed;
+                for (std::size_t i = 0; i < turns.size(); ++i) {
+                    if (turn_texts[i].empty()) continue;
+                    asr::Turn turn;
+                    turn.first_frame = turns[i].first_frame;
+                    turn.frame_count = turns[i].end_frame - turns[i].first_frame;
+                    turn.speaker =
+                        roles.role_of_cluster[static_cast<std::size_t>(turns[i].cluster)];
+                    turn.text = turn_texts[i];
+                    attributed.push_back(std::move(turn));
+                }
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
                 }
