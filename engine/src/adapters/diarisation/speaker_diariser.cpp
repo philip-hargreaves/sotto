@@ -47,7 +47,7 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         capture = worker_.Take();
         probabilities = std::move(capture.vad_probabilities);
         seg = std::move(capture.seg);
-        pieces_ = std::move(capture.resplit_pieces);
+        texts_ = std::move(capture.turn_texts);
     } else {
         vad_.Reset();
         std::vector<float> hop(audio::kVadHopFrames, 0.0f);

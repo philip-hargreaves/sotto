@@ -14,20 +14,22 @@
 
 namespace sotto::diar {
 
-// What capture accumulates for finalise to splice in
+// Decodes per speculation pass; bounds a tick so a stop never waits long
+inline constexpr int kSpeculateBudget = 24;
+
+// What capture accumulates for finalise to consume
 struct CaptureDiarisation {
     std::vector<float> vad_probabilities;  // one per hop
     SegResult seg;                         // absolute frames
     std::uint64_t seg_done = 0;            // frames fully segmented
     // Slice span -> embedding; empty means too short to embed
     std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> embeddings;
-    ResplitPieces resplit_pieces;
+    TurnTexts turn_texts;  // the speculation cache, keyed on exact decode spans
 };
 
-// Runs diarisation's causal stages during capture, so finalise only pays the
-// unsettled tail, clustering and roles. All work stays behind the settled
-// frontier, so finalise remains bit-identical to a whole-recording pass.
-// Borrows the diariser's models; nothing else may drive them mid-capture
+// Diarisation's causal stages, run during capture strictly behind the
+// settled frontier; finalise stays bit-identical to a whole-recording pass
+// and pays only the tail. Borrows the diariser's models
 class DiarWorker {
    public:
     DiarWorker(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder);

@@ -79,6 +79,29 @@ TEST(DecodeTurnTexts, ADegenerateDecodeYieldsEmpty) {
     EXPECT_TRUE(texts[0].empty()) << "a repetition loop has no safe fallback";
 }
 
+TEST(DecodeTurnTexts, ACachedSpanIsUsedWithoutDecoding) {
+    const std::vector<LabelledSlice> turns{{0, 30000, 0}, {30000, 60000, 1}};
+    TurnTexts cache;
+    cache[{0, 30000}] = "speculated words";
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;
+    const auto texts = DecodeTurnTexts(turns, kAudio, Decoder(&calls), &cache);
+    EXPECT_EQ(texts[0], "speculated words");
+    EXPECT_EQ(texts[1], "spoken at 30000");
+    ASSERT_EQ(calls.size(), 1u) << "only the miss decodes";
+}
+
+TEST(DecodeTurnTexts, ACacheKeyMustMatchTheSpanExactly) {
+    // A stale speculation whose boundaries did not survive clustering is
+    // never found; the turn decodes fresh
+    const std::vector<LabelledSlice> turns{{0, 30000, 0}};
+    TurnTexts cache;
+    cache[{0, 29999}] = "stale speculation";
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;
+    const auto texts = DecodeTurnTexts(turns, kAudio, Decoder(&calls), &cache);
+    EXPECT_EQ(texts[0], "spoken at 0");
+    EXPECT_EQ(calls.size(), 1u);
+}
+
 TEST(DecodeTurnTexts, ATurnPastTheAudioEndIsBounded) {
     const std::vector<LabelledSlice> turns{{390000, 500000, 0}};
     std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;

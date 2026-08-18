@@ -271,10 +271,16 @@ class SessionController {
             // The same reconcile finalise runs, so turn spans agree
             diar::ReconcileTurns(turns);
             try {
-                diariser_->Advance(audio, turns,
-                                   [this](std::span<const float> clip, std::uint64_t first) {
-                                       return transcriber_.DecodeClip(clip, first);
-                                   });
+                diariser_->Advance(
+                    audio, turns,
+                    [this](std::span<const float> clip, std::uint64_t first) -> std::string {
+                        {
+                            std::lock_guard<std::mutex> guard(mutex_);
+                            // A stop must not wait behind a speculation pass
+                            if (diar_stop_) return {};
+                        }
+                        return transcriber_.DecodeClip(clip, first);
+                    });
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
             lock.lock();
@@ -361,14 +367,17 @@ class SessionController {
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
-                // Each merged turn gets the text of its own audio, decoded
-                // off the live stream; assignment is exact by construction
+                // Each merged turn gets the text of its own audio; capture
+                // speculation filled most of the cache, so this mostly
+                // decodes only the tail
                 const auto turns = diar::MergeByCluster(result.slices);
-                const auto turn_texts =
-                    diar::DecodeTurnTexts(turns, session_audio_,
-                                          [this](std::span<const float> clip, std::uint64_t first) {
-                                              return transcriber_.DecodeClip(clip, first);
-                                          });
+                const auto cache = diariser_->TakeTurnTexts();
+                const auto turn_texts = diar::DecodeTurnTexts(
+                    turns, session_audio_,
+                    [this](std::span<const float> clip, std::uint64_t first) {
+                        return transcriber_.DecodeClip(clip, first);
+                    },
+                    &cache);
                 std::vector<diar::RoleTurn> role_turns;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
                     role_turns.push_back({turns[i].cluster,

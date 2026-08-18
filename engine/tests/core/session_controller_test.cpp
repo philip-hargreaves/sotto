@@ -363,6 +363,7 @@ struct FakeDiariser : diar::IDiariser {
     std::size_t advanced_turns = 0;
     int takes = 0;
     int discards = 0;
+    bool speculate_first_turn = false;
 
     diar::DiariseResult Diarise(std::span<const float> audio,
                                 std::span<const std::uint64_t> turn_boundaries) override {
@@ -395,9 +396,15 @@ struct FakeDiariser : diar::IDiariser {
         advanced_turns = turns.size();
     }
 
-    diar::ResplitPieces TakeResplitPieces() override {
+    // Pretends capture speculated the first cluster's turn (its span is the
+    // first half of the audio Diarise saw)
+    diar::TurnTexts TakeTurnTexts() override {
         ++takes;
-        return {};
+        diar::TurnTexts cache;
+        if (speculate_first_turn && audio_frames > 0) {
+            cache[{0, audio_frames / 2}] = "speculated words";
+        }
+        return cache;
     }
 
     void DiscardCapture() override {
@@ -509,6 +516,29 @@ TEST(SessionController, DiarisationAdvancesDuringCapture) {
     EXPECT_LE(diariser.advanced_frames, store.frames.size())
         << "Advance only ever sees captured audio";
     EXPECT_EQ(diariser.calls, 1);
+}
+
+TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.2, 0.8};
+    diariser.speculate_first_turn = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
+    controller.Stop();
+
+    EXPECT_EQ(diariser.takes, 1);
+    ASSERT_EQ(store.turns.size(), 2u);
+    EXPECT_EQ(store.turns[0].text, "speculated words") << "the cache hit stands";
+    EXPECT_NE(store.turns[1].text.find("re-decoded"), std::string::npos)
+        << "the miss decodes fresh";
 }
 
 TEST(SessionController, CancelDiscardsCaptureState) {

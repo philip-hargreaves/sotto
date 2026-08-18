@@ -18,6 +18,9 @@ using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint
 // Turn span -> its re-decoded pieces; empty means the turn stands
 using ResplitPieces = std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<asr::Turn>>;
 
+// Exact decode span -> speculated text
+using TurnTexts = std::map<std::pair<std::uint64_t, std::uint64_t>, std::string>;
+
 struct LabelledSlice {
     std::uint64_t first_frame = 0;
     std::uint64_t end_frame = 0;
@@ -49,8 +52,9 @@ class IDiariser {
     // optional - without it Diarise processes the whole recording
     virtual void Advance(std::span<const float>, std::span<const asr::Turn>, const DecodeClipFn&) {}
 
-    // Re-splits accumulated by Advance; valid after Diarise
-    virtual ResplitPieces TakeResplitPieces() {
+    // Turn texts speculated by Advance, keyed on exact decode spans; valid
+    // after Diarise
+    virtual TurnTexts TakeTurnTexts() {
         return {};
     }
 

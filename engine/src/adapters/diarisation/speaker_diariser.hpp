@@ -14,9 +14,6 @@
 
 namespace sotto::diar {
 
-inline constexpr std::uint64_t kOverlapTurnMinFrames =
-    6400;  // 0.4 s of overlap becomes its own turn
-
 // The assembled batch chain: VAD regions -> seg change points ->
 // refined slices -> overlap-excluded embeddings -> clustering -> labels.
 // Each long-enough overlap span is then emitted as a second turn on the
@@ -40,13 +37,13 @@ class SpeakerDiariser : public IDiariser {
         worker_.Advance(audio, turns, decode);
     }
 
-    ResplitPieces TakeResplitPieces() override {
-        return std::exchange(pieces_, {});
+    TurnTexts TakeTurnTexts() override {
+        return std::exchange(texts_, {});
     }
 
     void DiscardCapture() override {
         (void)worker_.Take();
-        pieces_.clear();
+        texts_.clear();
     }
 
     SpeakerEmbedder& Embedder() {
@@ -59,7 +56,7 @@ class SpeakerDiariser : public IDiariser {
     SpeakerEmbedder embedder_;
     AnchorStore anchors_;
     DiarWorker worker_;
-    ResplitPieces pieces_;
+    TurnTexts texts_;
 };
 
 }  // namespace sotto::diar

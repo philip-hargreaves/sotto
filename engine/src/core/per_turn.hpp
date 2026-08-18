@@ -8,19 +8,18 @@
 #include <string>
 #include <vector>
 
+#include "core/diar_regions.hpp"
 #include "ports/diariser.hpp"
 
 namespace sotto::diar {
 
-// 0.30 s: at 0.40 a 0.39 s "No." answering an eczema question was dropped
-// and the note generator fabricated the denial. No finer - "Okay." is 0.38 s
+// 0.30 s: at 0.40 a clinical "No." was dropped and the note fabricated the denial
 inline constexpr std::uint64_t kPerTurnMinClipFrames = 4800;
 inline constexpr std::size_t kPerTurnMaxRepeat = 4;  // 5-gram degeneracy guard
 
 namespace detail {
 
-// Highest repeat count of any 5-gram, sliding: a strided scan misses a
-// cycle whose period does not divide five. Legitimate speech peaks at 2
+// Most-repeated 5-gram, sliding; legitimate speech peaks at 2
 inline std::size_t MaxRepeatedNgram(const std::string& text) {
     std::vector<std::string> words;
     std::string word;
@@ -49,9 +48,7 @@ inline std::size_t MaxRepeatedNgram(const std::string& text) {
 
 }  // namespace detail
 
-// Merge consecutive same-cluster slices on boundaries only. Finalise and
-// capture-time speculation must run this identical operation, or the
-// speculation cache's keys stop matching
+// Finalise and speculation must merge identically or cache keys stop matching
 inline std::vector<LabelledSlice> MergeByCluster(const std::vector<LabelledSlice>& slices) {
     std::vector<LabelledSlice> turns;
     for (const auto& slice : slices) {
@@ -64,25 +61,40 @@ inline std::vector<LabelledSlice> MergeByCluster(const std::vector<LabelledSlice
     return turns;
 }
 
-// Give each merged turn the text of its own audio - there is nothing to
-// align, so no word can land on the wrong speaker. A turn's head clamps
-// past the previous end: that audio is already decoded. A turn nested
-// wholly inside its neighbour (an overlap's second speaker) gets no text:
-// its audio belongs to whoever talked through it, and a decode puts their
-// words under the wrong name - measured, worse than the drop. An empty
-// entry means the turn is dropped
-inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns,
-                                                std::span<const float> audio,
-                                                const DecodeClipFn& decode) {
-    std::vector<std::string> texts(turns.size());
+// Decode spans double as cache keys. Heads clamp past the previous end; a
+// nested overlap turn clamps to nothing (decoding it returns the louder
+// speaker's words under the wrong name)
+inline std::vector<Region> DecodeSpans(const std::vector<LabelledSlice>& turns,
+                                       std::uint64_t audio_frames) {
+    std::vector<Region> spans(turns.size());
     std::uint64_t prev_end = 0;
     for (std::size_t i = 0; i < turns.size(); ++i) {
-        const std::uint64_t b = std::min<std::uint64_t>(turns[i].end_frame, audio.size());
+        const std::uint64_t b = std::min(turns[i].end_frame, audio_frames);
         const std::uint64_t a = std::max(turns[i].first_frame, prev_end);
-        const bool nested = a >= b;
+        spans[i] = {a, b};
         prev_end = std::max(prev_end, b);
-        if (nested) continue;
-        if (b - a < kPerTurnMinClipFrames) continue;
+    }
+    return spans;
+}
+
+// Each merged turn gets the text of its own audio; empty means dropped.
+// Cached texts are used only on an exact key match, so any hit rate is safe
+inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns,
+                                                std::span<const float> audio,
+                                                const DecodeClipFn& decode,
+                                                const TurnTexts* cache = nullptr) {
+    const auto spans = DecodeSpans(turns, audio.size());
+    std::vector<std::string> texts(turns.size());
+    for (std::size_t i = 0; i < turns.size(); ++i) {
+        const auto [a, b] = spans[i];
+        if (a >= b || b - a < kPerTurnMinClipFrames) continue;
+        if (cache != nullptr) {
+            const auto it = cache->find({a, b});
+            if (it != cache->end()) {
+                texts[i] = it->second;
+                continue;
+            }
+        }
         std::string text = decode(audio.subspan(a, b - a), a);
         // A degenerate loop has no safe fallback; empty is the answer
         if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
