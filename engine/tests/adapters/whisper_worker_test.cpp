@@ -137,6 +137,27 @@ TEST(WhisperWorker, AFailedLoadDrainsWindowsWithoutTurnsOrHangs) {
     EXPECT_TRUE(sink.turns.empty());
 }
 
+TEST(WhisperWorker, TurnsInTheReheardOverlapAreNotEmittedAgain) {
+    RecordingSink sink;
+    WhisperTranscriber transcriber([](std::span<const float>, std::uint64_t first) {
+        // Three turns: wholly re-heard, straddling the boundary, wholly new
+        std::vector<Turn> turns;
+        turns.push_back(Labelled(first, 500));         // midpoint 1250
+        turns.push_back(Labelled(first + 800, 600));   // midpoint 2100
+        turns.push_back(Labelled(first + 1500, 400));  // midpoint 2700
+        return turns;
+    });
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(2000);
+    transcriber.Submit(window, 1000, 2000);
+    transcriber.Finish();
+
+    ASSERT_EQ(sink.turns.size(), 2u) << "the re-heard turn must not duplicate";
+    EXPECT_EQ(sink.turns[0].first_frame, 1800u) << "a straddler survives";
+    EXPECT_EQ(sink.turns[1].first_frame, 2500u);
+}
+
 TEST(WhisperWorker, BeginPointsTurnsAtTheNewSink) {
     RecordingSink first_sink;
     RecordingSink second_sink;

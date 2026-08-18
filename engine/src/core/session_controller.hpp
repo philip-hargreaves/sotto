@@ -177,7 +177,8 @@ class SessionController {
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
                 for (const auto& window : controller.endpointer_->Push(frames)) {
-                    controller.transcriber_.Submit(window.frames, window.first_frame);
+                    controller.transcriber_.Submit(window.frames, window.first_frame,
+                                                   window.first_new_frame);
                 }
             }
             for (const auto& reading : controller.meter_.Push(frames)) {
@@ -250,7 +251,7 @@ class SessionController {
         // turn is stored before the outcome below runs
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
             if (const auto tail = endpointer_->Flush()) {
-                transcriber_.Submit(tail->frames, tail->first_frame);
+                transcriber_.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
             }
         }
         transcriber_.Finish();

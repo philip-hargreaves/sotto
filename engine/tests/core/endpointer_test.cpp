@@ -139,12 +139,17 @@ TEST(Endpointer, TheCapBacktracksToTheQuietestHop) {
 
     const auto windows = endpointer.Push(Ramp(Hops(30.0) * kHop));
     ASSERT_EQ(windows.size(), 1u);
-    EXPECT_EQ(windows[0].frames.size(), Hops(26.0) * kHop) << "cut at the quiet hop's start";
+    const std::size_t cut = Hops(26.0) * kHop;
+    EXPECT_EQ(windows[0].frames.size(), cut) << "cut at the quiet hop's start";
+    EXPECT_EQ(windows[0].first_new_frame, 0u);
 
     const auto tail = endpointer.Flush();
     ASSERT_TRUE(tail.has_value());
-    EXPECT_EQ(tail->first_frame, Hops(26.0) * kHop) << "the remainder continues seamlessly";
-    EXPECT_EQ(tail->frames.front(), static_cast<float>(Hops(26.0) * kHop % 100000));
+    EXPECT_EQ(tail->first_frame, cut - Endpointer::kOverlapFrames)
+        << "the next window re-hears the last second";
+    EXPECT_EQ(tail->first_new_frame, cut) << "but only what follows the cut is new";
+    EXPECT_EQ(tail->frames.front(),
+              static_cast<float>((cut - Endpointer::kOverlapFrames) % 100000));
 }
 
 TEST(Endpointer, WindowsAndTailCoverTheSpeechExactly) {
@@ -178,14 +183,35 @@ TEST(Endpointer, UnbrokenSpeechDegeneratesToCappedCuts) {
     ASSERT_TRUE(tail.has_value());
 
     ASSERT_EQ(windows.size(), 2u);
-    std::size_t covered = 0;
+    std::uint64_t new_audio_end = 0;
+    std::size_t new_audio_total = 0;
     for (const auto& window : windows) {
-        EXPECT_EQ(window.first_frame, covered);
+        EXPECT_EQ(window.first_new_frame, new_audio_end) << "new audio spans tile without gaps";
         EXPECT_LE(window.frames.size(), Endpointer::kSoftCapFrames);
-        covered += window.frames.size();
+        new_audio_end = window.first_frame + window.frames.size();
+        new_audio_total += new_audio_end - window.first_new_frame;
     }
-    EXPECT_EQ(tail->first_frame, covered);
-    EXPECT_EQ(covered + tail->frames.size(), Hops(60.0) * kHop);
+    EXPECT_EQ(tail->first_new_frame, new_audio_end);
+    new_audio_total += tail->first_frame + tail->frames.size() - tail->first_new_frame;
+    EXPECT_EQ(new_audio_total, Hops(60.0) * kHop) << "every frame is transcribed exactly once";
+}
+
+TEST(Endpointer, ABreakCloseCarriesNoOverlap) {
+    ScriptedVad vad;
+    Add(vad.probabilities, Hops(3.0), 0.90f);
+    Add(vad.probabilities, Hops(2.5), 0.05f);  // break
+    Add(vad.probabilities, Hops(2.0), 0.90f);
+    Endpointer endpointer(vad);
+
+    const auto windows = endpointer.Push(Ramp(Hops(7.5) * kHop));
+    const auto tail = endpointer.Flush();
+    ASSERT_EQ(windows.size(), 1u);
+    ASSERT_TRUE(tail.has_value());
+
+    EXPECT_EQ(windows[0].first_new_frame, windows[0].first_frame);
+    EXPECT_EQ(tail->first_new_frame, tail->first_frame)
+        << "silence-separated windows share no audio";
+    EXPECT_GE(tail->first_frame, windows[0].first_frame + windows[0].frames.size());
 }
 
 TEST(Endpointer, FlushWithoutSpeechIsEmpty) {

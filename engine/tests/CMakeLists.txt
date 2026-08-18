@@ -19,6 +19,7 @@ add_executable(engine_tests
     core/endpointer_test.cpp
     core/level_meter_test.cpp
     core/session_controller_test.cpp
+    core/turn_assembly_test.cpp
     core/version_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp

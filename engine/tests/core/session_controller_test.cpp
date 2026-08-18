@@ -204,7 +204,8 @@ struct RecordingTranscriber : asr::ITranscriber {
         ++begins;
     }
 
-    void Submit(std::span<const float> frames, std::uint64_t first_frame) override {
+    void Submit(std::span<const float> frames, std::uint64_t first_frame,
+                std::uint64_t /*first_new_frame*/ = 0) override {
         windows.push_back({first_frame, frames.size()});
     }
 

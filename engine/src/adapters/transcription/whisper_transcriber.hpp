@@ -5,6 +5,7 @@
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <thread>
 #include <vector>
@@ -35,13 +36,15 @@ class WhisperTranscriber : public ITranscriber {
     ~WhisperTranscriber() override;
 
     void Begin(ITurnSink& sink) override;
-    void Submit(std::span<const float> frames, std::uint64_t first_frame) override;
+    void Submit(std::span<const float> frames, std::uint64_t first_frame,
+                std::uint64_t first_new_frame = 0) override;
     void Finish() override;
 
    private:
     struct Window {
         std::vector<float> frames;
         std::uint64_t first_frame;
+        std::uint64_t first_new_frame;
     };
 
     void WorkerLoop();
@@ -52,6 +55,7 @@ class WhisperTranscriber : public ITranscriber {
     std::condition_variable cv_;
     std::deque<Window> queue_;
     ITurnSink* sink_ = nullptr;
+    std::optional<Turn> previous_turn_;  // for the boundary dedup backstop
     bool busy_ = false;
     bool stopping_ = false;
     std::thread worker_;

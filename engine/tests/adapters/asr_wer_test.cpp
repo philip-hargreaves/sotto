@@ -28,7 +28,8 @@ constexpr const char* kRef =
     "C:/dev/intelliscribe/bench/transcription/references/day1_consultation01.json";
 
 // Long-form parity on this consult is 21.28%; VAD endpointing measured
-// 20.37%, so the gate holds the reclaim, not just the baseline
+// 20.37%, the full boundary stack (anchor + trim + dedup) 20.58%, so the
+// gate holds the reclaim, not just the baseline
 constexpr double kMaxWer = 0.22;
 
 std::vector<float> LoadWav(const char* path) {
@@ -118,10 +119,10 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     transcriber.Begin(sink);
     const auto decode_start = std::chrono::steady_clock::now();
     for (const auto& window : endpointer.Push(frames)) {
-        transcriber.Submit(window.frames, window.first_frame);
+        transcriber.Submit(window.frames, window.first_frame, window.first_new_frame);
     }
     if (const auto tail = endpointer.Flush()) {
-        transcriber.Submit(tail->frames, tail->first_frame);
+        transcriber.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
     }
     transcriber.Finish();
     const auto decode =

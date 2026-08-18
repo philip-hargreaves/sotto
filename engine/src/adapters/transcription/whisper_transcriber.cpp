@@ -7,6 +7,7 @@
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
+#include "core/turn_assembly.hpp"
 #include "ports/audio_source.hpp"
 
 namespace sotto::asr {
@@ -31,6 +32,8 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     config.task = "transcribe";
     config.return_timestamps = true;
 
+    // Transcript-tail conditioning (initial_prompt) was measured here and
+    // rejected: ADR-0021, worse verbatim and register-folded WER
     return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
         auto result = pipeline->generate(audio, config);
@@ -87,12 +90,15 @@ WhisperTranscriber::~WhisperTranscriber() {
 void WhisperTranscriber::Begin(ITurnSink& sink) {
     std::lock_guard<std::mutex> lock(mutex_);
     sink_ = &sink;
+    // The dedup backstop never reaches across sessions
+    previous_turn_.reset();
 }
 
-void WhisperTranscriber::Submit(std::span<const float> frames, std::uint64_t first_frame) {
+void WhisperTranscriber::Submit(std::span<const float> frames, std::uint64_t first_frame,
+                                std::uint64_t first_new_frame) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push_back({{frames.begin(), frames.end()}, first_frame});
+        queue_.push_back({{frames.begin(), frames.end()}, first_frame, first_new_frame});
     }
     cv_.notify_all();
 }
@@ -123,20 +129,33 @@ void WhisperTranscriber::WorkerLoop() {
         queue_.pop_front();
         busy_ = true;
         ITurnSink* sink = sink_;
+        std::optional<Turn> previous = previous_turn_;
         lock.unlock();
 
         // A failed decode loses this window's turns, never the session;
         // the audio is already stored
         try {
             if (decode_) {
-                for (const auto& turn : decode_(window.frames, window.first_frame)) {
+                auto turns = decode_(window.frames, window.first_frame);
+                AnchorFirstTurn(turns, window.first_frame);
+                DropReheardTurns(turns, window.first_new_frame);
+                // The dedup backstop acts at the window boundary only: within
+                // a window the decoder never duplicates its own segments, and
+                // stripping there would eat genuine repetition
+                if (!turns.empty() && previous.has_value()) {
+                    StripBoundaryDuplicates(*previous, turns.front());
+                }
+                for (Turn& turn : turns) {
+                    if (turn.text.empty()) continue;
                     if (sink != nullptr) sink->OnTurn(turn);
+                    previous = turn;
                 }
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
 
         lock.lock();
+        previous_turn_ = std::move(previous);
         busy_ = false;
         cv_.notify_all();
     }
