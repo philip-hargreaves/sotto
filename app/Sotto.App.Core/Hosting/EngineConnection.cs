@@ -13,7 +13,11 @@ public sealed class EngineConnection : IEngineClient
     private const string ShellName = "sotto-shell";
     private const string ShellVersion = "0.1.0";
 
-    private static readonly TimeSpan HelloTimeout = TimeSpan.FromSeconds(5);
+    // Generous: the engine binds its pipe before model verification and
+    // compilation, and answers the buffered hello only once that finishes
+    private static readonly TimeSpan HelloTimeout = TimeSpan.FromSeconds(120);
+
+    private static readonly TimeSpan RedialDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly IEngineHost _host;
     private readonly Func<uint, CancellationToken, Task<IEngineClient>> _connect;
@@ -126,51 +130,88 @@ public sealed class EngineConnection : IEngineClient
 
     private async Task ConnectAsync(int generation)
     {
-        try
-        {
-            var pid = _host.EnginePid ?? throw new IOException("engine pid unavailable");
-            var transport = await _connect((uint)pid, _disposal.Token).ConfigureAwait(false);
-            var installed = false;
-            try
-            {
-                var hello = await transport.RequestAsync(
-                    "engine/hello", new PeerInfo(ShellName, ShellVersion, Protocol.ProtocolVersion),
-                    HelloTimeout, _disposal.Token).ConfigureAwait(false);
-                var engineProtocol = hello.GetProperty("protocolVersion").GetInt32();
-                if (engineProtocol != Protocol.ProtocolVersion)
-                {
-                    throw new IOException(FormattableString.Invariant(
-                        $"engine speaks protocol {engineProtocol}, this shell needs {Protocol.ProtocolVersion}"));
-                }
-
-                transport.NotificationReceived += OnInnerNotification;
-                lock (_gate)
-                {
-                    // A newer status event owns the connection now; stand down
-                    if (_generation == generation && _disposed == 0)
-                    {
-                        _transport = transport;
-                        _lastConnectError = null;
-                        installed = true;
-                    }
-                }
-            }
-            finally
-            {
-                if (!installed)
-                {
-                    await transport.DisposeAsync().ConfigureAwait(false);
-                }
-            }
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
+        // Redial until installed or superseded; a silent give-up here was
+        // once a permanently dead connection
+        while (Volatile.Read(ref _disposed) == 0 && !_disposal.IsCancellationRequested)
         {
             lock (_gate)
             {
-                if (_generation == generation)
+                if (_generation != generation)
                 {
-                    _lastConnectError = e;
+                    return;
                 }
+            }
+
+            try
+            {
+                if (await TryConnectOnceAsync(generation).ConfigureAwait(false))
+                {
+                    return;
+                }
+            }
+            catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                lock (_gate)
+                {
+                    if (_generation == generation)
+                    {
+                        _lastConnectError = e;
+                    }
+                }
+            }
+
+            try
+            {
+                await Task.Delay(RedialDelay, _disposal.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    // True to stop dialling: installed, or a newer generation owns it
+    private async Task<bool> TryConnectOnceAsync(int generation)
+    {
+        var pid = _host.EnginePid ?? throw new IOException("engine pid unavailable");
+        var transport = await _connect((uint)pid, _disposal.Token).ConfigureAwait(false);
+        var installed = false;
+        try
+        {
+            var hello = await transport.RequestAsync(
+                "engine/hello", new PeerInfo(ShellName, ShellVersion, Protocol.ProtocolVersion),
+                HelloTimeout, _disposal.Token).ConfigureAwait(false);
+            var engineProtocol = hello.GetProperty("protocolVersion").GetInt32();
+            if (engineProtocol != Protocol.ProtocolVersion)
+            {
+                throw new IOException(FormattableString.Invariant(
+                    $"engine speaks protocol {engineProtocol}, this shell needs {Protocol.ProtocolVersion}"));
+            }
+
+            transport.NotificationReceived += OnInnerNotification;
+            lock (_gate)
+            {
+                // A newer status event owns the connection now; stand down
+                if (_generation == generation && _disposed == 0)
+                {
+                    _transport = transport;
+                    _lastConnectError = null;
+                    installed = true;
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            if (!installed)
+            {
+                await transport.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
