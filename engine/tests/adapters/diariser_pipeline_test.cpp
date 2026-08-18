@@ -101,8 +101,8 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
         EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
     }
     EXPECT_EQ(got.cluster_count, want.cluster_count);
-    EXPECT_FALSE(fed.TakeResplitPieces().empty()) << "capture considered the completed turns";
-    EXPECT_TRUE(batch.TakeResplitPieces().empty()) << "nothing accumulates without Advance";
+    EXPECT_FALSE(fed.TakeTurnTexts().empty()) << "capture speculated turn texts";
+    EXPECT_TRUE(batch.TakeTurnTexts().empty()) << "nothing accumulates without Advance";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
 }

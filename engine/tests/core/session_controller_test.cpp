@@ -363,7 +363,7 @@ struct FakeDiariser : diar::IDiariser {
     std::size_t advanced_turns = 0;
     int takes = 0;
     int discards = 0;
-    bool splice_first_turn = false;
+    bool speculate_first_turn = false;
 
     diar::DiariseResult Diarise(std::span<const float> audio,
                                 std::span<const std::uint64_t> turn_boundaries) override {
@@ -396,31 +396,34 @@ struct FakeDiariser : diar::IDiariser {
         advanced_turns = turns.size();
     }
 
-    // Pretends capture re-split the first reconciled turn (its span arrived
-    // as the first boundary pair) into two pieces
-    diar::ResplitPieces TakeResplitPieces() override {
+    // Pretends capture speculated the first cluster's turn (its span is the
+    // first half of the audio Diarise saw)
+    diar::TurnTexts TakeTurnTexts() override {
         ++takes;
-        diar::ResplitPieces pieces;
-        if (splice_first_turn && bounds.size() >= 2) {
-            const auto first = bounds[0];
-            const auto count = bounds[1] - bounds[0];
-            asr::Turn a;
-            a.first_frame = first;
-            a.frame_count = count / 2;
-            a.text = "piece one";
-            asr::Turn b;
-            b.first_frame = first + count / 2;
-            b.frame_count = count - count / 2;
-            b.text = "piece two";
-            pieces[{first, count}] = {std::move(a), std::move(b)};
+        diar::TurnTexts cache;
+        if (speculate_first_turn && audio_frames > 0) {
+            cache[{0, audio_frames / 2}] = "speculated words";
         }
-        return pieces;
+        return cache;
     }
 
     void DiscardCapture() override {
         ++discards;
     }
 };
+
+// Streams until the store holds enough audio that each of two merged turns
+// clears the 0.3 s decode floor; wall-clock sleeps are too coarse on Windows
+bool WaitForFrames(FakeSessionStore& store, std::size_t n) {
+    for (int i = 0; i < 400; ++i) {
+        {
+            const std::lock_guard<std::mutex> lock(store.mutex);
+            if (store.frames.size() >= n) return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
 
 TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
     RecordingEvents events;
@@ -432,6 +435,7 @@ TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
                                  store, transcriber, vad, kTestSettle, &diariser);
 
     ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
     EXPECT_EQ(diariser.calls, 1);
@@ -458,6 +462,7 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
                                  store, transcriber, vad, kTestSettle, &diariser);
 
     ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
     ASSERT_FALSE(store.turns.empty());
@@ -467,6 +472,28 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
     EXPECT_EQ(diariser.accruals, 1);
     EXPECT_EQ(diariser.accrued_cluster, 1) << "the nearer cluster to the anchor is the doctor";
     EXPECT_GT(diariser.boundary_cuts, 0u) << "transcribed-turn edges reach the diariser as cuts";
+}
+
+TEST(SessionController, FinaliseDecodesEachTurnFromItsOwnAudio) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.2, 0.8};
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
+    controller.Stop();
+
+    ASSERT_EQ(store.turns.size(), 2u) << "one merged turn per cluster";
+    const auto half = diariser.audio_frames / 2;
+    EXPECT_EQ(store.turns[0].text, "re-decoded " + std::to_string(half) + " frames at 0");
+    EXPECT_EQ(store.turns[1].first_frame, half);
+    EXPECT_NE(store.turns[0].speaker, store.turns[1].speaker);
 }
 
 TEST(SessionController, DiarisationAdvancesDuringCapture) {
@@ -491,7 +518,7 @@ TEST(SessionController, DiarisationAdvancesDuringCapture) {
     EXPECT_EQ(diariser.calls, 1);
 }
 
-TEST(SessionController, CaptureResplitsSpliceIntoTheStoredTranscript) {
+TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -499,21 +526,19 @@ TEST(SessionController, CaptureResplitsSpliceIntoTheStoredTranscript) {
     FakeDiariser diariser;
     diariser.clusters = 2;
     diariser.similarities = {0.2, 0.8};
-    diariser.splice_first_turn = true;
+    diariser.speculate_first_turn = true;
     SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
                                  store, transcriber, vad, kTestSettle, &diariser);
 
     ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
     EXPECT_EQ(diariser.takes, 1);
-    ASSERT_FALSE(store.turns.empty());
-    std::string all;
-    for (const auto& turn : store.turns) all += turn.text + '\n';
-    EXPECT_NE(all.find("piece one"), std::string::npos) << all;
-    EXPECT_EQ(all.find("scripted turn 0,"), std::string::npos)
-        << "the spliced pieces replace the source turn:\n"
-        << all;
+    ASSERT_EQ(store.turns.size(), 2u);
+    EXPECT_EQ(store.turns[0].text, "speculated words") << "the cache hit stands";
+    EXPECT_NE(store.turns[1].text.find("re-decoded"), std::string::npos)
+        << "the miss decodes fresh";
 }
 
 TEST(SessionController, CancelDiscardsCaptureState) {
@@ -546,6 +571,7 @@ TEST(SessionController, RedecodesNeverReachTheStore) {
                                  store, transcriber, vad, kTestSettle, &diariser);
 
     ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
     const auto calls = store.Calls();
@@ -570,6 +596,7 @@ TEST(SessionController, AmbiguousLexicalEvidenceKeepsNumberedSpeakers) {
                                  store, transcriber, vad, kTestSettle, &diariser);
 
     ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
     ASSERT_FALSE(store.turns.empty());
