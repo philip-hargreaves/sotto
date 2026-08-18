@@ -128,6 +128,7 @@ set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING
 add_library(sotto_diarisation STATIC
     src/adapters/diarisation/anchor_store.cpp
     src/adapters/diarisation/cluster_voiceprint.cpp
+    src/adapters/diarisation/diar_worker.cpp
     src/adapters/diarisation/fbank.cpp
     src/adapters/diarisation/segmenter.cpp
     src/adapters/diarisation/speaker_clustering.cpp
