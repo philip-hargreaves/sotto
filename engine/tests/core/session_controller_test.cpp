@@ -156,6 +156,12 @@ struct FakeSessionStore : store::ISessionStore {
         turns.push_back(turn);
     }
 
+    void ReplaceTurns(const store::SessionId& id, std::span<const asr::Turn> replacement) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("replace " + id);
+        turns.assign(replacement.begin(), replacement.end());
+    }
+
     void Finalise(const store::SessionId& id) override {
         const std::lock_guard<std::mutex> lock(mutex);
         calls.push_back("finalise " + id);
@@ -338,6 +344,55 @@ TEST(SessionController, StopFinalisesTheSession) {
     EXPECT_EQ(store.Calls(), (std::vector<std::string>{"begin s1", "turn s1", "finalise s1"}))
         << "the tail turn lands before the session seals";
     EXPECT_FALSE(store.frames.empty()) << "captured audio must reach the store";
+}
+
+struct FakeDiariser : diar::IDiariser {
+    int calls = 0;
+    std::size_t audio_frames = 0;
+
+    std::vector<diar::LabelledSlice> Diarise(std::span<const float> audio) override {
+        ++calls;
+        audio_frames = audio.size();
+        return {{0, audio.size(), 0}};
+    }
+};
+
+TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    EXPECT_EQ(diariser.calls, 1);
+    EXPECT_FALSE(store.frames.empty());
+    EXPECT_EQ(diariser.audio_frames, store.frames.size())
+        << "the diariser hears exactly the captured audio";
+    EXPECT_EQ(store.Calls(),
+              (std::vector<std::string>{"begin s1", "turn s1", "replace s1", "finalise s1"}))
+        << "the attributed transcript supersedes the live turns before the seal";
+    ASSERT_EQ(store.turns.size(), 1u);
+    EXPECT_EQ(store.turns[0].speaker, "speaker 1");
+}
+
+TEST(SessionController, CancelNeverDiarises) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Cancel();
+
+    EXPECT_EQ(diariser.calls, 0);
 }
 
 TEST(SessionController, CancelErasesTheSession) {

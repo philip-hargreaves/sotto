@@ -17,7 +17,7 @@ asr::Turn Spoken(std::uint64_t first, std::uint64_t count, std::string text) {
 }
 
 TEST(SpeakerAttribution, ATurnGoesWholeToItsMajorityOwner) {
-    const std::vector<LabelledSlice> slices{{{0, 40000}, 0}, {{40000, 80000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 40000, 0}, {40000, 80000, 1}};
     const auto turns = AttributeSpeakers({Spoken(10000, 20000, "hello there")}, slices);
     ASSERT_EQ(turns.size(), 1u);
     EXPECT_EQ(turns[0].speaker, "speaker 1");
@@ -25,7 +25,7 @@ TEST(SpeakerAttribution, ATurnGoesWholeToItsMajorityOwner) {
 }
 
 TEST(SpeakerAttribution, ATurnOverlappingNothingGoesToTheNearestSlice) {
-    const std::vector<LabelledSlice> slices{{{0, 16000}, 0}, {{100000, 120000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 16000, 0}, {100000, 120000, 1}};
     const auto turns = AttributeSpeakers({Spoken(90000, 8000, "late words")}, slices);
     ASSERT_EQ(turns.size(), 1u);
     EXPECT_EQ(turns[0].speaker, "speaker 2") << "words are never dropped";
@@ -35,7 +35,7 @@ TEST(SpeakerAttribution, AShortSharedTurnGoesToTheMostSpecificClaimant) {
     // A 0.5 s backchannel slice inside a long monologue slice; the 1 s turn
     // overlaps the monologue more in absolute terms but the backchannel
     // covers 80% of its own length
-    const std::vector<LabelledSlice> slices{{{0, 160000}, 0}, {{100000, 108000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 160000, 0}, {100000, 108000, 1}};
     const auto turns = AttributeSpeakers({Spoken(98000, 16000, "Okay.")}, slices);
     ASSERT_EQ(turns.size(), 1u);
     EXPECT_EQ(turns[0].speaker, "speaker 2")
@@ -43,7 +43,7 @@ TEST(SpeakerAttribution, AShortSharedTurnGoesToTheMostSpecificClaimant) {
 }
 
 TEST(SpeakerAttribution, AGenuinelySharedTurnSplitsAtThePunctuation) {
-    const std::vector<LabelledSlice> slices{{{0, 40000}, 0}, {{40000, 80000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 40000, 0}, {40000, 80000, 1}};
     // 2.5 s turn straddling the handover, sentence mark near the middle
     const auto turns =
         AttributeSpeakers({Spoken(20000, 40000, "That sounds fine. When did it start?")}, slices);
@@ -53,7 +53,7 @@ TEST(SpeakerAttribution, AGenuinelySharedTurnSplitsAtThePunctuation) {
 }
 
 TEST(SpeakerAttribution, AShortOrTextlessStraddlerDoesNotSplit) {
-    const std::vector<LabelledSlice> slices{{{0, 40000}, 0}, {{40000, 80000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 40000, 0}, {40000, 80000, 1}};
     // Shared but under the 1.2 s split floor: one owner takes it whole
     const auto turns = AttributeSpeakers({Spoken(35000, 10000, "yes exactly right")}, slices);
     ASSERT_EQ(turns.size(), 1u);
@@ -61,8 +61,7 @@ TEST(SpeakerAttribution, AShortOrTextlessStraddlerDoesNotSplit) {
 }
 
 TEST(SpeakerAttribution, ConsecutiveSameSpeakerSlicesMerge) {
-    const std::vector<LabelledSlice> slices{
-        {{0, 20000}, 0}, {{20000, 40000}, 0}, {{40000, 60000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 20000, 0}, {20000, 40000, 0}, {40000, 60000, 1}};
     const auto turns = AttributeSpeakers(
         {Spoken(0, 20000, "first"), Spoken(20000, 20000, "second"), Spoken(40000, 20000, "other")},
         slices);
@@ -73,7 +72,7 @@ TEST(SpeakerAttribution, ConsecutiveSameSpeakerSlicesMerge) {
 }
 
 TEST(SpeakerAttribution, WordlessSlicesDisappear) {
-    const std::vector<LabelledSlice> slices{{{0, 20000}, 0}, {{30000, 50000}, 1}};
+    const std::vector<LabelledSlice> slices{{0, 20000, 0}, {30000, 50000, 1}};
     const auto turns = AttributeSpeakers({Spoken(1000, 10000, "only here")}, slices);
     ASSERT_EQ(turns.size(), 1u);
     EXPECT_EQ(turns[0].speaker, "speaker 1");

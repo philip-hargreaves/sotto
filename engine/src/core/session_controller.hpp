@@ -14,7 +14,9 @@
 
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
+#include "core/speaker_attribution.hpp"
 #include "ports/audio_source.hpp"
+#include "ports/diariser.hpp"
 #include "ports/session_store.hpp"
 #include "ports/transcriber.hpp"
 
@@ -43,12 +45,14 @@ class SessionController {
    public:
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
                       asr::ITranscriber& transcriber, IStreamingVad& vad,
-                      std::chrono::milliseconds settle_timeout = std::chrono::seconds(3))
+                      std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
+                      diar::IDiariser* diariser = nullptr)
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
           transcriber_(transcriber),
           vad_(vad),
+          diariser_(diariser),
           settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
@@ -79,6 +83,8 @@ class SessionController {
             session_id_ = id;
             vad_.Reset();
             endpointer_.emplace(vad_);
+            session_audio_.clear();
+            session_turns_.clear();
             transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -154,6 +160,10 @@ class SessionController {
             }
             try {
                 controller.store_.AppendTurn(id, turn);
+                {
+                    std::lock_guard<std::mutex> lock(controller.mutex_);
+                    controller.session_turns_.push_back(turn);
+                }
                 controller.events_.OnTurn(turn);
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
@@ -176,6 +186,10 @@ class SessionController {
             controller.cv_.notify_all();
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
+                if (controller.diariser_ != nullptr) {
+                    controller.session_audio_.insert(controller.session_audio_.end(),
+                                                     frames.begin(), frames.end());
+                }
                 for (const auto& window : controller.endpointer_->Push(frames)) {
                     controller.transcriber_.Submit(window.frames, window.first_frame,
                                                    window.first_new_frame);
@@ -264,6 +278,30 @@ class SessionController {
         if (id.empty()) {
             return;
         }
+        // The speaker-attributed transcript supersedes the live turns before
+        // the seal; a diarisation failure keeps the unattributed transcript,
+        // never the session
+        if (outcome == Outcome::kFinalise && diariser_ != nullptr && !session_audio_.empty()) {
+            try {
+                const auto slices = diariser_->Diarise(session_audio_);
+                std::vector<asr::Turn> transcribed;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    transcribed = session_turns_;
+                }
+                const auto attributed = diar::AttributeSpeakers(transcribed, slices);
+                if (!attributed.empty()) {
+                    store_.ReplaceTurns(id, attributed);
+                }
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+        }
+        session_audio_.clear();
+        session_audio_.shrink_to_fit();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            session_turns_.clear();
+        }
         try {
             switch (outcome) {
                 case Outcome::kFinalise:
@@ -285,6 +323,7 @@ class SessionController {
     store::ISessionStore& store_;
     asr::ITranscriber& transcriber_;
     IStreamingVad& vad_;
+    diar::IDiariser* diariser_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
@@ -299,6 +338,9 @@ class SessionController {
     bool stop_requested_ = false;
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
+    // Capture-thread writes; finalise reads after the capture thread joins
+    std::vector<float> session_audio_;
+    std::vector<asr::Turn> session_turns_;  // under mutex_: turns arrive on the ASR thread
     SourceEnd end_{};
 };
 

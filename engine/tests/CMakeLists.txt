@@ -74,6 +74,7 @@ target_link_libraries(gpu_tests PRIVATE
 add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
+    adapters/diariser_pipeline_test.cpp
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp
     adapters/seg_model_test.cpp

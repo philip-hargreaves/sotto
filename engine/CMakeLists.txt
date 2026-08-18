@@ -129,10 +129,11 @@ add_library(sotto_diarisation STATIC
     src/adapters/diarisation/fbank.cpp
     src/adapters/diarisation/segmenter.cpp
     src/adapters/diarisation/speaker_clustering.cpp
+    src/adapters/diarisation/speaker_diariser.cpp
     src/adapters/diarisation/speaker_embedder.cpp)
 target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
 target_link_libraries(sotto_diarisation
-    PUBLIC sotto_core sotto_models
+    PUBLIC sotto_core sotto_models sotto_vad
     PRIVATE sotto_warnings hclust kaldi-native-fbank-core)
 
 add_library(sotto_audio STATIC
@@ -144,7 +145,8 @@ target_link_libraries(sotto_audio
 
 add_executable(sotto_engine src/main.cpp)
 target_link_libraries(sotto_engine PRIVATE
-    sotto_ipc sotto_audio sotto_storage sotto_transcription sotto_vad sotto_warnings)
+    sotto_ipc sotto_audio sotto_diarisation sotto_storage sotto_transcription sotto_vad
+    sotto_warnings)
 sotto_deploy_openvino(ov_engine_runtime)
 add_dependencies(sotto_engine ov_engine_runtime)
 

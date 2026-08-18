@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "core/diar_regions.hpp"
+#include "ports/diariser.hpp"
 #include "ports/transcriber.hpp"
 
 namespace sotto::diar {
@@ -21,11 +21,6 @@ inline constexpr double kClaimMinShare = 0.2;
 // A genuinely shared turn splits only when there is enough to split
 inline constexpr std::uint64_t kSplitMinFrames = 19200;  // 1.2 s
 inline constexpr std::size_t kSplitMinChars = 16;
-
-struct LabelledSlice {
-    Region span;
-    int cluster = 0;
-};
 
 namespace detail {
 
@@ -71,7 +66,7 @@ inline std::size_t SplitPoint(const std::string& text, double fraction) {
     return static_cast<std::size_t>(std::clamp(target, 0L, n));
 }
 
-inline std::uint64_t Overlap(const Region& span, std::uint64_t first, std::uint64_t end) {
+inline std::uint64_t Overlap(const LabelledSlice& span, std::uint64_t first, std::uint64_t end) {
     const std::uint64_t lo = std::max(span.first_frame, first);
     const std::uint64_t hi = std::min(span.end_frame, end);
     return hi > lo ? hi - lo : 0;
@@ -104,7 +99,7 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
         double nearest_gap = std::numeric_limits<double>::max();
         std::size_t nearest = 0;
         for (std::size_t i = 0; i < slices.size(); ++i) {
-            const std::uint64_t ov = detail::Overlap(slices[i].span, first, end);
+            const std::uint64_t ov = detail::Overlap(slices[i], first, end);
             if (ov > best_ov) {
                 second_ov = best_ov;
                 second = best;
@@ -114,10 +109,10 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
                 second_ov = ov;
                 second = static_cast<long>(i);
             }
-            const double gap = mid < static_cast<double>(slices[i].span.first_frame)
-                                   ? static_cast<double>(slices[i].span.first_frame) - mid
-                               : mid > static_cast<double>(slices[i].span.end_frame)
-                                   ? mid - static_cast<double>(slices[i].span.end_frame)
+            const double gap = mid < static_cast<double>(slices[i].first_frame)
+                                   ? static_cast<double>(slices[i].first_frame) - mid
+                               : mid > static_cast<double>(slices[i].end_frame)
+                                   ? mid - static_cast<double>(slices[i].end_frame)
                                    : 0.0;
             if (gap < nearest_gap) {
                 nearest_gap = gap;
@@ -136,12 +131,11 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
         } else if (turn.frame_count >= kSplitMinFrames && turn.text.size() >= kSplitMinChars) {
             const auto b = static_cast<std::size_t>(best);
             const auto s = static_cast<std::size_t>(second);
-            const std::size_t earlier =
-                slices[b].span.first_frame <= slices[s].span.first_frame ? b : s;
+            const std::size_t earlier = slices[b].first_frame <= slices[s].first_frame ? b : s;
             const std::size_t later = earlier == b ? s : b;
             const double boundary =
-                std::clamp(0.5 * (static_cast<double>(slices[earlier].span.end_frame) +
-                                  static_cast<double>(slices[later].span.first_frame)),
+                std::clamp(0.5 * (static_cast<double>(slices[earlier].end_frame) +
+                                  static_cast<double>(slices[later].first_frame)),
                            static_cast<double>(first), static_cast<double>(end));
             const std::size_t cut =
                 detail::SplitPoint(turn.text, (boundary - static_cast<double>(first)) / length);
@@ -151,9 +145,9 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
             const auto b = static_cast<std::size_t>(best);
             const auto s = static_cast<std::size_t>(second);
             const double db = std::max<double>(
-                static_cast<double>(slices[b].span.end_frame - slices[b].span.first_frame), 1.0);
+                static_cast<double>(slices[b].end_frame - slices[b].first_frame), 1.0);
             const double ds = std::max<double>(
-                static_cast<double>(slices[s].span.end_frame - slices[s].span.first_frame), 1.0);
+                static_cast<double>(slices[s].end_frame - slices[s].first_frame), 1.0);
             const bool specific =
                 static_cast<double>(second_ov) / ds > static_cast<double>(best_ov) / db;
             detail::AppendText(texts[specific ? s : b], turn.text);
@@ -165,12 +159,12 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
         if (texts[i].empty()) continue;
         const std::string speaker = "speaker " + std::to_string(slices[i].cluster + 1);
         if (!out.empty() && out.back().speaker == speaker) {
-            out.back().frame_count = slices[i].span.end_frame - out.back().first_frame;
+            out.back().frame_count = slices[i].end_frame - out.back().first_frame;
             detail::AppendText(out.back().text, texts[i]);
         } else {
             asr::Turn turn;
-            turn.first_frame = slices[i].span.first_frame;
-            turn.frame_count = slices[i].span.end_frame - slices[i].span.first_frame;
+            turn.first_frame = slices[i].first_frame;
+            turn.frame_count = slices[i].end_frame - slices[i].first_frame;
             turn.speaker = speaker;
             turn.text = std::move(texts[i]);
             out.push_back(std::move(turn));

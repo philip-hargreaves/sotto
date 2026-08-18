@@ -171,6 +171,32 @@ void SqliteSessionStore::AppendTurn(const SessionId& id, const asr::Turn& turn) 
     session.next_turn_seq += 1;
 }
 
+void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::Turn> turns) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Open& session = RequireOpen(id);
+
+    Db::Transaction txn(*session.db);
+    session.db->Prepare("DELETE FROM turns").Step();
+    for (const asr::Turn& turn : turns) {
+        // Sequence numbers continue rather than restart, so every sealed
+        // payload's AAD stays unique for the session's lifetime
+        const std::string content =
+            nlohmann::json{{"speaker", turn.speaker}, {"text", turn.text}}.dump();
+        const std::vector<std::uint8_t> sealed = session.cipher->Seal(
+            Domain::kTurns, session.id, static_cast<std::uint64_t>(session.next_turn_seq),
+            {reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
+        Db::Stmt insert = session.db->Prepare(
+            "INSERT INTO turns(seq, first_frame, frame_count, payload) VALUES(?, ?, ?, ?)");
+        insert.BindInt64(1, session.next_turn_seq);
+        insert.BindInt64(2, static_cast<std::int64_t>(turn.first_frame));
+        insert.BindInt64(3, static_cast<std::int64_t>(turn.frame_count));
+        insert.BindBlob(4, sealed);
+        insert.Step();
+        session.next_turn_seq += 1;
+    }
+    txn.Commit();
+}
+
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
