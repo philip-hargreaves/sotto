@@ -4,11 +4,15 @@
 // boundaries (the A/B). --roles runs the full finalise flow - ASR, text
 // assignment, cold-start naming - and prints roles, margin and per-cluster
 // voiceprints for the role-acceptance scorer
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -48,10 +52,10 @@ struct CollectingSink : sotto::asr::ITurnSink {
 
 std::vector<sotto::asr::Turn> Transcribe(const sotto::models::ModelStore& store,
                                          sotto::models::OvRuntime& runtime,
+                                         sotto::asr::WhisperTranscriber& transcriber,
                                          const std::vector<float>& audio) {
     sotto::audio::SileroVad vad(store, runtime);
     sotto::audio::Endpointer endpointer(vad);
-    sotto::asr::WhisperTranscriber transcriber(store, runtime);
     CollectingSink sink;
     transcriber.Begin(sink);
     for (const auto& window : endpointer.Push(audio)) {
@@ -64,6 +68,184 @@ std::vector<sotto::asr::Turn> Transcribe(const sotto::models::ModelStore& store,
     return sink.turns;
 }
 
+std::string Decode(sotto::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
+                   std::uint64_t first_frame) {
+    CollectingSink sink;
+    transcriber.Begin(sink);
+    transcriber.Submit(clip, first_frame);
+    transcriber.Finish();
+    std::string text;
+    for (const auto& turn : sink.turns) {
+        if (turn.text.empty()) continue;
+        if (!text.empty()) text += ' ';
+        text += turn.text;
+    }
+    return text;
+}
+
+std::size_t MaxNgramRepeat(const std::string& text) {
+    std::vector<std::string> words;
+    std::string word;
+    for (const char c : text) {
+        if (std::isspace(static_cast<unsigned char>(c)) != 0) {
+            if (!word.empty()) words.push_back(word);
+            word.clear();
+        } else {
+            word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+    }
+    if (!word.empty()) words.push_back(word);
+    if (words.size() < 5) return 0;
+    std::map<std::string, std::size_t> counts;
+    std::size_t worst = 0;
+    for (std::size_t i = 0; i + 5 <= words.size(); ++i) {
+        std::string gram;
+        for (std::size_t j = 0; j < 5; ++j) gram += words[i + j] + ' ';
+        worst = std::max(worst, ++counts[gram]);
+    }
+    return worst;
+}
+
+std::size_t WordEdit(const std::vector<std::string>& a, const std::vector<std::string>& b) {
+    std::vector<std::size_t> prev(b.size() + 1);
+    std::vector<std::size_t> cur(b.size() + 1);
+    for (std::size_t j = 0; j <= b.size(); ++j) prev[j] = j;
+    for (std::size_t i = 1; i <= a.size(); ++i) {
+        cur[0] = i;
+        for (std::size_t j = 1; j <= b.size(); ++j) {
+            cur[j] = std::min(
+                {prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1), prev[j] + 1, cur[j - 1] + 1});
+        }
+        std::swap(prev, cur);
+    }
+    return prev[b.size()];
+}
+
+std::string DropTailWords(const std::string& text, std::size_t count) {
+    std::size_t end = text.size();
+    for (std::size_t dropped = 0; dropped < count && end > 0; ++dropped) {
+        while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0) --end;
+        while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) == 0) --end;
+    }
+    while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0) --end;
+    return text.substr(0, end);
+}
+
+// Whisper hears a window boundary twice and its timestamps are sloppy
+// enough that the time trim can miss the repeat: adjacent turns then carry
+// the same phrase and overlap in time. Fuzzy-match the earlier turn's tail
+// against the later turn's head (word edit distance, so different
+// renderings still match) and drop the matched tail from the EARLIER turn -
+// the later window heard that speech with full context. Spans are clamped
+// afterwards so the turns no longer overlap
+void ReconcileTurns(std::vector<sotto::asr::Turn>& turns) {
+    constexpr std::uint64_t kWindowGapFrames = 24000;  // 1.5 s
+    for (std::size_t i = 1; i < turns.size(); ++i) {
+        auto& prev = turns[i - 1];
+        const auto& next = turns[i];
+        if (prev.text.empty() || next.text.empty()) continue;
+        const std::uint64_t prev_end = prev.first_frame + prev.frame_count;
+        if (next.first_frame > prev_end + kWindowGapFrames) continue;
+        const auto pw = sotto::diar::detail::WordsOf(prev.text);
+        const auto nw = sotto::diar::detail::WordsOf(next.text);
+        const std::size_t max_tail = std::min<std::size_t>(10, pw.size());
+        std::size_t drop = 0;
+        double best = 0.0;
+        for (std::size_t s = 2; s <= max_tail; ++s) {
+            const std::vector<std::string> tail(pw.end() - static_cast<std::ptrdiff_t>(s),
+                                                pw.end());
+            for (std::size_t len = s - 1; len <= std::min(s + 1, nw.size()); ++len) {
+                if (len == 0) continue;
+                const std::vector<std::string> head(nw.begin(),
+                                                    nw.begin() + static_cast<std::ptrdiff_t>(len));
+                const double sim = 1.0 - static_cast<double>(WordEdit(tail, head)) /
+                                             static_cast<double>(std::max(s, len));
+                if (sim >= 0.66 && sim * static_cast<double>(s) > best) {
+                    best = sim * static_cast<double>(s);
+                    drop = s;
+                }
+            }
+        }
+        if (drop >= 2) prev.text = DropTailWords(prev.text, drop);
+        if (prev_end > next.first_frame && next.first_frame > prev.first_frame) {
+            prev.frame_count = next.first_frame - prev.first_frame;
+        }
+    }
+}
+
+// The re-split probe (ported from the research finalise): a transcribed
+// turn straddling two different-speaker slices has its AUDIO cut at the
+// slice boundary midpoints and each piece re-transcribed, so no word can
+// land on the wrong speaker. Pieces under 0.4 s or degenerate decodes
+// abort the whole turn back to the original
+constexpr std::uint64_t kResplitMinShareFrames = 4800;  // 0.3 s to own a share
+constexpr std::uint64_t kResplitMinClipFrames = 6400;   // 0.4 s: shorter clips hallucinate
+constexpr std::size_t kResplitMaxRepeat = 4;
+
+std::vector<sotto::asr::Turn> ResplitStraddles(
+    sotto::asr::WhisperTranscriber& whisper, const std::vector<float>& audio,
+    const std::vector<sotto::asr::Turn>& turns,
+    const std::vector<sotto::diar::LabelledSlice>& slices, int& done, int& skipped) {
+    std::vector<sotto::asr::Turn> out;
+    for (const auto& turn : turns) {
+        const std::uint64_t t0 = turn.first_frame;
+        const std::uint64_t t1 = turn.first_frame + turn.frame_count;
+        std::vector<const sotto::diar::LabelledSlice*> parts;
+        for (const auto& slice : slices) {
+            const std::uint64_t lo = std::max(slice.first_frame, t0);
+            const std::uint64_t hi = std::min(slice.end_frame, t1);
+            if (hi <= lo || hi - lo < kResplitMinShareFrames) continue;
+            if (!parts.empty()) {
+                const auto& prev = *parts.back();
+                const std::uint64_t nlo = std::max(prev.first_frame, slice.first_frame);
+                const std::uint64_t nhi = std::min(prev.end_frame, slice.end_frame);
+                const std::uint64_t dur =
+                    std::max<std::uint64_t>(slice.end_frame - slice.first_frame, 1);
+                if (nhi > nlo && nhi - nlo > dur / 2) continue;  // nested overlap turn
+                if (slice.cluster == prev.cluster) continue;
+            }
+            parts.push_back(&slice);
+        }
+        if (parts.size() < 2) {
+            out.push_back(turn);
+            continue;
+        }
+
+        std::vector<sotto::asr::Turn> pieces;
+        bool ok = true;
+        for (std::size_t p = 0; p < parts.size() && ok; ++p) {
+            std::uint64_t a = p == 0 ? t0 : (parts[p - 1]->end_frame + parts[p]->first_frame) / 2;
+            std::uint64_t b =
+                p + 1 == parts.size() ? t1 : (parts[p]->end_frame + parts[p + 1]->first_frame) / 2;
+            a = std::clamp(a, t0, t1);
+            b = std::clamp(b, a, t1);
+            if (b - a < kResplitMinClipFrames || b > audio.size()) {
+                ok = false;
+                break;
+            }
+            const std::string text =
+                Decode(whisper, std::span<const float>(audio).subspan(a, b - a), a);
+            if (text.empty() || MaxNgramRepeat(text) >= kResplitMaxRepeat) {
+                ok = false;
+                break;
+            }
+            sotto::asr::Turn piece;
+            piece.first_frame = a;
+            piece.frame_count = b - a;
+            piece.text = text;
+            pieces.push_back(std::move(piece));
+        }
+        if (ok) {
+            for (auto& piece : pieces) out.push_back(std::move(piece));
+            ++done;
+        } else {
+            out.push_back(turn);
+            ++skipped;
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -72,10 +254,11 @@ int main(int argc, char** argv) {
                      "usage: diar_eval_runner <models-dir> <audio.wav> [--roles] [--turn-cuts]\n");
         return 2;
     }
-    bool roles = false, turn_cuts = false;
+    bool roles = false, turn_cuts = false, resplit = false;
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--roles") == 0) roles = true;
         if (std::strcmp(argv[i], "--turn-cuts") == 0) turn_cuts = true;
+        if (std::strcmp(argv[i], "--resplit") == 0) resplit = true;
     }
     try {
         const sotto::models::ModelStore store{std::filesystem::path(argv[1])};
@@ -87,7 +270,11 @@ int main(int argc, char** argv) {
         const auto audio = LoadWav(argv[2]);
 
         std::vector<sotto::asr::Turn> turns;
-        if (roles || turn_cuts) turns = Transcribe(store, runtime, audio);
+        std::unique_ptr<sotto::asr::WhisperTranscriber> whisper;
+        if (roles || turn_cuts) {
+            whisper = std::make_unique<sotto::asr::WhisperTranscriber>(store, runtime);
+            turns = Transcribe(store, runtime, *whisper, audio);
+        }
 
         std::vector<std::uint64_t> cuts;
         if (turn_cuts) {
@@ -97,6 +284,13 @@ int main(int argc, char** argv) {
             }
         }
         const auto result = diariser.Diarise(audio, cuts);
+
+        if (resplit) {
+            ReconcileTurns(turns);
+            int done = 0, skipped = 0;
+            turns = ResplitStraddles(*whisper, audio, turns, result.slices, done, skipped);
+            std::fprintf(stderr, "resplit: %d re-transcribed, %d skipped\n", done, skipped);
+        }
 
         if (!roles) {
             for (const auto& slice : result.slices) {
@@ -130,6 +324,10 @@ int main(int argc, char** argv) {
         for (const auto& slice : result.slices) {
             std::printf("SLICE %.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
                         static_cast<double>(slice.end_frame) / 16000.0, slice.cluster);
+        }
+        for (const auto& turn :
+             sotto::diar::BuildAttributedTurns(result.slices, texts, named.role_of_cluster)) {
+            std::printf("TURN %s\t%s\n", turn.speaker.c_str(), turn.text.c_str());
         }
         return 0;
     } catch (const std::exception& e) {
