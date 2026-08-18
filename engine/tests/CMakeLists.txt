@@ -35,6 +35,7 @@ add_executable(engine_tests
     adapters/pipe_security_test.cpp
     adapters/scripted_transcriber_test.cpp
     adapters/session_store_test.cpp
+    adapters/speaker_clustering_test.cpp
     adapters/store_recovery_test.cpp
     adapters/wav_source_test.cpp
     adapters/whisper_worker_test.cpp)
