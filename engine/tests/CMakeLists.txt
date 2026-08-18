@@ -21,6 +21,7 @@ add_executable(engine_tests
     core/level_meter_test.cpp
     core/seg_decode_test.cpp
     core/session_controller_test.cpp
+    core/slice_refinement_test.cpp
     core/turn_assembly_test.cpp
     core/version_test.cpp
     adapters/capture_errors_test.cpp
