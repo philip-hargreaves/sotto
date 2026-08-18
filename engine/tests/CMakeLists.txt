@@ -88,7 +88,12 @@ target_link_libraries(models_tests PRIVATE
     sotto_diarisation sotto_models sotto_transcription sotto_vad sotto_warnings
     nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
+# Dev evaluation tool for the research acceptance scorer; never shipped
+add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
+target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_warnings)
+
 sotto_deploy_openvino(ov_test_runtime)
+add_dependencies(diar_eval_runner ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)
 add_dependencies(gpu_tests ov_test_runtime)
 add_dependencies(models_tests ov_test_runtime)
