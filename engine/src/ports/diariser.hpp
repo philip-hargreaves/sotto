@@ -1,10 +1,22 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "ports/transcriber.hpp"
+
 namespace sotto::diar {
+
+// (clip, absolute first frame) -> transcribed text
+using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint64_t)>;
+
+// Turn span -> its re-decoded pieces; empty means the turn stands
+using ResplitPieces = std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<asr::Turn>>;
 
 struct LabelledSlice {
     std::uint64_t first_frame = 0;
@@ -18,12 +30,11 @@ struct DiariseResult {
     std::vector<double> anchor_similarity;  // one per cluster; empty: no anchor yet
 };
 
-// Who-spoke-when over a whole recording: speech slices with anonymous
-// cluster labels, plus each cluster's similarity to the accrued clinician
-// anchor when one exists. turn_boundaries are the transcribed turns' edges,
-// used as extra slice cuts (measured +0.41 pt attribution over 57
-// consults). Naming is the caller's decision; AccrueDoctor folds the named
-// doctor's voiceprint into the anchor afterwards
+// Who-spoke-when: speech slices with anonymous cluster labels, plus each
+// cluster's similarity to the accrued clinician anchor. turn_boundaries are
+// extra slice cuts (measured +0.41 pt attribution over 57 consults). Naming
+// is the caller's decision; AccrueDoctor then folds the named doctor's
+// voiceprint into the anchor
 class IDiariser {
    public:
     virtual ~IDiariser() = default;
@@ -33,6 +44,18 @@ class IDiariser {
 
     virtual void AccrueDoctor(std::span<const float> audio,
                               const std::vector<LabelledSlice>& slices, int doctor_cluster) = 0;
+
+    // Capture-phase work with the audio and reconciled turns so far;
+    // optional - without it Diarise processes the whole recording
+    virtual void Advance(std::span<const float>, std::span<const asr::Turn>, const DecodeClipFn&) {}
+
+    // Re-splits accumulated by Advance; valid after Diarise
+    virtual ResplitPieces TakeResplitPieces() {
+        return {};
+    }
+
+    // Drop capture state a finalise will never consume (cancel, abandon)
+    virtual void DiscardCapture() {}
 };
 
 }  // namespace sotto::diar

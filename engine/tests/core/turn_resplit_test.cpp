@@ -107,5 +107,60 @@ TEST(ResplitStraddles, ANestedOverlapSliceIsNotAHandover) {
     EXPECT_TRUE(calls.empty());
 }
 
+TEST(SpliceResplits, CapturePiecesReplaceTheirSourceTurn) {
+    const std::vector<LabelledSlice> slices{{0, 200000, 0}};
+    const std::vector<asr::Turn> turns{Spoken(20000, 60000, "source")};
+    ResplitPieces pieces;
+    pieces[{20000, 60000}] = {Spoken(20000, 30000, "first half"),
+                              Spoken(50000, 30000, "second half")};
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;
+
+    const auto out = SpliceResplits(turns, pieces, slices, kAudio, Decoder(&calls));
+
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].text, "first half");
+    EXPECT_EQ(out[1].text, "second half");
+    EXPECT_TRUE(calls.empty()) << "capture already paid the decodes";
+}
+
+TEST(SpliceResplits, AnEmptyEntryMeansTheTurnStands) {
+    const std::vector<LabelledSlice> slices{{0, 50000, 0}, {50000, 200000, 1}};
+    const std::vector<asr::Turn> turns{Spoken(20000, 60000, "straddler capture aborted")};
+    ResplitPieces pieces;
+    pieces[{20000, 60000}] = {};
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;
+
+    const auto out = SpliceResplits(turns, pieces, slices, kAudio, Decoder(&calls));
+
+    ASSERT_EQ(out.size(), 1u);
+    EXPECT_EQ(out[0].text, "straddler capture aborted");
+    EXPECT_TRUE(calls.empty()) << "considered once; not re-split against the clusters";
+}
+
+TEST(SpliceResplits, UnconsideredTurnsFallThroughToTheBatchResplit) {
+    const std::vector<LabelledSlice> slices{{0, 50000, 0}, {50000, 200000, 1}};
+    const std::vector<asr::Turn> turns{Spoken(20000, 60000, "the unsettled tail")};
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> calls;
+
+    const auto out = SpliceResplits(turns, {}, slices, kAudio, Decoder(&calls));
+
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(calls.size(), 2u) << "straddles the slice boundary, so it re-decodes";
+}
+
+TEST(SpliceResplits, OutputIsTimeSortedAcrossBothPaths) {
+    const std::vector<LabelledSlice> slices{{0, 200000, 0}};
+    const std::vector<asr::Turn> turns{Spoken(100000, 30000, "late but spliced"),
+                                       Spoken(10000, 30000, "early tail turn")};
+    ResplitPieces pieces;
+    pieces[{100000, 30000}] = {Spoken(100000, 30000, "late piece")};
+
+    const auto out = SpliceResplits(turns, pieces, slices, kAudio, Decoder());
+
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].text, "early tail turn");
+    EXPECT_EQ(out[1].text, "late piece");
+}
+
 }  // namespace
 }  // namespace sotto::diar

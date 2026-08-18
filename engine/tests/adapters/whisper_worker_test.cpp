@@ -158,6 +158,72 @@ TEST(WhisperWorker, TurnsInTheReheardOverlapAreNotEmittedAgain) {
     EXPECT_EQ(sink.turns[1].first_frame, 2500u);
 }
 
+TEST(WhisperWorker, DecodeClipReturnsTheJoinedTurnTexts) {
+    WhisperTranscriber transcriber([](std::span<const float>, std::uint64_t first) {
+        std::vector<Turn> turns{Labelled(first, 100), Labelled(first + 100, 100)};
+        turns.push_back(Labelled(first + 200, 100));
+        turns.back().text.clear();  // empty texts are skipped, not joined
+        return turns;
+    });
+
+    const std::vector<float> clip(300);
+    EXPECT_EQ(transcriber.DecodeClip(clip, 7000), "w7000 w7100");
+}
+
+TEST(WhisperWorker, DecodeClipNeverReachesTheSinkOrTheDedupBackstop) {
+    RecordingSink sink;
+    WhisperTranscriber transcriber([](std::span<const float> f, std::uint64_t first) {
+        return std::vector<Turn>{Labelled(first, f.size())};
+    });
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(10);
+    transcriber.Submit(window, 0);
+    (void)transcriber.DecodeClip(window, 500);
+    transcriber.Submit(window, 10);
+    transcriber.Finish();
+
+    ASSERT_EQ(sink.turns.size(), 2u) << "clips emit no turns";
+    EXPECT_EQ(sink.turns[0].first_frame, 0u);
+    EXPECT_EQ(sink.turns[1].first_frame, 10u);
+}
+
+TEST(WhisperWorker, PendingLiveWindowsDecodeBeforeAClip) {
+    std::promise<void> release;
+    auto released = release.get_future().share();
+    std::mutex order_mutex;
+    std::vector<std::uint64_t> order;
+    WhisperTranscriber transcriber(
+        [released, &order_mutex, &order](std::span<const float> f, std::uint64_t first) {
+            released.wait();
+            const std::lock_guard<std::mutex> lock(order_mutex);
+            order.push_back(first);
+            return std::vector<Turn>{Labelled(first, f.size())};
+        });
+    RecordingSink sink;
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(10);
+    transcriber.Submit(window, 0);  // decoding blocks on `release`
+    transcriber.Submit(window, 10);
+    auto clip = std::async(std::launch::async, [&] { return transcriber.DecodeClip(window, 99); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));  // let the clip enqueue
+    release.set_value();
+    EXPECT_EQ(clip.get(), "w99");
+
+    const std::lock_guard<std::mutex> lock(order_mutex);
+    ASSERT_EQ(order.size(), 3u);
+    EXPECT_EQ(order[2], 99u) << "the live transcript is never delayed by a clip";
+}
+
+TEST(WhisperWorker, AFailedLoadResolvesClipsEmpty) {
+    WhisperTranscriber transcriber(
+        DecodeLoader([]() -> DecodeFn { throw std::runtime_error("no GPU"); }));
+
+    const std::vector<float> clip(10);
+    EXPECT_EQ(transcriber.DecodeClip(clip, 0), "") << "an aborted re-split keeps the original";
+}
+
 TEST(WhisperWorker, BeginPointsTurnsAtTheNewSink) {
     RecordingSink first_sink;
     RecordingSink second_sink;

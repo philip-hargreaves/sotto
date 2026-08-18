@@ -34,6 +34,12 @@ class ITranscriber {
                         std::uint64_t first_new_frame = 0) = 0;
 
     virtual void Finish() = 0;
+
+    // Decode one clip off the live turn stream, safe mid-session; empty when
+    // unsupported (a re-split then keeps the original turn)
+    virtual std::string DecodeClip(std::span<const float>, std::uint64_t) {
+        return {};
+    }
 };
 
 }  // namespace sotto::asr

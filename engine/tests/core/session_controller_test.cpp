@@ -355,10 +355,20 @@ struct FakeDiariser : diar::IDiariser {
     std::vector<double> similarities;
 
     std::size_t boundary_cuts = 0;
+    std::vector<std::uint64_t> bounds;
+
+    // Written on the diarisation thread; read after the controller joins it
+    int advances = 0;
+    std::size_t advanced_frames = 0;
+    std::size_t advanced_turns = 0;
+    int takes = 0;
+    int discards = 0;
+    bool splice_first_turn = false;
 
     diar::DiariseResult Diarise(std::span<const float> audio,
                                 std::span<const std::uint64_t> turn_boundaries) override {
         boundary_cuts = turn_boundaries.size();
+        bounds.assign(turn_boundaries.begin(), turn_boundaries.end());
         ++calls;
         audio_frames = audio.size();
         diar::DiariseResult result;
@@ -377,6 +387,38 @@ struct FakeDiariser : diar::IDiariser {
                       int doctor_cluster) override {
         ++accruals;
         accrued_cluster = doctor_cluster;
+    }
+
+    void Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
+                 const diar::DecodeClipFn&) override {
+        ++advances;
+        advanced_frames = audio.size();
+        advanced_turns = turns.size();
+    }
+
+    // Pretends capture re-split the first reconciled turn (its span arrived
+    // as the first boundary pair) into two pieces
+    diar::ResplitPieces TakeResplitPieces() override {
+        ++takes;
+        diar::ResplitPieces pieces;
+        if (splice_first_turn && bounds.size() >= 2) {
+            const auto first = bounds[0];
+            const auto count = bounds[1] - bounds[0];
+            asr::Turn a;
+            a.first_frame = first;
+            a.frame_count = count / 2;
+            a.text = "piece one";
+            asr::Turn b;
+            b.first_frame = first + count / 2;
+            b.frame_count = count - count / 2;
+            b.text = "piece two";
+            pieces[{first, count}] = {std::move(a), std::move(b)};
+        }
+        return pieces;
+    }
+
+    void DiscardCapture() override {
+        ++discards;
     }
 };
 
@@ -425,6 +467,71 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
     EXPECT_EQ(diariser.accruals, 1);
     EXPECT_EQ(diariser.accrued_cluster, 1) << "the nearer cluster to the anchor is the doctor";
     EXPECT_GT(diariser.boundary_cuts, 0u) << "transcribed-turn edges reach the diariser as cuts";
+}
+
+TEST(SessionController, DiarisationAdvancesDuringCapture) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    // One 100 ms window per tick, so a short session advances several times
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames);
+
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+
+    EXPECT_GT(diariser.advances, 0) << "capture-phase work ran during the recording";
+    EXPECT_GT(diariser.advanced_frames, 0u);
+    EXPECT_LE(diariser.advanced_frames, store.frames.size())
+        << "Advance only ever sees captured audio";
+    EXPECT_EQ(diariser.calls, 1);
+}
+
+TEST(SessionController, CaptureResplitsSpliceIntoTheStoredTranscript) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.2, 0.8};
+    diariser.splice_first_turn = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    EXPECT_EQ(diariser.takes, 1);
+    ASSERT_FALSE(store.turns.empty());
+    std::string all;
+    for (const auto& turn : store.turns) all += turn.text + '\n';
+    EXPECT_NE(all.find("piece one"), std::string::npos) << all;
+    EXPECT_EQ(all.find("scripted turn 0,"), std::string::npos)
+        << "the spliced pieces replace the source turn:\n"
+        << all;
+}
+
+TEST(SessionController, CancelDiscardsCaptureState) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Cancel();
+
+    EXPECT_GE(diariser.discards, 1) << "a cancelled session's capture state must not leak";
+    EXPECT_EQ(diariser.takes, 0) << "nothing splices on cancel";
+    EXPECT_EQ(diariser.calls, 0) << "nothing diarises on cancel";
 }
 
 TEST(SessionController, RedecodesNeverReachTheStore) {

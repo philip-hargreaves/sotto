@@ -26,6 +26,11 @@ class ScriptedTranscriber : public ITranscriber {
 
     void Finish() override {}
 
+    std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override {
+        return "re-decoded " + std::to_string(frames.size()) + " frames at " +
+               std::to_string(first_frame);
+    }
+
    private:
     ITurnSink* sink_ = nullptr;
     int turns_ = 0;

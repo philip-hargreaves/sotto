@@ -86,6 +86,127 @@ std::string Decode(sotto::asr::WhisperTranscriber& transcriber, std::span<const 
     return text;
 }
 
+// --amortise-probe: drive the production capture path - a SpeakerDiariser
+// fed in five-second steps with the audio and completed turns so far,
+// exactly as the session controller feeds it - then time what a stop pays
+// and verify the output is bit-identical to the batch pass
+void AmortiseProbe(const sotto::models::ModelStore& store, sotto::models::OvRuntime& runtime,
+                   sotto::asr::WhisperTranscriber& whisper, const std::vector<float>& audio,
+                   const std::vector<sotto::asr::Turn>& reconciled,
+                   const std::vector<std::uint64_t>& cuts, const sotto::diar::DiariseResult& batch,
+                   const std::vector<sotto::asr::Turn>& batch_resplit) {
+    using Clock = std::chrono::steady_clock;
+    const auto seconds = [](Clock::time_point a, Clock::time_point b) {
+        return std::chrono::duration<double>(b - a).count();
+    };
+    constexpr std::uint64_t kStepFrames = 5 * 16000;
+
+    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-eval-amortise";
+    std::filesystem::create_directories(anchor_root);
+    sotto::diar::SpeakerDiariser fed(store, runtime, anchor_root);
+    std::size_t decodes = 0;
+    const auto decode = [&whisper, &decodes](std::span<const float> clip, std::uint64_t first) {
+        ++decodes;
+        return Decode(whisper, clip, first);
+    };
+
+    // Capture: the controller's cadence, completed turns only
+    double capture_s = 0.0;
+    std::size_t ticks = 0;
+    for (std::uint64_t upto = kStepFrames; upto < audio.size(); upto += kStepFrames) {
+        std::vector<sotto::asr::Turn> so_far;
+        for (const auto& turn : reconciled) {
+            if (turn.first_frame + turn.frame_count <= upto) so_far.push_back(turn);
+        }
+        const auto t0 = Clock::now();
+        fed.Advance(std::span<const float>(audio).first(upto), so_far, decode);
+        capture_s += seconds(t0, Clock::now());
+        ++ticks;
+    }
+    const std::size_t capture_decodes = decodes;
+
+    // Stop: everything production's finalise pays, including the pair's
+    // voiceprints for anchor ranking and accrual
+    const auto stop_start = Clock::now();
+    const auto result = fed.Diarise(audio, cuts);
+    const auto spliced = sotto::diar::SpliceResplits(reconciled, fed.TakeResplitPieces(),
+                                                     result.slices, audio, decode);
+    const auto texts = sotto::diar::AssignSliceTexts(spliced, result.slices);
+    std::vector<sotto::diar::RoleTurn> role_turns;
+    for (std::size_t i = 0; i < result.slices.size(); ++i) {
+        role_turns.push_back({result.slices[i].cluster,
+                              result.slices[i].end_frame - result.slices[i].first_frame, texts[i]});
+    }
+    const auto named = sotto::diar::NameRoles(role_turns, result.cluster_count);
+    const auto display =
+        sotto::diar::BuildAttributedTurns(result.slices, texts, named.role_of_cluster);
+    const auto vp_start = Clock::now();
+    for (int c = 0; c < result.cluster_count && c < 2; ++c) {
+        (void)sotto::diar::ClusterVoiceprint(fed.Embedder(), audio, result.slices, c);
+    }
+    const double vp_s = seconds(vp_start, Clock::now());
+    const double stop_s = seconds(stop_start, Clock::now());
+    const std::size_t stop_decodes = decodes - capture_decodes;
+
+    // ---- verification against the batch pass
+    std::ptrdiff_t mismatch = -1;
+    if (result.slices.size() != batch.slices.size()) {
+        std::fprintf(stderr, "amortise probe: SLICE COUNT differs (%zu vs batch %zu)\n",
+                     result.slices.size(), batch.slices.size());
+        for (std::size_t i = 0; i < std::min(result.slices.size(), batch.slices.size()); ++i) {
+            if (result.slices[i].first_frame != batch.slices[i].first_frame ||
+                result.slices[i].end_frame != batch.slices[i].end_frame) {
+                std::fprintf(
+                    stderr, "  first divergence at %zu: fed [%.2f, %.2f) batch [%.2f, %.2f)\n", i,
+                    result.slices[i].first_frame / 16000.0, result.slices[i].end_frame / 16000.0,
+                    batch.slices[i].first_frame / 16000.0, batch.slices[i].end_frame / 16000.0);
+                break;
+            }
+        }
+    } else {
+        mismatch = 0;
+        for (std::size_t i = 0; i < result.slices.size(); ++i) {
+            if (result.slices[i].first_frame != batch.slices[i].first_frame ||
+                result.slices[i].end_frame != batch.slices[i].end_frame ||
+                result.slices[i].cluster != batch.slices[i].cluster) {
+                ++mismatch;
+            }
+        }
+        std::fprintf(stderr, "amortise probe: slices vs batch: %td mismatched of %zu\n", mismatch,
+                     result.slices.size());
+    }
+    std::size_t text_same = 0;
+    std::map<std::string, int> batch_texts;
+    for (const auto& t : batch_resplit) ++batch_texts[t.text];
+    for (const auto& t : spliced) {
+        auto it = batch_texts.find(t.text);
+        if (it != batch_texts.end() && it->second > 0) {
+            --it->second;
+            ++text_same;
+        }
+    }
+    std::fprintf(stderr, "amortise probe: turn texts matching batch: %zu of %zu (batch %zu)\n",
+                 text_same, spliced.size(), batch_resplit.size());
+    std::fprintf(stderr,
+                 "amortise probe: capture %.1f s over %zu ticks (%zu decodes); STOP %.2f s "
+                 "(vp %.2f, %zu decodes)\n",
+                 capture_s, ticks, capture_decodes, stop_s, vp_s, stop_decodes);
+    // One line per consult for the verification driver to parse
+    std::fprintf(stderr,
+                 "PROBE audio=%.1f capture=%.1f ticks=%zu cap_decodes=%zu stop=%.3f vp=%.3f "
+                 "stop_decodes=%zu slices=%zu batch_slices=%zu mismatch=%td text_match=%zu "
+                 "turns=%zu batch_turns=%zu\n",
+                 audio.size() / 16000.0, capture_s, ticks, capture_decodes, stop_s, vp_s,
+                 stop_decodes, result.slices.size(), batch.slices.size(), mismatch, text_same,
+                 spliced.size(), batch_resplit.size());
+    // The attributed transcript, for the blinded judge
+    for (const auto& turn : display) {
+        std::printf("ATURN %s\t%s\n", turn.speaker.c_str(), turn.text.c_str());
+    }
+    std::error_code ec;
+    std::filesystem::remove_all(anchor_root, ec);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -94,10 +215,14 @@ int main(int argc, char** argv) {
                      "usage: diar_eval_runner <models-dir> <audio.wav> [--roles] [--turn-cuts]\n");
         return 2;
     }
-    bool roles = false, turn_cuts = false;
+    bool roles = false, turn_cuts = false, amortise = false;
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--roles") == 0) roles = true;
         if (std::strcmp(argv[i], "--turn-cuts") == 0) turn_cuts = true;
+        if (std::strcmp(argv[i], "--amortise-probe") == 0) {
+            roles = true;
+            amortise = true;
+        }
     }
     try {
         const sotto::models::ModelStore store{std::filesystem::path(argv[1])};
@@ -123,6 +248,7 @@ int main(int argc, char** argv) {
                 cuts.push_back(turn.first_frame + turn.frame_count);
             }
         }
+        const std::vector<sotto::asr::Turn> reconciled = turns;
         const auto result = diariser.Diarise(audio, cuts);
 
         if (roles) {
@@ -137,6 +263,11 @@ int main(int argc, char** argv) {
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - before);
             std::fprintf(stderr, "resplit: %zu -> %zu turns in %.1f s\n", was, turns.size(),
                          took.count());
+        }
+
+        if (amortise) {
+            AmortiseProbe(store, runtime, *whisper, audio, reconciled, cuts, result, turns);
+            return 0;
         }
 
         if (!roles) {
@@ -176,6 +307,7 @@ int main(int argc, char** argv) {
              sotto::diar::BuildAttributedTurns(result.slices, texts, named.role_of_cluster)) {
             std::printf("TURN %s\t%s\n", turn.speaker.c_str(), turn.text.c_str());
         }
+
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "diar_eval_runner: %s\n", e.what());

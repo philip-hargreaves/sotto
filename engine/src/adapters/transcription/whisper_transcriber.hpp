@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <future>
 #include <mutex>
 #include <optional>
 #include <span>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -40,11 +42,21 @@ class WhisperTranscriber : public ITranscriber {
                 std::uint64_t first_new_frame = 0) override;
     void Finish() override;
 
+    // Rides the same worker queue after any pending live windows, so the one
+    // pipeline is never contended and the live transcript is never delayed.
+    // Blocks until decoded; never touches the sink or the dedup backstop
+    std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override;
+
    private:
     struct Window {
         std::vector<float> frames;
         std::uint64_t first_frame;
         std::uint64_t first_new_frame;
+    };
+    struct Clip {
+        std::vector<float> frames;
+        std::uint64_t first_frame;
+        std::promise<std::string> text;
     };
 
     void WorkerLoop();
@@ -54,6 +66,7 @@ class WhisperTranscriber : public ITranscriber {
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<Window> queue_;
+    std::deque<Clip> clips_;
     ITurnSink* sink_ = nullptr;
     std::optional<Turn> previous_turn_;  // for the boundary dedup backstop
     bool busy_ = false;
