@@ -19,6 +19,7 @@ add_executable(engine_tests
     core/diar_regions_test.cpp
     core/endpointer_test.cpp
     core/level_meter_test.cpp
+    core/seg_decode_test.cpp
     core/session_controller_test.cpp
     core/turn_assembly_test.cpp
     core/version_test.cpp
@@ -73,6 +74,7 @@ add_executable(models_tests
     adapters/asr_wer_test.cpp
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp
+    adapters/seg_model_test.cpp
     adapters/silero_vad_test.cpp
     adapters/speaker_embedder_test.cpp
     adapters/whisper_real_test.cpp)
