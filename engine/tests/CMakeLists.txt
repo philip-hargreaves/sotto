@@ -25,6 +25,7 @@ add_executable(engine_tests
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
     adapters/db_test.cpp
+    adapters/fbank_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
@@ -47,8 +48,8 @@ add_executable(store_crash_helper
 target_link_libraries(store_crash_helper PRIVATE sotto_storage sotto_warnings)
 add_dependencies(engine_tests store_crash_helper)
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_audio sotto_models sotto_storage sotto_transcription sotto_warnings
-    openvino::genai GTest::gtest_main)
+    sotto_ipc sotto_audio sotto_diarisation sotto_models sotto_storage sotto_transcription
+    sotto_warnings openvino::genai GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute
@@ -69,14 +70,15 @@ add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
     adapters/embedder_model_test.cpp
+    adapters/fbank_parity_test.cpp
     adapters/silero_vad_test.cpp
     adapters/whisper_real_test.cpp)
 target_compile_definitions(models_tests PRIVATE
     SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
     SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
 target_link_libraries(models_tests PRIVATE
-    sotto_models sotto_transcription sotto_vad sotto_warnings nlohmann_json::nlohmann_json
-    openvino::genai GTest::gtest_main)
+    sotto_diarisation sotto_models sotto_transcription sotto_vad sotto_warnings
+    nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)

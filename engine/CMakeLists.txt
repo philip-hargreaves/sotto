@@ -94,6 +94,29 @@ target_link_libraries(sotto_vad
     PUBLIC sotto_core
     PRIVATE sotto_models sotto_warnings openvino::genai)
 
+# Feature front-end for the speaker embedder, pinned to the version the
+# research validated against torchaudio. kissfft is fetched and hash-pinned
+# by knf's own build
+set(KALDI_NATIVE_FBANK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(KALDI_NATIVE_FBANK_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF)
+FetchContent_Declare(
+    kaldi_native_fbank
+    GIT_REPOSITORY https://github.com/csukuangfj/kaldi-native-fbank.git
+    GIT_TAG b09e686fe2084732ddd30d1ef80acfc0f13eaf01  # v1.22.3
+    SYSTEM
+)
+FetchContent_MakeAvailable(kaldi_native_fbank)
+# Not ours to keep warning-clean
+set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+
+add_library(sotto_diarisation STATIC
+    src/adapters/diarisation/fbank.cpp)
+target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
+target_link_libraries(sotto_diarisation
+    PUBLIC sotto_core
+    PRIVATE sotto_warnings kaldi-native-fbank-core)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
