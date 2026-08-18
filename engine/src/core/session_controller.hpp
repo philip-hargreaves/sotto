@@ -6,13 +6,14 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
 #include <utility>
 
+#include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
-#include "core/window_cutter.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/session_store.hpp"
 #include "ports/transcriber.hpp"
@@ -41,12 +42,13 @@ using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
 class SessionController {
    public:
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
-                      asr::ITranscriber& transcriber,
+                      asr::ITranscriber& transcriber, IStreamingVad& vad,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3))
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
           transcriber_(transcriber),
+          vad_(vad),
           settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
@@ -75,7 +77,8 @@ class SessionController {
             const store::SessionId id = store_.Begin({kSampleRate, "", ""});
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
-            cutter_ = WindowCutter{};
+            vad_.Reset();
+            endpointer_.emplace(vad_);
             transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -173,7 +176,7 @@ class SessionController {
             controller.cv_.notify_all();
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
-                for (const auto& window : controller.cutter_.Push(frames)) {
+                for (const auto& window : controller.endpointer_->Push(frames)) {
                     controller.transcriber_.Submit(window.frames, window.first_frame);
                 }
             }
@@ -245,8 +248,8 @@ class SessionController {
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
-        if (outcome != Outcome::kCancel) {
-            if (const auto tail = cutter_.Flush()) {
+        if (outcome != Outcome::kCancel && endpointer_.has_value()) {
+            if (const auto tail = endpointer_->Flush()) {
                 transcriber_.Submit(tail->frames, tail->first_frame);
             }
         }
@@ -280,11 +283,12 @@ class SessionController {
     ISessionEvents& events_;
     store::ISessionStore& store_;
     asr::ITranscriber& transcriber_;
+    IStreamingVad& vad_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
     LevelMeter meter_;
-    WindowCutter cutter_;
+    std::optional<Endpointer> endpointer_;
     TurnSink turn_sink_{*this};
     mutable std::mutex mutex_;
     std::condition_variable cv_;

@@ -20,6 +20,8 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
+#include "adapters/vad/passthrough_vad.hpp"
+#include "adapters/vad/silero_vad.hpp"
 #include "core/session_controller.hpp"
 
 namespace {
@@ -120,8 +122,17 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
             transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();
         }
+        // Same pattern for the VAD: real endpointing when staged
+        std::unique_ptr<sotto::audio::IStreamingVad> vad;
+        try {
+            model_store.Resolve("vad", "default");
+            vad = std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: capped windows (%s)\n", e.what());
+            vad = std::make_unique<sotto::audio::PassthroughVad>();
+        }
         sotto::audio::SessionController controller(std::move(factory), events, session_store,
-                                                   *transcriber);
+                                                   *transcriber, *vad);
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
         server.ServeOneClient();
