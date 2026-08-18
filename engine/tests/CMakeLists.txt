@@ -68,10 +68,12 @@ target_link_libraries(gpu_tests PRIVATE
 add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
+    adapters/embedder_model_test.cpp
     adapters/silero_vad_test.cpp
     adapters/whisper_real_test.cpp)
 target_compile_definitions(models_tests PRIVATE
-    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models")
+    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
+    SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
 target_link_libraries(models_tests PRIVATE
     sotto_models sotto_transcription sotto_vad sotto_warnings nlohmann_json::nlohmann_json
     openvino::genai GTest::gtest_main)
