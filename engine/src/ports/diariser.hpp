@@ -53,6 +53,9 @@ class IDiariser {
     virtual ResplitPieces TakeResplitPieces() {
         return {};
     }
+
+    // Drop capture state a finalise will never consume (cancel, abandon)
+    virtual void DiscardCapture() {}
 };
 
 }  // namespace sotto::diar

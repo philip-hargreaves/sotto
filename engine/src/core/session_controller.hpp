@@ -49,13 +49,15 @@ class SessionController {
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
                       asr::ITranscriber& transcriber, IStreamingVad& vad,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
-                      diar::IDiariser* diariser = nullptr)
+                      diar::IDiariser* diariser = nullptr,
+                      std::uint64_t diar_advance_frames = 5 * kSampleRate)
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
           transcriber_(transcriber),
           vad_(vad),
           diariser_(diariser),
+          diar_advance_frames_(diar_advance_frames),
           settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
@@ -76,6 +78,7 @@ class SessionController {
             got_audio_ = false;
             ended_ = false;
             stop_requested_ = false;
+            diar_stop_ = false;
             lost_frames_ = 0;
             end_ = {};
             meter_ = LevelMeter{};
@@ -98,6 +101,9 @@ class SessionController {
         }
         source_ = factory_();
         worker_ = std::thread([this] { GuardedRun(); });
+        if (diariser_ != nullptr) {
+            diar_thread_ = std::thread([this] { DiarLoop(); });
+        }
 
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait_for(lock, settle_timeout_, [this] { return got_audio_ || ended_; });
@@ -192,14 +198,15 @@ class SessionController {
                 controller.lost_frames_ += lost_frames;
                 controller.got_audio_ = true;
                 id = controller.session_id_;
+                // Under the lock: the diarisation thread snapshots this
+                if (controller.diariser_ != nullptr && !id.empty()) {
+                    controller.session_audio_.insert(controller.session_audio_.end(),
+                                                     frames.begin(), frames.end());
+                }
             }
             controller.cv_.notify_all();
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
-                if (controller.diariser_ != nullptr) {
-                    controller.session_audio_.insert(controller.session_audio_.end(),
-                                                     frames.begin(), frames.end());
-                }
                 for (const auto& window : controller.endpointer_->Push(frames)) {
                     controller.transcriber_.Submit(window.frames, window.first_frame,
                                                    window.first_new_frame);
@@ -245,6 +252,49 @@ class SessionController {
         }
     }
 
+    // Diarisation's causal work, spread over the recording so finalise only
+    // pays the tail. Snapshots are taken under the lock; the heavy Advance
+    // (models, clip re-decodes) runs outside it and off the capture thread
+    void DiarLoop() {
+        std::vector<float> audio;
+        std::vector<asr::Turn> turns;
+        std::unique_lock<std::mutex> lock(mutex_);
+        for (;;) {
+            cv_.wait(lock, [this, &audio] {
+                return diar_stop_ || session_audio_.size() >= audio.size() + diar_advance_frames_;
+            });
+            if (diar_stop_) {
+                return;
+            }
+            audio = session_audio_;
+            turns = session_turns_;
+            lock.unlock();
+            // The same reconcile finalise runs, so turn spans agree
+            diar::ReconcileTurns(turns);
+            try {
+                diariser_->Advance(audio, turns,
+                                   [this](std::span<const float> clip, std::uint64_t first) {
+                                       return transcriber_.DecodeClip(clip, first);
+                                   });
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+            lock.lock();
+        }
+    }
+
+    void JoinDiarThread() {
+        std::thread diar;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            diar_stop_ = true;
+            diar = std::move(diar_thread_);
+        }
+        cv_.notify_all();
+        if (diar.joinable()) {
+            diar.join();
+        }
+    }
+
     void EndCapture() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -270,6 +320,8 @@ class SessionController {
                 return;
             }
         }
+        // No capture work may run once finalise starts
+        JoinDiarThread();
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
@@ -310,10 +362,11 @@ class SessionController {
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
-                // Re-decode straddling turns off the live stream, so nothing
-                // reaches the store; the replace below carries the repairs
-                transcribed = diar::ResplitStraddles(
-                    transcribed, result.slices, session_audio_,
+                // Capture-phase re-splits splice in; only turns capture never
+                // settled re-decode here, off the live stream, so nothing
+                // reaches the store and the replace below carries the repairs
+                transcribed = diar::SpliceResplits(
+                    transcribed, diariser_->TakeResplitPieces(), result.slices, session_audio_,
                     [this](std::span<const float> clip, std::uint64_t first) {
                         return transcriber_.DecodeClip(clip, first);
                     });
@@ -337,6 +390,11 @@ class SessionController {
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
+        }
+        // Capture state a finalise did not consume must not leak into the
+        // next session (cancel, abandon, a diarisation failure)
+        if (diariser_ != nullptr) {
+            diariser_->DiscardCapture();
         }
         session_audio_.clear();
         session_audio_.shrink_to_fit();
@@ -366,9 +424,12 @@ class SessionController {
     asr::ITranscriber& transcriber_;
     IStreamingVad& vad_;
     diar::IDiariser* diariser_;
+    std::uint64_t diar_advance_frames_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
+    std::thread diar_thread_;
+    bool diar_stop_ = false;  // under mutex_
     LevelMeter meter_;
     std::optional<Endpointer> endpointer_;
     TurnSink turn_sink_{*this};
@@ -381,7 +442,8 @@ class SessionController {
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
     store::SessionId last_finalised_;
-    // Capture-thread writes; finalise reads after the capture thread joins
+    // Appended under mutex_ (the diarisation thread snapshots it); finalise
+    // reads it after every other thread has joined
     std::vector<float> session_audio_;
     std::vector<asr::Turn> session_turns_;  // under mutex_: turns arrive on the ASR thread
     SourceEnd end_{};

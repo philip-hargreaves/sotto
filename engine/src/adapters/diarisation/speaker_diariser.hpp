@@ -44,6 +44,11 @@ class SpeakerDiariser : public IDiariser {
         return std::exchange(pieces_, {});
     }
 
+    void DiscardCapture() override {
+        (void)worker_.Take();
+        pieces_.clear();
+    }
+
     SpeakerEmbedder& Embedder() {
         return embedder_;
     }
