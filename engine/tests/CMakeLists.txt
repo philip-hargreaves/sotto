@@ -26,6 +26,7 @@ add_executable(engine_tests
     core/speaker_attribution_test.cpp
     core/turn_assembly_test.cpp
     core/turn_reconcile_test.cpp
+    core/turn_resplit_test.cpp
     core/version_test.cpp
     adapters/anchor_store_test.cpp
     adapters/capture_errors_test.cpp
