@@ -15,9 +15,6 @@ namespace sotto::diar {
 // (clip, absolute first frame) -> transcribed text
 using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint64_t)>;
 
-// Turn span -> its re-decoded pieces; empty means the turn stands
-using ResplitPieces = std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<asr::Turn>>;
-
 // Exact decode span -> speculated text
 using TurnTexts = std::map<std::pair<std::uint64_t, std::uint64_t>, std::string>;
 
