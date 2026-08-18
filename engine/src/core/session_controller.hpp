@@ -180,16 +180,6 @@ class SessionController {
         }
     };
 
-    // Collects re-decode output without touching the store; the
-    // transcriber's Finish orders the writes before the read
-    struct CollectingSink : asr::ITurnSink {
-        std::vector<asr::Turn> turns;
-
-        void OnTurn(const asr::Turn& turn) override {
-            turns.push_back(turn);
-        }
-    };
-
     struct Sink : IAudioSink {
         SessionController& controller;
 
@@ -320,24 +310,12 @@ class SessionController {
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
-                // Re-decode straddling turns through the session's own
-                // transcriber; a throwaway sink keeps re-decodes out of the
-                // store, and the replace below carries the repaired turns
-                CollectingSink resplit_sink;
+                // Re-decode straddling turns off the live stream, so nothing
+                // reaches the store; the replace below carries the repairs
                 transcribed = diar::ResplitStraddles(
                     transcribed, result.slices, session_audio_,
-                    [this, &resplit_sink](std::span<const float> clip, std::uint64_t first) {
-                        resplit_sink.turns.clear();
-                        transcriber_.Begin(resplit_sink);
-                        transcriber_.Submit(clip, first);
-                        transcriber_.Finish();
-                        std::string text;
-                        for (const auto& piece : resplit_sink.turns) {
-                            if (piece.text.empty()) continue;
-                            if (!text.empty()) text += ' ';
-                            text += piece.text;
-                        }
-                        return text;
+                    [this](std::span<const float> clip, std::uint64_t first) {
+                        return transcriber_.DecodeClip(clip, first);
                     });
                 const auto texts = diar::AssignSliceTexts(transcribed, result.slices);
                 std::vector<diar::RoleTurn> role_turns;

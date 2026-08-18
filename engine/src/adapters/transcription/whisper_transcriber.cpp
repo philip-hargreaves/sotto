@@ -108,6 +108,19 @@ void WhisperTranscriber::Finish() {
     cv_.wait(lock, [this] { return (queue_.empty() && !busy_) || stopping_; });
 }
 
+std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
+                                           std::uint64_t first_frame) {
+    std::future<std::string> text;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (stopping_) return {};  // the worker no longer serves clips
+        clips_.push_back({{frames.begin(), frames.end()}, first_frame, {}});
+        text = clips_.back().text.get_future();
+    }
+    cv_.notify_all();
+    return text.get();
+}
+
 void WhisperTranscriber::WorkerLoop() {
     // Load here, not in the constructor: the engine serves and sessions
     // record while the pipeline compiles; queued windows decode afterwards.
@@ -122,8 +135,32 @@ void WhisperTranscriber::WorkerLoop() {
 
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
-        cv_.wait(lock, [this] { return !queue_.empty() || stopping_; });
+        cv_.wait(lock, [this] { return !queue_.empty() || !clips_.empty() || stopping_; });
         if (stopping_) break;
+
+        // Live windows first: clips are background repair work
+        if (queue_.empty()) {
+            Clip clip = std::move(clips_.front());
+            clips_.pop_front();
+            busy_ = true;
+            lock.unlock();
+            std::string text;
+            try {
+                if (decode_) {
+                    for (const Turn& turn : decode_(clip.frames, clip.first_frame)) {
+                        if (turn.text.empty()) continue;
+                        if (!text.empty()) text += ' ';
+                        text += turn.text;
+                    }
+                }
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+            clip.text.set_value(std::move(text));
+            lock.lock();
+            busy_ = false;
+            cv_.notify_all();
+            continue;
+        }
 
         Window window = std::move(queue_.front());
         queue_.pop_front();
@@ -159,6 +196,8 @@ void WhisperTranscriber::WorkerLoop() {
         busy_ = false;
         cv_.notify_all();
     }
+    // A caller may still be blocked on a pending clip at shutdown
+    for (auto& clip : clips_) clip.text.set_value({});
 }
 
 }  // namespace sotto::asr
