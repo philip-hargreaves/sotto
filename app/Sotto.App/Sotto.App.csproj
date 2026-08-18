@@ -10,6 +10,10 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- Dev and stakeholder runs are unpackaged; MSIX returns with the
+         distribution work. Self-contained: no runtime install needed -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +38,12 @@
   <Target Name="LinkModelStore" AfterTargets="Build"
           Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And !Exists('$(TargetDir)models')">
     <Exec Command='mklink /J "$(TargetDir)models" "$(MSBuildProjectDirectory)\..\..\models"' />
+  </Target>
+
+  <!-- Packaged F5 runs the engine from AppX, which needs the same link -->
+  <Target Name="LinkModelStoreAppX" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\models')">
+    <Exec Command='mklink /J "$(TargetDir)AppX\models" "$(MSBuildProjectDirectory)\..\..\models"' />
   </Target>
 
   <ItemGroup>

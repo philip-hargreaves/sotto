@@ -24,6 +24,9 @@ public partial class App : Application
 
     public IServiceProvider Services { get; }
 
+    /// <summary>The main window, for pickers that need an HWND.</summary>
+    public Window? Window => _window;
+
     private static readonly TimeSpan EngineConnectTimeout = TimeSpan.FromSeconds(10);
 
     private static ServiceProvider ConfigureServices()
@@ -35,8 +38,11 @@ public partial class App : Application
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IEngineLauncher>(_ => new ProcessEngineLauncher(
             Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe")));
+        // Identity-free path: unpackaged runs have no ApplicationData
+        var localState = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
         services.AddSingleton<ICrashLog>(_ => new FileCrashLog(
-            Path.Combine(ApplicationData.GetDefault().LocalPath, "crashes.jsonl")));
+            Path.Combine(localState, "crashes.jsonl")));
         services.AddSingleton<ISessionState>(sp => new DeferredSessionState(sp));
         services.AddSingleton<IEngineHost>(sp => new EngineSupervisor(
             sp.GetRequiredService<IEngineLauncher>(),
@@ -53,6 +59,8 @@ public partial class App : Application
         services.AddSingleton<NavigationService>();
         services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
 
+        services.AddSingleton(_ => AppPreferences.Load(
+            Path.Combine(localState, "preferences.json")));
         services.AddSingleton<TranscriptViewModel>();
         services.AddSingleton<NoteViewModel>();
         services.AddSingleton<StatusBarViewModel>();
@@ -61,8 +69,10 @@ public partial class App : Application
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<SessionsViewModel>();
+        services.AddSingleton<DemoTrayViewModel>();
 
         services.AddTransient<SessionControlsView>();
+        services.AddTransient<DemoTrayView>();
         services.AddTransient<TranscriptPaneView>();
         services.AddTransient<NotePaneView>();
         services.AddTransient<StatusBarView>();

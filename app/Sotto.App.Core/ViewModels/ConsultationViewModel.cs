@@ -5,6 +5,9 @@ using Sotto.Client;
 
 namespace Sotto.App.Core.ViewModels;
 
+/// <summary>A file replayed as the session's audio source.</summary>
+public sealed record ReplayRequest(string Path, double Speed, bool Monitor);
+
 /// <summary>
 /// Owns the session lifecycle.
 /// </summary>
@@ -19,6 +22,18 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
+
+    [ObservableProperty]
+    public partial bool Paused { get; private set; }
+
+    // Delivered-audio position: one level event per 100 ms of audio, at any
+    // replay speed
+    [ObservableProperty]
+    public partial double AudioSeconds { get; private set; }
+
+    /// <summary>The active session's replay request; null for a microphone.</summary>
+    [ObservableProperty]
+    public partial ReplayRequest? ActiveReplay { get; private set; }
 
     public bool ConsultationActive => State != SessionState.Idle;
 
@@ -40,20 +55,39 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             (method, parameters) => dispatcher.Post(() => HandleNotification(method, parameters));
     }
 
-    public async Task StartRecordingAsync()
+    public async Task StartRecordingAsync(ReplayRequest? replay = null)
     {
         if (State != SessionState.Idle)
         {
             return;
         }
 
-        if (!await RequestAsync("session/start").ConfigureAwait(true))
+        var parameters = replay is null
+            ? null
+            : new { replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
+        if (!await RequestAsync("session/start", parameters).ConfigureAwait(true))
         {
             return;
         }
 
+        Paused = false;
+        AudioSeconds = 0;
+        ActiveReplay = replay;
         State = SessionState.Recording;
-        Status.Append("recording started");
+        Status.Append(replay is null ? "recording started" : "replay started");
+    }
+
+    public async Task SetPausedAsync(bool paused)
+    {
+        if (State != SessionState.Recording || paused == Paused)
+        {
+            return;
+        }
+
+        if (await RequestAsync("session/pause", new { paused }).ConfigureAwait(true))
+        {
+            Paused = paused;
+        }
     }
 
     public async Task StopRecordingAsync()
@@ -64,6 +98,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
 
         State = SessionState.Finalising;
+        Paused = false;
+        ActiveReplay = null;
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("finalising");
         var response = await RequestValueAsync("session/stop", StopTimeout).ConfigureAwait(true);
@@ -117,6 +153,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
 
         State = SessionState.Idle;
+        Paused = false;
+        ActiveReplay = null;
         Status.Append("recording cancelled");
     }
 
@@ -150,10 +188,17 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 Status.SetMicLevel(
                     parameters.GetProperty("level").GetDouble(),
                     parameters.GetProperty("clipped").GetBoolean());
+                if (State == SessionState.Recording)
+                {
+                    AudioSeconds += 0.1;
+                }
+
                 break;
             case "session/interrupted"
                 when State is SessionState.Recording or SessionState.Finalising:
                 State = SessionState.Idle;
+                Paused = false;
+                ActiveReplay = null;
                 Note.Reset();
                 Status.SetMicLevel(0, false);
                 Status.Append(parameters.ValueKind == JsonValueKind.Object
@@ -165,14 +210,16 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
     }
 
-    private async Task<bool> RequestAsync(string method, TimeSpan? timeout = null) =>
-        await RequestValueAsync(method, timeout).ConfigureAwait(true) is not null;
+    private async Task<bool> RequestAsync(
+        string method, object? parameters = null, TimeSpan? timeout = null) =>
+        await RequestValueAsync(method, timeout, parameters).ConfigureAwait(true) is not null;
 
-    private async Task<JsonElement?> RequestValueAsync(string method, TimeSpan? timeout = null)
+    private async Task<JsonElement?> RequestValueAsync(
+        string method, TimeSpan? timeout = null, object? parameters = null)
     {
         try
         {
-            return await _engine.RequestAsync(method, null, timeout ?? RequestTimeout)
+            return await _engine.RequestAsync(method, parameters, timeout ?? RequestTimeout)
                 .ConfigureAwait(true);
         }
         catch (OperationCanceledException)

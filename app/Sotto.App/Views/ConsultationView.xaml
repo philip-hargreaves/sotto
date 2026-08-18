@@ -9,6 +9,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid Padding="0,0,16,0" ColumnSpacing="8">
@@ -52,8 +53,14 @@
         </Grid>
 
         <ContentControl
-            x:Name="StatusHost"
+            x:Name="DemoTrayHost"
             Grid.Row="2"
+            HorizontalContentAlignment="Stretch"
+            Visibility="Collapsed" />
+
+        <ContentControl
+            x:Name="StatusHost"
+            Grid.Row="3"
             HorizontalContentAlignment="Stretch" />
     </Grid>
 </UserControl>
