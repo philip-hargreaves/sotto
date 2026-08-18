@@ -24,6 +24,7 @@
 #include "core/endpointer.hpp"
 #include "core/role_naming.hpp"
 #include "core/speaker_attribution.hpp"
+#include "core/turn_reconcile.hpp"
 
 namespace {
 
@@ -104,73 +105,6 @@ std::size_t MaxNgramRepeat(const std::string& text) {
         worst = std::max(worst, ++counts[gram]);
     }
     return worst;
-}
-
-std::size_t WordEdit(const std::vector<std::string>& a, const std::vector<std::string>& b) {
-    std::vector<std::size_t> prev(b.size() + 1);
-    std::vector<std::size_t> cur(b.size() + 1);
-    for (std::size_t j = 0; j <= b.size(); ++j) prev[j] = j;
-    for (std::size_t i = 1; i <= a.size(); ++i) {
-        cur[0] = i;
-        for (std::size_t j = 1; j <= b.size(); ++j) {
-            cur[j] = std::min(
-                {prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1), prev[j] + 1, cur[j - 1] + 1});
-        }
-        std::swap(prev, cur);
-    }
-    return prev[b.size()];
-}
-
-std::string DropTailWords(const std::string& text, std::size_t count) {
-    std::size_t end = text.size();
-    for (std::size_t dropped = 0; dropped < count && end > 0; ++dropped) {
-        while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0) --end;
-        while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) == 0) --end;
-    }
-    while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0) --end;
-    return text.substr(0, end);
-}
-
-// Whisper hears a window boundary twice and its timestamps are sloppy
-// enough that the time trim can miss the repeat: adjacent turns then carry
-// the same phrase and overlap in time. Fuzzy-match the earlier turn's tail
-// against the later turn's head (word edit distance, so different
-// renderings still match) and drop the matched tail from the EARLIER turn -
-// the later window heard that speech with full context. Spans are clamped
-// afterwards so the turns no longer overlap
-void ReconcileTurns(std::vector<sotto::asr::Turn>& turns) {
-    constexpr std::uint64_t kWindowGapFrames = 24000;  // 1.5 s
-    for (std::size_t i = 1; i < turns.size(); ++i) {
-        auto& prev = turns[i - 1];
-        const auto& next = turns[i];
-        if (prev.text.empty() || next.text.empty()) continue;
-        const std::uint64_t prev_end = prev.first_frame + prev.frame_count;
-        if (next.first_frame > prev_end + kWindowGapFrames) continue;
-        const auto pw = sotto::diar::detail::WordsOf(prev.text);
-        const auto nw = sotto::diar::detail::WordsOf(next.text);
-        const std::size_t max_tail = std::min<std::size_t>(10, pw.size());
-        std::size_t drop = 0;
-        double best = 0.0;
-        for (std::size_t s = 2; s <= max_tail; ++s) {
-            const std::vector<std::string> tail(pw.end() - static_cast<std::ptrdiff_t>(s),
-                                                pw.end());
-            for (std::size_t len = s - 1; len <= std::min(s + 1, nw.size()); ++len) {
-                if (len == 0) continue;
-                const std::vector<std::string> head(nw.begin(),
-                                                    nw.begin() + static_cast<std::ptrdiff_t>(len));
-                const double sim = 1.0 - static_cast<double>(WordEdit(tail, head)) /
-                                             static_cast<double>(std::max(s, len));
-                if (sim >= 0.66 && sim * static_cast<double>(s) > best) {
-                    best = sim * static_cast<double>(s);
-                    drop = s;
-                }
-            }
-        }
-        if (drop >= 2) prev.text = DropTailWords(prev.text, drop);
-        if (prev_end > next.first_frame && next.first_frame > prev.first_frame) {
-            prev.frame_count = next.first_frame - prev.first_frame;
-        }
-    }
 }
 
 // The re-split probe (ported from the research finalise): a transcribed
@@ -286,7 +220,7 @@ int main(int argc, char** argv) {
         const auto result = diariser.Diarise(audio, cuts);
 
         if (resplit) {
-            ReconcileTurns(turns);
+            sotto::diar::ReconcileTurns(turns);
             int done = 0, skipped = 0;
             turns = ResplitStraddles(*whisper, audio, turns, result.slices, done, skipped);
             std::fprintf(stderr, "resplit: %d re-transcribed, %d skipped\n", done, skipped);
