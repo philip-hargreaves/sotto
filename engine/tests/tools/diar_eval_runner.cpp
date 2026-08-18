@@ -34,9 +34,12 @@ int main(int argc, char** argv) {
     try {
         const sotto::models::ModelStore store{std::filesystem::path(argv[1])};
         sotto::models::OvRuntime runtime;
-        sotto::diar::SpeakerDiariser diariser(store, runtime);
+        // A throwaway anchor root: evaluation must never touch a real anchor
+        const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-eval";
+        std::filesystem::create_directories(anchor_root);
+        sotto::diar::SpeakerDiariser diariser(store, runtime, anchor_root);
         const auto audio = LoadWav(argv[2]);
-        for (const auto& slice : diariser.Diarise(audio)) {
+        for (const auto& slice : diariser.Diarise(audio).slices) {
             std::printf("%.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
                         static_cast<double>(slice.end_frame) / 16000.0, slice.cluster);
         }

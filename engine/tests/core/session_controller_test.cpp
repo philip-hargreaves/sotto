@@ -348,12 +348,31 @@ TEST(SessionController, StopFinalisesTheSession) {
 
 struct FakeDiariser : diar::IDiariser {
     int calls = 0;
+    int accruals = 0;
+    int accrued_cluster = -1;
     std::size_t audio_frames = 0;
+    int clusters = 1;
+    std::vector<double> similarities;
 
-    std::vector<diar::LabelledSlice> Diarise(std::span<const float> audio) override {
+    diar::DiariseResult Diarise(std::span<const float> audio) override {
         ++calls;
         audio_frames = audio.size();
-        return {{0, audio.size(), 0}};
+        diar::DiariseResult result;
+        result.cluster_count = clusters;
+        result.anchor_similarity = similarities;
+        if (clusters == 1) {
+            result.slices = {{0, audio.size(), 0}};
+        } else {
+            const auto half = audio.size() / 2;
+            result.slices = {{0, half, 0}, {half, audio.size(), 1}};
+        }
+        return result;
+    }
+
+    void AccrueDoctor(std::span<const float>, const std::vector<diar::LabelledSlice>&,
+                      int doctor_cluster) override {
+        ++accruals;
+        accrued_cluster = doctor_cluster;
     }
 };
 
@@ -377,7 +396,50 @@ TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
               (std::vector<std::string>{"begin s1", "turn s1", "replace s1", "finalise s1"}))
         << "the attributed transcript supersedes the live turns before the seal";
     ASSERT_EQ(store.turns.size(), 1u);
-    EXPECT_EQ(store.turns[0].speaker, "speaker 1");
+    EXPECT_EQ(store.turns[0].speaker, "speaker 1") << "one cluster cannot be named";
+    EXPECT_EQ(diariser.accruals, 0) << "an abstained session must not teach the anchor";
+}
+
+TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.2, 0.8};
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_FALSE(store.turns.empty());
+    for (const auto& turn : store.turns) {
+        EXPECT_TRUE(turn.speaker == "doctor" || turn.speaker == "patient") << turn.speaker;
+    }
+    EXPECT_EQ(diariser.accruals, 1);
+    EXPECT_EQ(diariser.accrued_cluster, 1) << "the nearer cluster to the anchor is the doctor";
+}
+
+TEST(SessionController, AmbiguousLexicalEvidenceKeepsNumberedSpeakers) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;  // scripted text carries no role signal
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_FALSE(store.turns.empty());
+    for (const auto& turn : store.turns) {
+        EXPECT_TRUE(turn.speaker == "speaker 1" || turn.speaker == "speaker 2") << turn.speaker;
+    }
+    EXPECT_EQ(diariser.accruals, 0);
 }
 
 TEST(SessionController, CancelNeverDiarises) {

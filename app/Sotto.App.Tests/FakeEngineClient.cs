@@ -24,13 +24,31 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 Protocol.JsonOptions));
         }
 
-        if (method == "session/stop" && autoNotify)
+        if (method == "session/stop")
         {
-            _ = NotifySequenceAsync();
+            if (autoNotify)
+            {
+                _ = NotifySequenceAsync();
+            }
+
+            return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        }
+
+        if (method == "session/transcript")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(new
+            {
+                turns = Transcript
+                    .Select(t => new { firstFrame = 0, frameCount = 0, speaker = t.Speaker, text = t.Text })
+                    .ToArray(),
+            }));
         }
 
         return Task.FromResult(Empty);
     }
+
+    /// <summary>Turns served by session/transcript after a stop.</summary>
+    public List<(string Speaker, string Text)> Transcript { get; } = [];
 
     public void RaiseNotification(string method, JsonElement parameters = default) =>
         NotificationReceived?.Invoke(method, parameters);

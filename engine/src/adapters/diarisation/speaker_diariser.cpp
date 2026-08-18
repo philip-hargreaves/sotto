@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
 #include "core/diar_regions.hpp"
 #include "core/slice_refinement.hpp"
@@ -23,11 +24,16 @@ std::vector<float> Gather(std::span<const float> audio, const std::vector<Region
 
 }  // namespace
 
-SpeakerDiariser::SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime)
-    : vad_(store, runtime), segmenter_(store, runtime), embedder_(store, runtime) {}
+SpeakerDiariser::SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,
+                                 const std::filesystem::path& anchor_root)
+    : vad_(store, runtime),
+      segmenter_(store, runtime),
+      embedder_(store, runtime),
+      anchors_(anchor_root) {}
 
-std::vector<LabelledSlice> SpeakerDiariser::Diarise(std::span<const float> audio) {
-    if (audio.empty()) return {};
+DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
+    DiariseResult result;
+    if (audio.empty()) return result;
 
     vad_.Reset();
     std::vector<float> probabilities;
@@ -96,7 +102,30 @@ std::vector<LabelledSlice> SpeakerDiariser::Diarise(std::span<const float> audio
     std::sort(out.begin(), out.end(), [](const LabelledSlice& a, const LabelledSlice& b) {
         return a.first_frame < b.first_frame;
     });
-    return out;
+    result.slices = std::move(out);
+    result.cluster_count = clusters.count;
+
+    // Each cluster's similarity to the accrued anchor; a cluster too short
+    // for a voiceprint ranks below any real match
+    if (const auto anchor = anchors_.Anchor()) {
+        result.anchor_similarity.assign(static_cast<std::size_t>(clusters.count), -2.0);
+        for (int c = 0; c < clusters.count; ++c) {
+            const auto voiceprint = ClusterVoiceprint(embedder_, audio, result.slices, c);
+            if (voiceprint.empty()) continue;
+            double dot = 0.0;
+            for (std::size_t d = 0; d < voiceprint.size(); ++d) {
+                dot += static_cast<double>(voiceprint[d]) * (*anchor)[d];
+            }
+            result.anchor_similarity[static_cast<std::size_t>(c)] = dot;
+        }
+    }
+    return result;
+}
+
+void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,
+                                   const std::vector<LabelledSlice>& slices, int doctor_cluster) {
+    const auto voiceprint = ClusterVoiceprint(embedder_, audio, slices, doctor_cluster);
+    if (!voiceprint.empty()) anchors_.Accrue(voiceprint);
 }
 
 }  // namespace sotto::diar

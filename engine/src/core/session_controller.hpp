@@ -14,6 +14,7 @@
 
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
+#include "core/role_naming.hpp"
 #include "core/speaker_attribution.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/diariser.hpp"
@@ -137,6 +138,13 @@ class SessionController {
     std::uint64_t LostFrames() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return lost_frames_;
+    }
+
+    // The most recently finalised session, for the shell's post-stop
+    // transcript fetch; empty until a session has finalised
+    store::SessionId LastFinalised() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return last_finalised_;
     }
 
    private:
@@ -274,6 +282,9 @@ class SessionController {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             id = std::exchange(session_id_, {});
+            if (outcome == Outcome::kFinalise) {
+                last_finalised_ = id;
+            }
         }
         if (id.empty()) {
             return;
@@ -283,15 +294,29 @@ class SessionController {
         // never the session
         if (outcome == Outcome::kFinalise && diariser_ != nullptr && !session_audio_.empty()) {
             try {
-                const auto slices = diariser_->Diarise(session_audio_);
+                const auto result = diariser_->Diarise(session_audio_);
                 std::vector<asr::Turn> transcribed;
                 {
                     std::lock_guard<std::mutex> lock(mutex_);
                     transcribed = session_turns_;
                 }
-                const auto attributed = diar::AttributeSpeakers(transcribed, slices);
+                const auto texts = diar::AssignSliceTexts(transcribed, result.slices);
+                std::vector<diar::RoleTurn> role_turns;
+                for (std::size_t i = 0; i < result.slices.size(); ++i) {
+                    role_turns.push_back({result.slices[i].cluster,
+                                          result.slices[i].end_frame - result.slices[i].first_frame,
+                                          texts[i]});
+                }
+                const auto roles =
+                    diar::NameRoles(role_turns, result.cluster_count, result.anchor_similarity);
+                const auto attributed =
+                    diar::BuildAttributedTurns(result.slices, texts, roles.role_of_cluster);
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
+                }
+                // The anchor learns only from named sessions, never a guess
+                if (roles.doctor_cluster >= 0) {
+                    diariser_->AccrueDoctor(session_audio_, result.slices, roles.doctor_cluster);
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
@@ -338,6 +363,7 @@ class SessionController {
     bool stop_requested_ = false;
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
+    store::SessionId last_finalised_;
     // Capture-thread writes; finalise reads after the capture thread joins
     std::vector<float> session_audio_;
     std::vector<asr::Turn> session_turns_;  // under mutex_: turns arrive on the ASR thread

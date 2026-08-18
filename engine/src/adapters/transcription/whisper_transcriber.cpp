@@ -33,7 +33,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     config.return_timestamps = true;
 
     // Transcript-tail conditioning (initial_prompt) was measured here and
-    // rejected: ADR-0021, worse verbatim and register-folded WER
+    // rejected: it worsened WER even with register effects folded out
     return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
         auto result = pipeline->generate(audio, config);

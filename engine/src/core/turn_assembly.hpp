@@ -10,9 +10,9 @@
 
 namespace sotto::asr {
 
-// Window-boundary quality (spec 1.3): the pure steps between a window's
-// decode and its emitted turns. Every constant is measured; the sweeps are
-// in engine-constants.md - do not retune
+// Window-boundary quality: the pure steps between a window's decode and
+// its emitted turns. Every constant is the researched, measured
+// configuration - do not retune
 inline constexpr std::uint64_t kAnchorSnapFrames = 24000;  // 1.5 s
 inline constexpr std::uint64_t kAdjacentGapFrames = 4000;  // 0.25 s
 inline constexpr std::size_t kMaxDedupWords = 4;

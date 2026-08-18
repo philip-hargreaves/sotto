@@ -35,11 +35,14 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
     const auto audio = LoadWav(kWav);
     const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
     models::OvRuntime runtime;
-    SpeakerDiariser diariser(store, runtime);
+    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-pipeline-test";
+    std::filesystem::create_directories(anchor_root);
+    SpeakerDiariser diariser(store, runtime, anchor_root);
 
     const auto start = std::chrono::steady_clock::now();
-    const auto slices = diariser.Diarise(audio);
+    const auto result = diariser.Diarise(audio);
     const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
+    const auto& slices = result.slices;
 
     ASSERT_GT(slices.size(), 20u) << "a full consult yields a real turn structure";
     std::set<int> clusters;
@@ -50,8 +53,12 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
         if (i > 0) EXPECT_GE(slices[i].first_frame, slices[i - 1].first_frame) << "time-sorted";
     }
     EXPECT_EQ(clusters.size(), 2u) << "doctor and patient, no phantom third voice";
+    EXPECT_EQ(result.cluster_count, 2);
+    EXPECT_TRUE(result.anchor_similarity.empty()) << "no anchor has accrued in a fresh root";
     std::printf("diarised %zu slices, %zu clusters in %.1f s\n", slices.size(), clusters.size(),
                 took.count());
+    std::error_code ec;
+    std::filesystem::remove_all(anchor_root, ec);
 }
 
 }  // namespace
