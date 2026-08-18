@@ -74,18 +74,17 @@ inline std::uint64_t Overlap(const LabelledSlice& span, std::uint64_t first, std
 
 }  // namespace detail
 
-// Assign every transcribed turn's text to the diarised slices (spec 2.3):
+// Assign every transcribed turn's text to a diarised slice:
 // majority overlap; a turn genuinely shared between two slices splits at
 // the punctuation nearest the handover; a short shared turn goes to the
 // most SPECIFIC claimant (largest share of its own length), so a
 // backchannel claims its "Okay." from inside a monologue; a turn
 // overlapping nothing goes to the nearest slice by midpoint - words are
-// never dropped. Consecutive same-cluster slices then merge and wordless
-// slices disappear. Output turns carry "speaker N"
-inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& transcribed,
-                                                const std::vector<LabelledSlice>& slices) {
-    if (slices.empty()) return {};
+// never dropped
+inline std::vector<std::string> AssignSliceTexts(const std::vector<asr::Turn>& transcribed,
+                                                 const std::vector<LabelledSlice>& slices) {
     std::vector<std::string> texts(slices.size());
+    if (slices.empty()) return texts;
 
     for (const asr::Turn& turn : transcribed) {
         if (turn.text.empty()) continue;
@@ -154,10 +153,22 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
         }
     }
 
+    return texts;
+}
+
+// Slices plus their texts become display turns: consecutive same-speaker
+// slices merge, wordless slices disappear. role_of_cluster names each
+// cluster; empty falls back to "speaker N"
+inline std::vector<asr::Turn> BuildAttributedTurns(
+    const std::vector<LabelledSlice>& slices, const std::vector<std::string>& texts,
+    const std::vector<std::string>& role_of_cluster = {}) {
     std::vector<asr::Turn> out;
     for (std::size_t i = 0; i < slices.size(); ++i) {
         if (texts[i].empty()) continue;
-        const std::string speaker = "speaker " + std::to_string(slices[i].cluster + 1);
+        const auto cluster = static_cast<std::size_t>(slices[i].cluster);
+        const std::string speaker = cluster < role_of_cluster.size()
+                                        ? role_of_cluster[cluster]
+                                        : "speaker " + std::to_string(slices[i].cluster + 1);
         if (!out.empty() && out.back().speaker == speaker) {
             out.back().frame_count = slices[i].end_frame - out.back().first_frame;
             detail::AppendText(out.back().text, texts[i]);
@@ -166,11 +177,16 @@ inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& tr
             turn.first_frame = slices[i].first_frame;
             turn.frame_count = slices[i].end_frame - slices[i].first_frame;
             turn.speaker = speaker;
-            turn.text = std::move(texts[i]);
+            turn.text = texts[i];
             out.push_back(std::move(turn));
         }
     }
     return out;
+}
+
+inline std::vector<asr::Turn> AttributeSpeakers(const std::vector<asr::Turn>& transcribed,
+                                                const std::vector<LabelledSlice>& slices) {
+    return BuildAttributedTurns(slices, AssignSliceTexts(transcribed, slices));
 }
 
 }  // namespace sotto::diar

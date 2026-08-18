@@ -138,7 +138,8 @@ int main(int argc, char* argv[]) {
         try {
             model_store.Resolve("diarisation", "default");
             model_store.Resolve("segmentation", "default");
-            diariser = std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime);
+            diariser =
+                std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime, store_root);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }

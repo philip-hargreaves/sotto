@@ -19,12 +19,14 @@ add_executable(engine_tests
     core/diar_regions_test.cpp
     core/endpointer_test.cpp
     core/level_meter_test.cpp
+    core/role_naming_test.cpp
     core/seg_decode_test.cpp
     core/session_controller_test.cpp
     core/slice_refinement_test.cpp
     core/speaker_attribution_test.cpp
     core/turn_assembly_test.cpp
     core/version_test.cpp
+    adapters/anchor_store_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
@@ -74,6 +76,7 @@ target_link_libraries(gpu_tests PRIVATE
 add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
+    adapters/cluster_voiceprint_test.cpp
     adapters/diariser_pipeline_test.cpp
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp
@@ -90,7 +93,7 @@ target_link_libraries(models_tests PRIVATE
 
 # Dev evaluation tool for the research acceptance scorer; never shipped
 add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
-target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_warnings)
+target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_transcription sotto_warnings)
 
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(diar_eval_runner ov_test_runtime)

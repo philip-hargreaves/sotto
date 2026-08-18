@@ -12,9 +12,8 @@
 
 namespace sotto::audio {
 
-// Cuts the capture stream into windows at speech boundaries (spec 1.2, core
-// profile). Every constant below is measured; the sweeps are in
-// engine-constants.md 2 - do not retune
+// Cuts the capture stream into windows at speech boundaries. Every
+// constant below is the researched, swept configuration - do not retune
 class Endpointer {
    public:
     // Hysteresis and padding, validated configuration

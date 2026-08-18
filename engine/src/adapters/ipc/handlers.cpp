@@ -114,7 +114,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.Stop();
         server.QueueNotification("note/ready", json::object());
         server.QueueNotification("patient/ready", json::object());
-        return json::object();
+        return json{{"sessionId", controller.LastFinalised()}};
     });
 }
 

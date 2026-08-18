@@ -10,7 +10,7 @@
 
 namespace sotto::diar {
 
-// Diarisation's speech regions (spec 2.2 step 1): a batch Silero pass over
+// Diarisation's speech regions: a batch Silero pass over
 // the whole recording, cut finer than the ASR endpointer so speaker
 // handovers become region edges. A faithful transliteration of the
 // research's sample-exact port; constants are the validated configuration -

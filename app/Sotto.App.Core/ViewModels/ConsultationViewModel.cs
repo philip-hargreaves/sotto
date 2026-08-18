@@ -66,7 +66,42 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Finalising;
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("finalising");
-        await RequestAsync("session/stop", StopTimeout).ConfigureAwait(true);
+        var response = await RequestValueAsync("session/stop", StopTimeout).ConfigureAwait(true);
+
+        // The finalised transcript carries the speaker labels the live feed
+        // could not; it replaces the pane once the engine has sealed it
+        if (response is { ValueKind: JsonValueKind.Object } stop
+            && stop.TryGetProperty("sessionId", out var sessionId))
+        {
+            await LoadFinalTranscriptAsync(sessionId.GetString()).ConfigureAwait(true);
+        }
+    }
+
+    private async Task LoadFinalTranscriptAsync(string? id)
+    {
+        if (string.IsNullOrEmpty(id))
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await _engine
+                .RequestAsync("session/transcript", new { id }, RequestTimeout)
+                .ConfigureAwait(true);
+            Transcript.Turns.Clear();
+            foreach (var turn in response.GetProperty("turns").EnumerateArray())
+            {
+                var speaker = turn.GetProperty("speaker").GetString();
+                var text = turn.GetProperty("text").GetString() ?? "";
+                Transcript.Turns.Add(
+                    string.IsNullOrEmpty(speaker) ? text : $"{speaker}: {text}");
+            }
+        }
+        catch (Exception e)
+        {
+            Status.Append($"could not load the final transcript: {e.Message}");
+        }
     }
 
     public async Task CancelRecordingAsync()
@@ -130,23 +165,25 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
     }
 
-    private async Task<bool> RequestAsync(string method, TimeSpan? timeout = null)
+    private async Task<bool> RequestAsync(string method, TimeSpan? timeout = null) =>
+        await RequestValueAsync(method, timeout).ConfigureAwait(true) is not null;
+
+    private async Task<JsonElement?> RequestValueAsync(string method, TimeSpan? timeout = null)
     {
         try
         {
-            _ = await _engine.RequestAsync(method, null, timeout ?? RequestTimeout)
+            return await _engine.RequestAsync(method, null, timeout ?? RequestTimeout)
                 .ConfigureAwait(true);
-            return true;
         }
         catch (OperationCanceledException)
         {
             Status.Append($"engine request {method} timed out");
-            return false;
+            return null;
         }
         catch (Exception e)
         {
             Status.Append($"engine request {method} failed: {e.Message}");
-            return false;
+            return null;
         }
     }
 }
