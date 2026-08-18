@@ -28,10 +28,12 @@ class Endpointer {
     static constexpr std::size_t kPauseGateFrames = 320000;  // 20 s accumulated
     static constexpr std::size_t kSoftCapFrames = 448000;    // 28 s, Whisper's window
     static constexpr std::size_t kBacktrackFrames = 48000;   // quietest hop in last 3 s
+    static constexpr std::size_t kOverlapFrames = 16000;     // 1 s re-heard after a soft cut
 
     struct Window {
         std::vector<float> frames;
         std::uint64_t first_frame = 0;
+        std::uint64_t first_new_frame = 0;  // frames before this were already transcribed
     };
 
     explicit Endpointer(IStreamingVad& vad) : vad_(vad) {}
@@ -59,6 +61,7 @@ class Endpointer {
         hop_fill_ = 0;
         Window window;
         window.first_frame = window_first_frame_;
+        window.first_new_frame = first_new_frame_;
         window.frames = std::move(buffer_);
         Reset();
         return window;
@@ -93,6 +96,7 @@ class Endpointer {
             // Speech onset: the window starts at the retained pad
             speech_seen_ = true;
             window_first_frame_ = session_frame_ + idle_frames_ - pad_.size();
+            first_new_frame_ = window_first_frame_;
             buffer_ = std::move(pad_);
             pad_.clear();
             session_frame_ += idle_frames_;
@@ -120,6 +124,7 @@ class Endpointer {
             if (cut_at >= kMinUtteranceFrames) {
                 Window window;
                 window.first_frame = window_first_frame_;
+                window.first_new_frame = first_new_frame_;
                 window.frames.assign(buffer_.begin(),
                                      buffer_.begin() + static_cast<std::ptrdiff_t>(cut_at));
                 windows.push_back(std::move(window));
@@ -134,8 +139,9 @@ class Endpointer {
         }
     }
 
-    // At the cap, cut at the quietest hop of the last 3 s; the remainder
-    // stays as the next window's start
+    // At the cap, cut at the quietest hop of the last 3 s. The remainder
+    // starts the next window and re-hears the last second, so the boundary
+    // word reaches the decoder whole; the consumer trims re-heard turns
     Window SoftCut() {
         const std::size_t earliest =
             std::max(kMinUtteranceFrames,
@@ -153,12 +159,15 @@ class Endpointer {
 
         Window window;
         window.first_frame = window_first_frame_;
+        window.first_new_frame = first_new_frame_;
         window.frames.assign(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(cut));
 
-        buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(cut));
-        window_first_frame_ += cut;
+        const std::size_t keep_from = cut > kOverlapFrames ? cut - kOverlapFrames : 0;
+        buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(keep_from));
+        window_first_frame_ += keep_from;
+        first_new_frame_ = window.first_frame + cut;
         hops_.clear();
-        last_speech_end_ = last_speech_end_ > cut ? last_speech_end_ - cut : 0;
+        last_speech_end_ = last_speech_end_ > keep_from ? last_speech_end_ - keep_from : 0;
         return window;
     }
 
@@ -185,6 +194,7 @@ class Endpointer {
     std::uint64_t session_frame_ = 0;  // absolute frames consumed before this window
     std::uint64_t idle_frames_ = 0;    // absolute frames consumed while idle
     std::uint64_t window_first_frame_ = 0;
+    std::uint64_t first_new_frame_ = 0;
 };
 
 }  // namespace sotto::audio

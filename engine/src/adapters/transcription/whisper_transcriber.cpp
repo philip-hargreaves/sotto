@@ -89,10 +89,11 @@ void WhisperTranscriber::Begin(ITurnSink& sink) {
     sink_ = &sink;
 }
 
-void WhisperTranscriber::Submit(std::span<const float> frames, std::uint64_t first_frame) {
+void WhisperTranscriber::Submit(std::span<const float> frames, std::uint64_t first_frame,
+                                std::uint64_t first_new_frame) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push_back({{frames.begin(), frames.end()}, first_frame});
+        queue_.push_back({{frames.begin(), frames.end()}, first_frame, first_new_frame});
     }
     cv_.notify_all();
 }
@@ -130,6 +131,9 @@ void WhisperTranscriber::WorkerLoop() {
         try {
             if (decode_) {
                 for (const auto& turn : decode_(window.frames, window.first_frame)) {
+                    // A turn whose midpoint falls in the re-heard overlap was
+                    // already emitted by the prior window
+                    if (turn.first_frame + turn.frame_count / 2 < window.first_new_frame) continue;
                     if (sink != nullptr) sink->OnTurn(turn);
                 }
             }

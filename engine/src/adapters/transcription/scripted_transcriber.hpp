@@ -14,7 +14,8 @@ class ScriptedTranscriber : public ITranscriber {
         turns_ = 0;
     }
 
-    void Submit(std::span<const float> frames, std::uint64_t first_frame) override {
+    void Submit(std::span<const float> frames, std::uint64_t first_frame,
+                std::uint64_t /*first_new_frame*/ = 0) override {
         Turn turn;
         turn.first_frame = first_frame;
         turn.frame_count = frames.size();

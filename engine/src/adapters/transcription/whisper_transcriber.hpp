@@ -35,13 +35,15 @@ class WhisperTranscriber : public ITranscriber {
     ~WhisperTranscriber() override;
 
     void Begin(ITurnSink& sink) override;
-    void Submit(std::span<const float> frames, std::uint64_t first_frame) override;
+    void Submit(std::span<const float> frames, std::uint64_t first_frame,
+                std::uint64_t first_new_frame = 0) override;
     void Finish() override;
 
    private:
     struct Window {
         std::vector<float> frames;
         std::uint64_t first_frame;
+        std::uint64_t first_new_frame;
     };
 
     void WorkerLoop();
