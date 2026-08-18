@@ -141,6 +141,7 @@ target_link_libraries(sotto_diarisation
 
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
+    src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(sotto_audio
     PUBLIC sotto_core

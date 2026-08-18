@@ -42,6 +42,9 @@ class IAudioSource {
 
     virtual void Run(IAudioSink& sink) = 0;
     virtual void RequestStop() = 0;
+
+    // Hold delivery without ending the stream; optional, any thread
+    virtual void SetPaused(bool) {}
 };
 
 }  // namespace sotto::audio

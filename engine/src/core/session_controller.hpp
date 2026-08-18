@@ -37,7 +37,15 @@ class ISessionEvents {
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
 };
 
-using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
+// A replay request, carried into the source factory; absent means microphone
+struct ReplaySpec {
+    std::string path;
+    double speed = 1.0;
+    bool monitor = false;
+};
+
+using SourceFactory =
+    std::function<std::unique_ptr<IAudioSource>(const std::optional<ReplaySpec>&)>;
 
 // One capture session at a time. Every way a session can end has a storage
 // outcome: Stop finalises, Cancel erases, an interruption abandons (kept,
@@ -67,7 +75,7 @@ class SessionController {
 
     // True once audio flows; false if the source ended or the deadline
     // passed first, with the reason left in LastEnd
-    bool Start() {
+    bool Start(std::optional<ReplaySpec> replay = std::nullopt) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
@@ -98,7 +106,10 @@ class SessionController {
                     std::string("store refused the session: ") + e.what()};
             return false;
         }
-        source_ = factory_();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            source_ = factory_(replay);
+        }
         worker_ = std::thread([this] { GuardedRun(); });
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
@@ -130,6 +141,12 @@ class SessionController {
     void Cancel() {
         EndCapture();
         FinishSession(Outcome::kCancel);
+    }
+
+    // Hold the source's delivery; stop and cancel always win
+    void SetPaused(bool paused) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (source_ && running_) source_->SetPaused(paused);
     }
 
     bool Running() const {

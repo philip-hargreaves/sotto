@@ -99,10 +99,26 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     server.RegisterMethod("session/delete", [&sessions](const json& params) {
         return HandleSessionDelete(sessions, params);
     });
-    server.RegisterMethod("session/start", [&controller](const json&) -> std::variant<json, Error> {
-        if (!controller.Start()) {
-            return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
-        }
+    server.RegisterMethod(
+        "session/start", [&controller](const json& params) -> std::variant<json, Error> {
+            // An optional replay block plays a file through the same
+            // pipeline; absent means microphone
+            std::optional<sotto::audio::ReplaySpec> replay;
+            if (params.contains("replay")) {
+                const auto& r = params["replay"];
+                if (!r.contains("path") || !r["path"].is_string()) {
+                    return Error{kInvalidParams, "replay.path is required", {}};
+                }
+                replay = sotto::audio::ReplaySpec{r["path"].get<std::string>(),
+                                                  r.value("speed", 1.0), r.value("monitor", false)};
+            }
+            if (!controller.Start(std::move(replay))) {
+                return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
+            }
+            return json::object();
+        });
+    server.RegisterMethod("session/pause", [&controller](const json& params) {
+        controller.SetPaused(params.value("paused", true));
         return json::object();
     });
     server.RegisterMethod("session/cancel", [&controller](const json&) {

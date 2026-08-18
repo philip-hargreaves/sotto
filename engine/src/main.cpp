@@ -101,15 +101,21 @@ int main(int argc, char* argv[]) {
         sotto::store::SqliteSessionStore session_store(store_root);
         sotto::models::ModelStore model_store(models_root);
 
-        // A wav path replays through the same port instead of the microphone
-        sotto::audio::SourceFactory factory;
-        if (argc > 4) {
-            factory = [path = std::string(argv[4])] {
-                return std::make_unique<sotto::audio::WavSource>(path);
-            };
-        } else {
-            factory = [] { return std::make_unique<sotto::audio::WasapiCapture>(); };
-        }
+        // A replay request plays a wav through the same port; a launch-time
+        // wav path (CI, scripts) forces every session to replay that file
+        sotto::audio::SourceFactory factory =
+            [forced = argc > 4 ? std::string(argv[4]) : std::string()](
+                const std::optional<sotto::audio::ReplaySpec>& replay)
+            -> std::unique_ptr<sotto::audio::IAudioSource> {
+            if (replay.has_value()) {
+                return std::make_unique<sotto::audio::WavSource>(
+                    replay->path, sotto::audio::WavSource::Config{replay->speed, replay->monitor});
+            }
+            if (!forced.empty()) {
+                return std::make_unique<sotto::audio::WavSource>(forced);
+            }
+            return std::make_unique<sotto::audio::WasapiCapture>();
+        };
         // The store's contents decide: real transcription when the ASR role
         // is staged, scripted otherwise (CI, fresh installs). Whisper loads
         // on its worker thread, so the engine serves and records immediately
