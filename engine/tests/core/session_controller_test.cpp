@@ -427,6 +427,31 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
     EXPECT_GT(diariser.boundary_cuts, 0u) << "transcribed-turn edges reach the diariser as cuts";
 }
 
+TEST(SessionController, RedecodesNeverReachTheStore) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.2, 0.8};
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    const auto calls = store.Calls();
+    const auto replace = std::find(calls.begin(), calls.end(), "replace s1");
+    ASSERT_NE(replace, calls.end());
+    for (auto it = calls.begin(); it != calls.end(); ++it) {
+        if (*it == "turn s1") {
+            EXPECT_LT(it - calls.begin(), replace - calls.begin())
+                << "a re-decode appended to the store";
+        }
+    }
+}
+
 TEST(SessionController, AmbiguousLexicalEvidenceKeepsNumberedSpeakers) {
     RecordingEvents events;
     FakeSessionStore store;
