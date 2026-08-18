@@ -28,6 +28,7 @@ class SqliteSessionStore : public ISessionStore {
     void Append(const SessionId& id, std::span<const float> frames,
                 std::uint64_t lost_frames) override;
     void AppendTurn(const SessionId& id, const asr::Turn& turn) override;
+    void ReplaceTurns(const SessionId& id, std::span<const asr::Turn> turns) override;
     void Finalise(const SessionId& id) override;
     void Cancel(const SessionId& id) override;
     void Abandon(const SessionId& id) override;

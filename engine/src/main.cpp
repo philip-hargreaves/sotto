@@ -13,6 +13,7 @@
 
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
+#include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
@@ -131,8 +132,19 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "sotto-engine: capped windows (%s)\n", e.what());
             vad = std::make_unique<sotto::audio::PassthroughVad>();
         }
+        // Diarisation needs both its models; without them turns simply keep
+        // an empty speaker
+        std::unique_ptr<sotto::diar::SpeakerDiariser> diariser;
+        try {
+            model_store.Resolve("diarisation", "default");
+            model_store.Resolve("segmentation", "default");
+            diariser = std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
+        }
         sotto::audio::SessionController controller(std::move(factory), events, session_store,
-                                                   *transcriber, *vad);
+                                                   *transcriber, *vad, std::chrono::seconds(3),
+                                                   diariser.get());
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
         server.ServeOneClient();

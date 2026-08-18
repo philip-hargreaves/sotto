@@ -16,15 +16,20 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 add_executable(engine_tests
     core/audio_ring_test.cpp
+    core/diar_regions_test.cpp
     core/endpointer_test.cpp
     core/level_meter_test.cpp
+    core/seg_decode_test.cpp
     core/session_controller_test.cpp
+    core/slice_refinement_test.cpp
+    core/speaker_attribution_test.cpp
     core/turn_assembly_test.cpp
     core/version_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
     adapters/db_test.cpp
+    adapters/fbank_test.cpp
     adapters/framing_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
@@ -33,6 +38,7 @@ add_executable(engine_tests
     adapters/pipe_security_test.cpp
     adapters/scripted_transcriber_test.cpp
     adapters/session_store_test.cpp
+    adapters/speaker_clustering_test.cpp
     adapters/store_recovery_test.cpp
     adapters/wav_source_test.cpp
     adapters/whisper_worker_test.cpp)
@@ -47,8 +53,8 @@ add_executable(store_crash_helper
 target_link_libraries(store_crash_helper PRIVATE sotto_storage sotto_warnings)
 add_dependencies(engine_tests store_crash_helper)
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_audio sotto_models sotto_storage sotto_transcription sotto_warnings
-    openvino::genai GTest::gtest_main)
+    sotto_ipc sotto_audio sotto_diarisation sotto_models sotto_storage sotto_transcription
+    sotto_warnings openvino::genai GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute
@@ -68,15 +74,26 @@ target_link_libraries(gpu_tests PRIVATE
 add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
+    adapters/diariser_pipeline_test.cpp
+    adapters/embedder_model_test.cpp
+    adapters/fbank_parity_test.cpp
+    adapters/seg_model_test.cpp
     adapters/silero_vad_test.cpp
+    adapters/speaker_embedder_test.cpp
     adapters/whisper_real_test.cpp)
 target_compile_definitions(models_tests PRIVATE
-    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models")
+    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
+    SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
 target_link_libraries(models_tests PRIVATE
-    sotto_models sotto_transcription sotto_vad sotto_warnings nlohmann_json::nlohmann_json
-    openvino::genai GTest::gtest_main)
+    sotto_diarisation sotto_models sotto_transcription sotto_vad sotto_warnings
+    nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
+
+# Dev evaluation tool for the research acceptance scorer; never shipped
+add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
+target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_warnings)
 
 sotto_deploy_openvino(ov_test_runtime)
+add_dependencies(diar_eval_runner ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)
 add_dependencies(gpu_tests ov_test_runtime)
 add_dependencies(models_tests ov_test_runtime)

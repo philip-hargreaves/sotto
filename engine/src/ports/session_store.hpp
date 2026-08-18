@@ -48,6 +48,10 @@ class ISessionStore {
 
     virtual void AppendTurn(const SessionId& id, const asr::Turn& turn) = 0;
 
+    // The speaker-attributed transcript supersedes the live turns at
+    // finalise; one transaction, before the session seals
+    virtual void ReplaceTurns(const SessionId& id, std::span<const asr::Turn> turns) = 0;
+
     virtual void Finalise(const SessionId& id) = 0;
     virtual void Cancel(const SessionId& id) = 0;
 

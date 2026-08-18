@@ -94,6 +94,48 @@ target_link_libraries(sotto_vad
     PUBLIC sotto_core
     PRIVATE sotto_models sotto_warnings openvino::genai)
 
+# Average-linkage clustering (fastcluster), the implementation the research
+# proved identical to the sklearn reference. No CMake build upstream; the
+# amalgamated source is compiled here like sqlite
+FetchContent_Declare(
+    hclust_cpp
+    GIT_REPOSITORY https://github.com/cdalitz/hclust-cpp.git
+    GIT_TAG d48fff6bba1199d80422cd37f5b635107a5a0c92
+    SYSTEM
+)
+FetchContent_MakeAvailable(hclust_cpp)
+add_library(hclust STATIC ${hclust_cpp_SOURCE_DIR}/fastcluster.cpp)
+target_include_directories(hclust SYSTEM PUBLIC ${hclust_cpp_SOURCE_DIR})
+# Not ours to keep warning-clean
+set_target_properties(hclust PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+
+# Feature front-end for the speaker embedder, pinned to the version the
+# research validated against torchaudio. kissfft is fetched and hash-pinned
+# by knf's own build
+set(KALDI_NATIVE_FBANK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(KALDI_NATIVE_FBANK_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF)
+FetchContent_Declare(
+    kaldi_native_fbank
+    GIT_REPOSITORY https://github.com/csukuangfj/kaldi-native-fbank.git
+    GIT_TAG b09e686fe2084732ddd30d1ef80acfc0f13eaf01  # v1.22.3
+    SYSTEM
+)
+FetchContent_MakeAvailable(kaldi_native_fbank)
+# Not ours to keep warning-clean
+set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+
+add_library(sotto_diarisation STATIC
+    src/adapters/diarisation/fbank.cpp
+    src/adapters/diarisation/segmenter.cpp
+    src/adapters/diarisation/speaker_clustering.cpp
+    src/adapters/diarisation/speaker_diariser.cpp
+    src/adapters/diarisation/speaker_embedder.cpp)
+target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
+target_link_libraries(sotto_diarisation
+    PUBLIC sotto_core sotto_models sotto_vad
+    PRIVATE sotto_warnings hclust kaldi-native-fbank-core)
+
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
@@ -103,7 +145,8 @@ target_link_libraries(sotto_audio
 
 add_executable(sotto_engine src/main.cpp)
 target_link_libraries(sotto_engine PRIVATE
-    sotto_ipc sotto_audio sotto_storage sotto_transcription sotto_vad sotto_warnings)
+    sotto_ipc sotto_audio sotto_diarisation sotto_storage sotto_transcription sotto_vad
+    sotto_warnings)
 sotto_deploy_openvino(ov_engine_runtime)
 add_dependencies(sotto_engine ov_engine_runtime)
 
