@@ -16,6 +16,7 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 add_executable(engine_tests
     core/audio_ring_test.cpp
+    core/diar_regions_test.cpp
     core/endpointer_test.cpp
     core/level_meter_test.cpp
     core/session_controller_test.cpp
@@ -72,6 +73,7 @@ add_executable(models_tests
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp
     adapters/silero_vad_test.cpp
+    adapters/speaker_embedder_test.cpp
     adapters/whisper_real_test.cpp)
 target_compile_definitions(models_tests PRIVATE
     SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"

@@ -111,10 +111,11 @@ FetchContent_MakeAvailable(kaldi_native_fbank)
 set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
 add_library(sotto_diarisation STATIC
-    src/adapters/diarisation/fbank.cpp)
+    src/adapters/diarisation/fbank.cpp
+    src/adapters/diarisation/speaker_embedder.cpp)
 target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
 target_link_libraries(sotto_diarisation
-    PUBLIC sotto_core
+    PUBLIC sotto_core sotto_models
     PRIVATE sotto_warnings kaldi-native-fbank-core)
 
 add_library(sotto_audio STATIC
