@@ -26,6 +26,7 @@ add_executable(engine_tests
     core/speaker_attribution_test.cpp
     core/turn_assembly_test.cpp
     core/version_test.cpp
+    adapters/anchor_store_test.cpp
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
@@ -75,6 +76,7 @@ target_link_libraries(gpu_tests PRIVATE
 add_executable(models_tests
     adapters/asr_model_test.cpp
     adapters/asr_wer_test.cpp
+    adapters/cluster_voiceprint_test.cpp
     adapters/diariser_pipeline_test.cpp
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp

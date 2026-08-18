@@ -10,9 +10,8 @@
 
 namespace sotto::diar {
 
-// Below this cluster-mean gap the lexical path refuses to name anyone.
-// Chosen from the observed margin range (1.00-1.62 full consultations,
-// 0.57+ at six turns), not swept; revisit first if it abstains too often
+// Below this lexical margin no one is named. Chosen from the observed
+// margin range, not swept; revisit first if it abstains too often
 inline constexpr double kRoleMinMargin = 0.5;
 
 struct RoleTurn {
@@ -78,9 +77,8 @@ inline const std::vector<std::vector<std::string>> kIdentPhrases = {
     {"calling", "from"},
 };
 
-// The clinician stating what happens next - all first-person, which is why
-// they need naming: the first-person penalty would otherwise score the
-// plan, the doctor's most characteristic speech, as the patient's
+// Plan speech is all first-person; unnamed, the penalty would score the
+// doctor's most characteristic speech as the patient's
 inline const std::vector<std::vector<std::string>> kPlanPhrases = {
     {"i'll"},
     {"i", "will"},
@@ -97,11 +95,10 @@ inline const std::vector<std::vector<std::string>> kPlanPhrases = {
 
 }  // namespace detail
 
-// Cold-start scorer, positive leaning clinician. Deliberately reads NO
-// question features: question weighting inverts wholesale on results and
-// medication consultations, where the patient asks most questions
-// (measured 6/6 -> 0/6). Self-identification and plan speech suppress the
-// first-person penalty - the suppression is the point, not the bonus
+// Cold-start scorer, positive leaning clinician. Reads no question
+// features: question weighting inverts on consultations where the patient
+// asks the questions (measured 6/6 -> 0/6). Self-identification and plan
+// speech suppress the first-person penalty - the suppression is the point
 inline double LexicalDoctorScore(const std::string& text) {
     const auto words = detail::WordsOf(text);
     if (words.empty()) return 0.0;
@@ -135,12 +132,10 @@ inline double LexicalDoctorScore(const std::string& text) {
 }
 
 // Anonymous clusters -> roles. The two dominant clusters by talk time are
-// the candidate pair; anything further is a third party, never a candidate.
-// With anchor similarities (one per cluster) the doctor is the nearer of
-// the pair - rank, never a threshold, content-blind. Without them (cold
-// start) the higher mean lexical score decides, and below the margin the
-// result keeps numbered speakers: separation is certain, roles are not,
-// and a confident inversion is the one failure that corrupts the record
+// the candidates; anything further stays unknown. With anchor similarities
+// the nearer of the pair is the doctor (rank, never a threshold). Without
+// them the higher mean lexical score decides, abstaining below the margin:
+// a confident inversion is the one failure that corrupts the record
 inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
                             const std::vector<double>& anchor_similarity = {}) {
     RoleResult result;
@@ -187,8 +182,8 @@ inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_coun
         const double mean2 = n2 > 0 ? sum2 / n2 : 0.0;
         result.margin = std::abs(mean1 - mean2);
         if (result.margin < kRoleMinMargin || top1 == top2) {
-            // Numbered, not "unknown": the separation stays readable and
-            // correctable while the roles decline to assert themselves
+            // Numbered, not unknown: the separation is still certain, only
+            // the roles are not
             result.role_of_cluster[static_cast<std::size_t>(top1)] = "speaker 1";
             if (top2 != top1) result.role_of_cluster[static_cast<std::size_t>(top2)] = "speaker 2";
             return result;

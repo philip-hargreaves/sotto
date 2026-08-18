@@ -126,6 +126,8 @@ FetchContent_MakeAvailable(kaldi_native_fbank)
 set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
 add_library(sotto_diarisation STATIC
+    src/adapters/diarisation/anchor_store.cpp
+    src/adapters/diarisation/cluster_voiceprint.cpp
     src/adapters/diarisation/fbank.cpp
     src/adapters/diarisation/segmenter.cpp
     src/adapters/diarisation/speaker_clustering.cpp
@@ -134,7 +136,7 @@ add_library(sotto_diarisation STATIC
 target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
 target_link_libraries(sotto_diarisation
     PUBLIC sotto_core sotto_models sotto_vad
-    PRIVATE sotto_warnings hclust kaldi-native-fbank-core)
+    PRIVATE sotto_warnings crypt32 hclust kaldi-native-fbank-core)
 
 add_library(sotto_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
