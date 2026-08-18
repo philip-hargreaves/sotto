@@ -26,10 +26,15 @@ class SpeakerDiariser : public IDiariser {
     SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,
                     const std::filesystem::path& anchor_root);
 
-    DiariseResult Diarise(std::span<const float> audio) override;
+    DiariseResult Diarise(std::span<const float> audio,
+                          std::span<const std::uint64_t> turn_boundaries = {}) override;
 
     void AccrueDoctor(std::span<const float> audio, const std::vector<LabelledSlice>& slices,
                       int doctor_cluster) override;
+
+    SpeakerEmbedder& Embedder() {
+        return embedder_;
+    }
 
    private:
     audio::SileroVad vad_;

@@ -31,7 +31,8 @@ SpeakerDiariser::SpeakerDiariser(const models::ModelStore& store, models::OvRunt
       embedder_(store, runtime),
       anchors_(anchor_root) {}
 
-DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
+DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
+                                       std::span<const std::uint64_t> turn_boundaries) {
     DiariseResult result;
     if (audio.empty()) return result;
 
@@ -46,7 +47,10 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
     }
 
     const auto regions = SpeechRegions(probabilities, audio.size());
-    const auto seg = segmenter_.Run(audio);
+    auto seg = segmenter_.Run(audio);
+    seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
+                             turn_boundaries.end());
+    std::sort(seg.change_points.begin(), seg.change_points.end());
     const auto slices = RefineRegions(regions, seg.change_points);
 
     std::vector<std::vector<float>> embeddings;

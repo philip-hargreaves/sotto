@@ -93,7 +93,7 @@ target_link_libraries(models_tests PRIVATE
 
 # Dev evaluation tool for the research acceptance scorer; never shipped
 add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
-target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_warnings)
+target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_transcription sotto_warnings)
 
 sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(diar_eval_runner ov_test_runtime)

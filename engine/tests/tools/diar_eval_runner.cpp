@@ -1,13 +1,25 @@
-// Dev evaluation tool, never shipped: runs production diarisation over one
-// wav and prints "start end cluster" per slice in seconds, the format the
-// research scorer consumes (score_sotto_diar.py)
+// Dev evaluation tool, never shipped. Default: production diarisation over
+// one wav, "start end cluster" per slice in seconds (the attribution
+// scorer's format). --turn-cuts also splits slices at transcribed-turn
+// boundaries (the A/B). --roles runs the full finalise flow - ASR, text
+// assignment, cold-start naming - and prints roles, margin and per-cluster
+// voiceprints for the role-acceptance scorer
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
+#include <string>
 #include <vector>
 
+#include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
+#include "adapters/transcription/whisper_transcriber.hpp"
+#include "adapters/vad/silero_vad.hpp"
+#include "core/endpointer.hpp"
+#include "core/role_naming.hpp"
+#include "core/speaker_attribution.hpp"
 
 namespace {
 
@@ -24,12 +36,46 @@ std::vector<float> LoadWav(const char* path) {
     return frames;
 }
 
+struct CollectingSink : sotto::asr::ITurnSink {
+    std::mutex mutex;
+    std::vector<sotto::asr::Turn> turns;
+
+    void OnTurn(const sotto::asr::Turn& turn) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        turns.push_back(turn);
+    }
+};
+
+std::vector<sotto::asr::Turn> Transcribe(const sotto::models::ModelStore& store,
+                                         sotto::models::OvRuntime& runtime,
+                                         const std::vector<float>& audio) {
+    sotto::audio::SileroVad vad(store, runtime);
+    sotto::audio::Endpointer endpointer(vad);
+    sotto::asr::WhisperTranscriber transcriber(store, runtime);
+    CollectingSink sink;
+    transcriber.Begin(sink);
+    for (const auto& window : endpointer.Push(audio)) {
+        transcriber.Submit(window.frames, window.first_frame, window.first_new_frame);
+    }
+    if (const auto tail = endpointer.Flush()) {
+        transcriber.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
+    }
+    transcriber.Finish();
+    return sink.turns;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::fprintf(stderr, "usage: diar_eval_runner <models-dir> <audio.wav>\n");
+        std::fprintf(stderr,
+                     "usage: diar_eval_runner <models-dir> <audio.wav> [--roles] [--turn-cuts]\n");
         return 2;
+    }
+    bool roles = false, turn_cuts = false;
+    for (int i = 3; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--roles") == 0) roles = true;
+        if (std::strcmp(argv[i], "--turn-cuts") == 0) turn_cuts = true;
     }
     try {
         const sotto::models::ModelStore store{std::filesystem::path(argv[1])};
@@ -39,8 +85,50 @@ int main(int argc, char** argv) {
         std::filesystem::create_directories(anchor_root);
         sotto::diar::SpeakerDiariser diariser(store, runtime, anchor_root);
         const auto audio = LoadWav(argv[2]);
-        for (const auto& slice : diariser.Diarise(audio).slices) {
-            std::printf("%.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
+
+        std::vector<sotto::asr::Turn> turns;
+        if (roles || turn_cuts) turns = Transcribe(store, runtime, audio);
+
+        std::vector<std::uint64_t> cuts;
+        if (turn_cuts) {
+            for (const auto& turn : turns) {
+                cuts.push_back(turn.first_frame);
+                cuts.push_back(turn.first_frame + turn.frame_count);
+            }
+        }
+        const auto result = diariser.Diarise(audio, cuts);
+
+        if (!roles) {
+            for (const auto& slice : result.slices) {
+                std::printf("%.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
+                            static_cast<double>(slice.end_frame) / 16000.0, slice.cluster);
+            }
+            return 0;
+        }
+
+        const auto texts = sotto::diar::AssignSliceTexts(turns, result.slices);
+        std::vector<sotto::diar::RoleTurn> role_turns;
+        for (std::size_t i = 0; i < result.slices.size(); ++i) {
+            role_turns.push_back({result.slices[i].cluster,
+                                  result.slices[i].end_frame - result.slices[i].first_frame,
+                                  texts[i]});
+        }
+        const auto named = sotto::diar::NameRoles(role_turns, result.cluster_count);
+
+        std::printf("DOCTOR %d\nMARGIN %.4f\n", named.doctor_cluster, named.margin);
+        for (std::size_t c = 0; c < named.role_of_cluster.size(); ++c) {
+            std::printf("ROLE %zu %s\n", c, named.role_of_cluster[c].c_str());
+        }
+        for (int c = 0; c < result.cluster_count; ++c) {
+            const auto voiceprint =
+                sotto::diar::ClusterVoiceprint(diariser.Embedder(), audio, result.slices, c);
+            if (voiceprint.empty()) continue;
+            std::printf("VP %d", c);
+            for (const float x : voiceprint) std::printf(" %.6f", x);
+            std::printf("\n");
+        }
+        for (const auto& slice : result.slices) {
+            std::printf("SLICE %.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
                         static_cast<double>(slice.end_frame) / 16000.0, slice.cluster);
         }
         return 0;

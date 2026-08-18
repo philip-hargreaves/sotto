@@ -354,7 +354,11 @@ struct FakeDiariser : diar::IDiariser {
     int clusters = 1;
     std::vector<double> similarities;
 
-    diar::DiariseResult Diarise(std::span<const float> audio) override {
+    std::size_t boundary_cuts = 0;
+
+    diar::DiariseResult Diarise(std::span<const float> audio,
+                                std::span<const std::uint64_t> turn_boundaries) override {
+        boundary_cuts = turn_boundaries.size();
         ++calls;
         audio_frames = audio.size();
         diar::DiariseResult result;
@@ -420,6 +424,7 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
     }
     EXPECT_EQ(diariser.accruals, 1);
     EXPECT_EQ(diariser.accrued_cluster, 1) << "the nearer cluster to the anchor is the doctor";
+    EXPECT_GT(diariser.boundary_cuts, 0u) << "transcribed-turn edges reach the diariser as cuts";
 }
 
 TEST(SessionController, AmbiguousLexicalEvidenceKeepsNumberedSpeakers) {
