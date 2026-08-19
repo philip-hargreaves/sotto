@@ -54,6 +54,40 @@ public class NotePipelineTest
     }
 
     [Fact]
+    public async Task PartialsStreamIntoTheNotePaneAndReadySeals()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+
+        engine.RaiseNotification("note/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The patient" }));
+        Assert.Equal("The patient", note.ClinicalNoteText);
+
+        engine.RaiseNotification("note/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The patient presents" }));
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The patient presents with bursitis." }));
+
+        Assert.Equal("The patient presents with bursitis.", note.ClinicalNoteText);
+        Assert.Equal(SessionState.Review, session.State);
+    }
+
+    [Fact]
+    public async Task AFailedNoteStillReachesReview()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+
+        engine.RaiseNotification("note/failed", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { detail = "the transcript is empty" }));
+
+        Assert.Equal(SessionState.Review, session.State);
+        Assert.Equal(NotePipelineState.NoteFailed, note.PipelineState);
+    }
+
+    [Fact]
     public async Task NewConsultationResetsThePipeline()
     {
         var (session, engine, note) = TestSession.Create();

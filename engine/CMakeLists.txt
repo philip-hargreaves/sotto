@@ -88,6 +88,12 @@ target_link_libraries(sotto_transcription
     PUBLIC sotto_core
     PRIVATE sotto_models sotto_warnings openvino::genai)
 
+add_library(sotto_note STATIC
+    src/adapters/note/qwen_note_writer.cpp)
+target_link_libraries(sotto_note
+    PUBLIC sotto_core
+    PRIVATE sotto_models sotto_warnings openvino::genai)
+
 add_library(sotto_vad STATIC
     src/adapters/vad/silero_vad.cpp)
 target_link_libraries(sotto_vad
@@ -149,8 +155,8 @@ target_link_libraries(sotto_audio
 
 add_executable(sotto_engine src/main.cpp)
 target_link_libraries(sotto_engine PRIVATE
-    sotto_ipc sotto_audio sotto_diarisation sotto_storage sotto_transcription sotto_vad
-    sotto_warnings)
+    sotto_ipc sotto_audio sotto_diarisation sotto_note sotto_storage sotto_transcription
+    sotto_vad sotto_warnings)
 sotto_deploy_openvino(ov_engine_runtime)
 add_dependencies(sotto_engine ov_engine_runtime)
 

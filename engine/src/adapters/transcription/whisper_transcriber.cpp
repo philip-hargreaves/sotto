@@ -79,7 +79,8 @@ WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(deco
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
-WhisperTranscriber::WhisperTranscriber(DecodeLoader loader) : loader_(std::move(loader)) {
+WhisperTranscriber::WhisperTranscriber(DecodeLoader loader)
+    : factory_(loader), loader_(std::move(loader)) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
@@ -113,6 +114,16 @@ void WhisperTranscriber::Finish() {
     cv_.wait(lock, [this] { return (queue_.empty() && !busy_) || stopping_; });
 }
 
+void WhisperTranscriber::Release() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (!factory_) {
+        return;  // an injected decode has nothing to reload from
+    }
+    release_requested_ = true;
+    cv_.notify_all();
+    cv_.wait(lock, [this] { return !release_requested_ || stopping_; });
+}
+
 std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
                                            std::uint64_t first_frame) {
     std::future<std::string> text;
@@ -126,25 +137,47 @@ std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
     return text.get();
 }
 
-void WhisperTranscriber::WorkerLoop() {
-    // Load here, not in the constructor: the engine serves and sessions
-    // record while the pipeline compiles; queued windows decode afterwards.
-    // A failed load drains windows without turns, so nothing hangs
-    if (loader_) {
-        try {
-            decode_ = loader_();
-        } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
-        }
+// Load off the hot path: the engine serves and sessions record while the
+// pipeline compiles; queued windows decode afterwards. A failed load drains
+// windows without turns, so nothing hangs
+void WhisperTranscriber::LoadIfPending() {
+    if (!loader_) {
+        return;
     }
+    try {
+        decode_ = loader_();
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
+    }
+    loader_ = {};
+}
+
+void WhisperTranscriber::WorkerLoop() {
+    LoadIfPending();
 
     std::unique_lock<std::mutex> lock(mutex_);
     // Clips yield to live windows but are never starved: one clip per two
     // windows keeps speculation alive under an accelerated-replay backlog
     int windows_since_clip = 0;
     while (!stopping_) {
-        cv_.wait(lock, [this] { return !queue_.empty() || !clips_.empty() || stopping_; });
+        cv_.wait(lock, [this] {
+            return !queue_.empty() || !clips_.empty() || release_requested_ || stopping_;
+        });
         if (stopping_) break;
+
+        // Release only once drained; the next work item reloads
+        if (release_requested_ && queue_.empty() && clips_.empty()) {
+            decode_ = {};
+            loader_ = factory_;
+            release_requested_ = false;
+            cv_.notify_all();
+            continue;
+        }
+        if (loader_ && (!queue_.empty() || !clips_.empty())) {
+            lock.unlock();
+            LoadIfPending();
+            lock.lock();
+        }
 
         if (!clips_.empty() && (queue_.empty() || windows_since_clip >= 2)) {
             windows_since_clip = 0;

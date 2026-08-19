@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <mutex>
@@ -65,6 +66,43 @@ TEST(WhisperWorker, TurnsArriveInSubmitOrder) {
 
     ASSERT_EQ(sink.turns.size(), 5u);
     for (std::uint64_t i = 0; i < 5; ++i) EXPECT_EQ(sink.turns[i].first_frame, i * 10);
+}
+
+TEST(WhisperWorker, ReleaseFreesAndTheNextSubmitReloads) {
+    std::atomic<int> loads{0};
+    RecordingSink sink;
+    WhisperTranscriber transcriber(DecodeLoader([&loads] {
+        ++loads;
+        return DecodeFn([](std::span<const float> f, std::uint64_t first) {
+            return std::vector<Turn>{Labelled(first, f.size())};
+        });
+    }));
+    transcriber.Begin(sink);
+
+    const std::vector<float> window(10);
+    transcriber.Submit(window, 0);
+    transcriber.Finish();
+    EXPECT_EQ(loads.load(), 1);
+
+    transcriber.Release();
+    transcriber.Submit(window, 10);
+    transcriber.Finish();
+    EXPECT_EQ(loads.load(), 2) << "a released pipeline reloads on demand";
+    EXPECT_EQ(sink.turns.size(), 2u);
+}
+
+TEST(WhisperWorker, ReleaseIsANoOpForAnInjectedDecode) {
+    RecordingSink sink;
+    WhisperTranscriber transcriber([](std::span<const float> f, std::uint64_t first) {
+        return std::vector<Turn>{Labelled(first, f.size())};
+    });
+    transcriber.Begin(sink);
+    transcriber.Release();
+
+    const std::vector<float> window(10);
+    transcriber.Submit(window, 0);
+    transcriber.Finish();
+    EXPECT_EQ(sink.turns.size(), 1u);
 }
 
 TEST(WhisperWorker, FinishWaitsForTheLastDecode) {

@@ -122,6 +122,41 @@ struct RecordingEvents : ISessionEvents {
         last_detail = detail;
     }
 
+    void OnNotePartial(const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        note_partials.push_back(text);
+    }
+
+    void OnNoteReady(const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        note_ready = text;
+        note_done = true;
+    }
+
+    void OnNoteFailed(const std::string& detail) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        note_failed = detail;
+        note_done = true;
+    }
+
+    std::vector<std::string> note_partials;
+    std::string note_ready;
+    std::string note_failed;
+    bool note_done = false;
+
+    bool WaitForNote() {
+        for (int i = 0; i < 400; ++i) {
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                if (note_done) {
+                    return true;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return false;
+    }
+
     bool WaitForInterruption() {
         for (int i = 0; i < 400; ++i) {
             {
@@ -200,6 +235,17 @@ struct FakeSessionStore : store::ISessionStore {
         return {};
     }
 
+    void SaveNote(const store::SessionId& id, const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("note " + id);
+        note = text;
+    }
+
+    std::string ReadNote(const store::SessionId&) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        return note;
+    }
+
     std::vector<asr::Turn> ReadTurns(const store::SessionId&) override {
         return {};
     }
@@ -209,6 +255,42 @@ struct FakeSessionStore : store::ISessionStore {
     std::vector<std::string> Calls() {
         const std::lock_guard<std::mutex> lock(mutex);
         return calls;
+    }
+
+    std::string note;
+};
+
+struct FakeNoteWriter : note::INoteWriter {
+    std::string result = "the clinical note";
+    bool fail = false;
+    std::atomic<bool> block{false};
+    std::atomic<bool> cancelled{false};
+    std::atomic<int> prepares{0};
+    std::mutex mutex;
+    std::vector<std::vector<asr::Turn>> calls;
+
+    void Prepare() override {
+        ++prepares;
+    }
+
+    std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override {
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            calls.push_back(transcript);
+        }
+        progress("The patient");
+        progress("The patient presents");
+        while (block.load() && !cancelled.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (fail) {
+            throw std::runtime_error("generation failed");
+        }
+        return cancelled.load() ? "interrupted" : result;
+    }
+
+    void Cancel() override {
+        cancelled = true;
     }
 };
 
@@ -222,6 +304,11 @@ struct RecordingTranscriber : asr::ITranscriber {
     std::vector<std::pair<std::uint64_t, std::size_t>> windows;  // first_frame, count
     int begins = 0;
     int finishes = 0;
+    std::atomic<int> releases{0};
+
+    void Release() override {
+        ++releases;
+    }
 
     void Begin(asr::ITurnSink&) override {
         ++begins;
@@ -276,6 +363,105 @@ TEST(SessionController, TurnsReachTheStoreAndTheEvents) {
     EXPECT_EQ(store.turns[0].text, events.turns[0].text);
     EXPECT_EQ(store.turns[0].first_frame, 0u);
     EXPECT_EQ(store.turns[0].frame_count, Window().size());
+}
+
+TEST(SessionController, TheNoteFollowsTheSeal) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(events.note_partials,
+              (std::vector<std::string>{"The patient", "The patient presents"}));
+    EXPECT_EQ(events.note_ready, "the clinical note");
+    EXPECT_TRUE(events.note_failed.empty());
+    EXPECT_EQ(store.note, "the clinical note");
+    const auto calls = store.Calls();
+    EXPECT_EQ(calls.back(), "note s1") << "the note is stored after the seal";
+    ASSERT_EQ(writer.calls.size(), 1u);
+    EXPECT_FALSE(writer.calls[0].empty()) << "the writer gets the transcript";
+    EXPECT_GE(writer.prepares.load(), 1) << "the weights warm while the session records";
+}
+
+TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    RecordingTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(transcriber.releases.load(), 1) << "the GPU is freed before the note writes";
+}
+
+TEST(SessionController, AFailedNoteAnnouncesAndStoresNothing) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.fail = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(events.note_failed, "generation failed");
+    EXPECT_TRUE(events.note_ready.empty());
+    EXPECT_TRUE(store.note.empty());
+}
+
+TEST(SessionController, DestructionCancelsANoteStillWriting) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.block = true;
+    {
+        SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio),
+                                     events, store, transcriber, vad, kTestSettle, nullptr,
+                                     5 * kSampleRate, &writer);
+        ASSERT_TRUE(controller.Start());
+        controller.Stop();
+    }
+
+    EXPECT_TRUE(writer.cancelled.load());
+    EXPECT_EQ(events.note_ready, "interrupted") << "an interrupted write returns what it had";
+}
+
+TEST(SessionController, CancelWritesNoNote) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Cancel();
+
+    EXPECT_TRUE(writer.calls.empty());
+    EXPECT_TRUE(events.note_partials.empty());
 }
 
 TEST(SessionController, StartAcksOnlyAfterAudioFlowsAndLevelsFollow) {

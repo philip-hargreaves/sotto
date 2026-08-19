@@ -19,6 +19,7 @@
 #include "core/turn_reconcile.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/diariser.hpp"
+#include "ports/note_writer.hpp"
 #include "ports/session_store.hpp"
 #include "ports/transcriber.hpp"
 
@@ -35,6 +36,11 @@ class ISessionEvents {
 
     // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
+
+    // The note lane, delivered on its own thread after finalise
+    virtual void OnNotePartial(const std::string&) {}
+    virtual void OnNoteReady(const std::string&) {}
+    virtual void OnNoteFailed(const std::string&) {}
 };
 
 // A replay request, carried into the source factory; absent means microphone
@@ -57,18 +63,21 @@ class SessionController {
                       asr::ITranscriber& transcriber, IStreamingVad& vad,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
                       diar::IDiariser* diariser = nullptr,
-                      std::uint64_t diar_advance_frames = 5 * kSampleRate)
+                      std::uint64_t diar_advance_frames = 5 * kSampleRate,
+                      note::INoteWriter* note_writer = nullptr)
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
           transcriber_(transcriber),
           vad_(vad),
           diariser_(diariser),
+          note_writer_(note_writer),
           diar_advance_frames_(diar_advance_frames),
           settle_timeout_(settle_timeout) {}
 
     ~SessionController() {
         Stop();
+        JoinNoteThread();
     }
     SessionController(const SessionController&) = delete;
     SessionController& operator=(const SessionController&) = delete;
@@ -114,6 +123,10 @@ class SessionController {
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
         }
+        // Warm the note weights' file cache while the session records
+        if (note_writer_ != nullptr) {
+            note_writer_->Prepare();
+        }
 
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait_for(lock, settle_timeout_, [this] { return got_audio_ || ended_; });
@@ -133,6 +146,10 @@ class SessionController {
     // Idempotent; a stop is the user's, so it never counts as an interruption.
     // The recording is kept
     void Stop() {
+        // Re-warm in parallel with finalise; a long session may have evicted
+        if (note_writer_ != nullptr && Running()) {
+            note_writer_->Prepare();
+        }
         EndCapture();
         FinishSession(Outcome::kFinalise);
     }
@@ -175,6 +192,10 @@ class SessionController {
     store::SessionId LastFinalised() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return last_finalised_;
+    }
+
+    bool HasNoteWriter() const {
+        return note_writer_ != nullptr;
     }
 
    private:
@@ -390,6 +411,16 @@ class SessionController {
         if (id.empty()) {
             return;
         }
+        // The note lane's input: attributed turns when diarisation succeeds,
+        // the reconciled transcript otherwise
+        std::vector<asr::Turn> note_input;
+        if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                note_input = session_turns_;
+            }
+            diar::ReconcileTurns(note_input);
+        }
         // The speaker-attributed transcript supersedes the live turns before
         // the seal; a diarisation failure keeps the unattributed transcript,
         // never the session
@@ -455,6 +486,7 @@ class SessionController {
                 }
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
+                    note_input = attributed;
                 }
                 stage("transcript sealed");
                 // The anchor learns only from named sessions, never a guess
@@ -489,6 +521,46 @@ class SessionController {
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
+        if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {
+            StartNoteLane(id, std::move(note_input));
+        }
+    }
+
+    // The note writes after the seal on its own thread; a new stop cancels
+    // a note still writing
+    void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
+        JoinNoteThread();
+        std::lock_guard<std::mutex> lock(mutex_);
+        note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
+            // Whisper must not stay on the GPU beside the note model
+            // (measured: KV-cache corruption); it reloads next session
+            transcriber_.Release();
+            try {
+                const std::string text = note_writer_->Write(
+                    turns, [this](const std::string& partial) { events_.OnNotePartial(partial); });
+                try {
+                    store_.SaveNote(id, text);
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+                events_.OnNoteReady(text);
+            } catch (const std::exception& e) {
+                events_.OnNoteFailed(e.what());
+            } catch (...) {
+                events_.OnNoteFailed("note generation failed");
+            }
+        });
+    }
+
+    void JoinNoteThread() {
+        std::thread note;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            note = std::move(note_thread_);
+        }
+        if (note.joinable()) {
+            if (note_writer_ != nullptr) note_writer_->Cancel();
+            note.join();
+        }
     }
 
     SourceFactory factory_;
@@ -497,13 +569,15 @@ class SessionController {
     asr::ITranscriber& transcriber_;
     IStreamingVad& vad_;
     diar::IDiariser* diariser_;
+    note::INoteWriter* note_writer_;
     std::uint64_t diar_advance_frames_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
     std::thread diar_thread_;
-    bool diar_stop_ = false;  // under mutex_
-    int diar_ticks_ = 0;      // under mutex_; diagnostics
+    std::thread note_thread_;  // moved out under mutex_, joined outside it
+    bool diar_stop_ = false;   // under mutex_
+    int diar_ticks_ = 0;       // under mutex_; diagnostics
     LevelMeter meter_;
     std::optional<Endpointer> endpointer_;
     TurnSink turn_sink_{*this};

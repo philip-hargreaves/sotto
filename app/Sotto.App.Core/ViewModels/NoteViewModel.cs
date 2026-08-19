@@ -22,6 +22,8 @@ public sealed partial class NoteViewModel : ObservableObject
                 => NotePipelineState.NoteWriting,
             (NotePipelineState.NoteWriting, NotePipelineEvent.NoteReady)
                 => NotePipelineState.NoteReadyPatientWriting,
+            (NotePipelineState.NoteWriting, NotePipelineEvent.NoteFailed)
+                => NotePipelineState.NoteFailed,
             (NotePipelineState.NoteReadyPatientWriting, NotePipelineEvent.PatientInfoReady)
                 => NotePipelineState.AllReady,
             _ => (NotePipelineState?)null,

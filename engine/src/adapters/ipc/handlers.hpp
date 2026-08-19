@@ -17,6 +17,9 @@ json HandleModels(const sotto::models::ModelStore& models);
 
 json HandleSessionList(sotto::store::ISessionStore& sessions);
 
+std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& sessions,
+                                            const json& params);
+
 std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& sessions,
                                                   const json& params);
 

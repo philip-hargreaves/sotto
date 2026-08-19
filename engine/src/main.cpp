@@ -19,6 +19,7 @@
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
+#include "adapters/note/qwen_note_writer.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
@@ -48,6 +49,18 @@ class WireEvents : public sotto::audio::ISessionEvents {
     void OnInterrupted(sotto::audio::SourceEndReason reason, const std::string& detail) override {
         server_.PushNotification("session/interrupted",
                                  {{"reason", ReasonName(reason)}, {"detail", detail}});
+    }
+
+    void OnNotePartial(const std::string& text) override {
+        server_.PushNotification("note/partial", {{"text", text}});
+    }
+
+    void OnNoteReady(const std::string& text) override {
+        server_.PushNotification("note/ready", {{"text", text}});
+    }
+
+    void OnNoteFailed(const std::string& detail) override {
+        server_.PushNotification("note/failed", {{"detail", detail}});
     }
 
    private:
@@ -155,9 +168,19 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }
-        sotto::audio::SessionController controller(std::move(factory), events, session_store,
-                                                   *transcriber, *vad, std::chrono::seconds(3),
-                                                   diariser.get());
+        // The prompt lives beside the models dir so edits apply per note
+        std::unique_ptr<sotto::note::QwenNoteWriter> note_writer;
+        try {
+            model_store.Resolve("note", "default");
+            note_writer = std::make_unique<sotto::note::QwenNoteWriter>(
+                model_store, ov_runtime,
+                models_root.parent_path() / "prompts" / "note-narrative.md");
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
+        }
+        sotto::audio::SessionController controller(
+            std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(3),
+            diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get());
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
         server.ServeOneClient();

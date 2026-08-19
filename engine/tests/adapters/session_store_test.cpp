@@ -163,6 +163,44 @@ TEST(SessionStore, ReadTurnsReturnsWhatWasAppended) {
     EXPECT_EQ(turns[1].text, "about three weeks");
 }
 
+TEST(SessionStore, TheNoteRoundTripsAfterFinalise) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Finalise(id);
+
+    EXPECT_EQ(store.ReadNote(id), "");
+    store.SaveNote(id, "The patient presents with a swollen left elbow.");
+    EXPECT_EQ(store.ReadNote(id), "The patient presents with a swollen left elbow.");
+    store.SaveNote(id, "revised");
+    EXPECT_EQ(store.ReadNote(id), "revised") << "a rewrite replaces the note";
+}
+
+TEST(SessionStore, TheNoteIsNotPlaintextAtRest) {
+    TempRoot root;
+    const std::string sentinel = "SENTINEL-BURSITIS-PHRASE";
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.Finalise(id);
+        store.SaveNote(id, sentinel);
+    }
+
+    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
+    const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
+    EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
+}
+
+TEST(SessionStore, TheNoteRefusesTheRecordingSessionAndUnknownIds) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    EXPECT_THROW(store.SaveNote(id, "early"), std::runtime_error);
+    EXPECT_THROW(store.ReadNote(id), std::runtime_error);
+    EXPECT_THROW(store.ReadNote("nope"), std::runtime_error);
+}
+
 TEST(SessionStore, AnAbandonedSessionsTurnsAreReadable) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);

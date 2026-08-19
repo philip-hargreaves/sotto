@@ -40,6 +40,9 @@ class ITranscriber {
     virtual std::string DecodeClip(std::span<const float>, std::uint64_t) {
         return {};
     }
+
+    // Free the model's device memory; the next use reloads it
+    virtual void Release() {}
 };
 
 }  // namespace sotto::asr

@@ -49,6 +49,9 @@ class WhisperTranscriber : public ITranscriber {
     // Blocks until decoded; never touches the sink or the dedup backstop
     std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override;
 
+    // Frees the pipeline once the queues drain; the next Submit reloads it
+    void Release() override;
+
    private:
     struct Window {
         std::vector<float> frames;
@@ -62,7 +65,9 @@ class WhisperTranscriber : public ITranscriber {
     };
 
     void WorkerLoop();
+    void LoadIfPending();
 
+    DecodeLoader factory_;  // The reload recipe Release re-arms from
     DecodeLoader loader_;
     DecodeFn decode_;  // Worker-thread only once the loader has run
     std::mutex mutex_;
@@ -73,6 +78,7 @@ class WhisperTranscriber : public ITranscriber {
     std::optional<Turn> previous_turn_;  // for the boundary dedup backstop
     bool busy_ = false;
     bool stopping_ = false;
+    bool release_requested_ = false;
     std::thread worker_;
 };
 
