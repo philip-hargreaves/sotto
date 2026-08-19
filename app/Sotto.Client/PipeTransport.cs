@@ -24,6 +24,16 @@ public sealed class PipeTransport : IEngineClient
 
     public event Action<string, JsonElement>? NotificationReceived;
 
+    // A raw transport is connected until it faults; EngineConnection is the
+    // layer that raises transitions
+    public bool Connected => Volatile.Read(ref _fault) is null && Volatile.Read(ref _disposed) == 0;
+
+    public event Action<bool>? ConnectedChanged
+    {
+        add { }
+        remove { }
+    }
+
     private PipeTransport(NamedPipeClientStream pipe) => _pipe = pipe;
 
     public static async Task<PipeTransport> ConnectAsync(

@@ -29,7 +29,8 @@ class PipeServer {
     void QueueNotification(const std::string& method, json params);
 
     // Written immediately, callable from any thread; reads and writes share a
-    // duplex pipe independently, so the serve loop needs no waking
+    // duplex pipe independently, so the serve loop needs no waking. Bounded:
+    // a client that stops draining must never stall the capture thread
     void PushNotification(const std::string& method, json params);
 
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
@@ -39,13 +40,14 @@ class PipeServer {
     void HandleFrame(const std::string& payload);
     void Reply(const Id& id, const json& envelope);
     void FlushNotifications();
-    bool WriteFrame(const std::string& payload);
+    bool WriteFrame(const std::string& payload, unsigned timeout_ms = 0);  // 0: wait forever
 
     PipeSecurity security_;
     void* pipe_ = nullptr;  // HANDLE
     std::map<std::string, MethodHandler> handlers_;
     std::vector<json> notifications_;
     std::mutex write_mutex_;
+    bool write_failed_ = false;  // under write_mutex_; a torn frame ends the stream
 };
 
 }  // namespace sotto::ipc

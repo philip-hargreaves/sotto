@@ -10,6 +10,10 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- Dev and stakeholder runs are unpackaged; MSIX returns with the
+         distribution work. Self-contained: no runtime install needed -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,10 +21,11 @@
     <ProjectReference Include="..\Sotto.App.Core\Sotto.App.Core.csproj" />
   </ItemGroup>
 
-  <!-- Ship the engine beside the app when it has been built; F5 works without it -->
+  <!-- Ship the engine beside the app when it has been built; F5 works without it.
+       Always the Release engine: a Debug engine is 5-10x slower through the
+       models and makes every timing observation misleading -->
   <PropertyGroup>
-    <EnginePreset Condition="'$(Configuration)' == 'Debug'">dev</EnginePreset>
-    <EnginePreset Condition="'$(Configuration)' != 'Debug'">release</EnginePreset>
+    <EnginePreset>release</EnginePreset>
     <EngineBinary>..\..\build\$(EnginePreset)\engine\sotto_engine.exe</EngineBinary>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(EngineBinary)')">
@@ -34,6 +39,12 @@
   <Target Name="LinkModelStore" AfterTargets="Build"
           Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And !Exists('$(TargetDir)models')">
     <Exec Command='mklink /J "$(TargetDir)models" "$(MSBuildProjectDirectory)\..\..\models"' />
+  </Target>
+
+  <!-- Packaged F5 runs the engine from AppX, which needs the same link -->
+  <Target Name="LinkModelStoreAppX" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\models')">
+    <Exec Command='mklink /J "$(TargetDir)AppX\models" "$(MSBuildProjectDirectory)\..\..\models"' />
   </Target>
 
   <ItemGroup>

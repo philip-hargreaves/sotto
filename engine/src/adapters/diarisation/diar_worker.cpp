@@ -117,8 +117,13 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
                 const auto first = std::max(span.first_frame, kept[i].first_frame);
                 const auto end = std::min(span.end_frame, kept[i].end_frame);
                 if (end <= first || end - first < kOverlapTurnMinFrames) continue;
-                const auto embedding =
-                    embedder_.Embed(audio.subspan(first, static_cast<std::size_t>(end - first)));
+                // Memoised separately from slice embeddings (same span, raw
+                // audio); this runs every tick over all settled overlaps
+                auto& embedding = overlap_cache_[{first, end}];
+                if (embedding.empty()) {
+                    embedding = embedder_.Embed(
+                        audio.subspan(first, static_cast<std::size_t>(end - first)));
+                }
                 const int primary = clusters.labels[i];
                 int second = -1;
                 double best = -1e18;

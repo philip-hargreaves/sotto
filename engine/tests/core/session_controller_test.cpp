@@ -72,6 +72,21 @@ class ScriptedSource : public IAudioSource {
         stop_.store(true);
     }
 
+    void SetPaused(bool paused) override {
+        ++pause_calls;
+        last_paused = paused;
+    }
+
+    void SetMonitor(bool monitor) override {
+        ++monitor_calls;
+        last_monitor = monitor;
+    }
+
+    std::atomic<int> pause_calls{0};
+    std::atomic<bool> last_paused{false};
+    std::atomic<int> monitor_calls{0};
+    std::atomic<bool> last_monitor{false};
+
    private:
     void WaitForStop() {
         while (!stop_.load()) {
@@ -198,7 +213,9 @@ struct FakeSessionStore : store::ISessionStore {
 };
 
 SourceFactory FactoryFor(ScriptedSource::Script script) {
-    return [script] { return std::make_unique<ScriptedSource>(script); };
+    return [script](const std::optional<ReplaySpec>&) {
+        return std::make_unique<ScriptedSource>(script);
+    };
 }
 
 struct RecordingTranscriber : asr::ITranscriber {
@@ -539,6 +556,73 @@ TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
     EXPECT_EQ(store.turns[0].text, "speculated words") << "the cache hit stands";
     EXPECT_NE(store.turns[1].text.find("re-decoded"), std::string::npos)
         << "the miss decodes fresh";
+}
+
+TEST(SessionController, PauseReachesTheSourceAndStopStillWins) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    ScriptedSource* source = nullptr;
+    SourceFactory factory = [&source](const std::optional<ReplaySpec>&) {
+        auto s = std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
+        source = s.get();
+        return s;
+    };
+    SessionController controller(std::move(factory), events, store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.SetPaused(true);
+    controller.SetPaused(false);
+    controller.Stop();
+
+    ASSERT_NE(source, nullptr);
+    EXPECT_EQ(source->pause_calls.load(), 2);
+    EXPECT_FALSE(source->last_paused.load());
+}
+
+TEST(SessionController, MonitorToggleReachesTheSource) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    ScriptedSource* source = nullptr;
+    SourceFactory factory = [&source](const std::optional<ReplaySpec>&) {
+        auto s = std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
+        source = s.get();
+        return s;
+    };
+    SessionController controller(std::move(factory), events, store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.SetMonitor(true);
+    controller.SetMonitor(false);
+    controller.Stop();
+
+    ASSERT_NE(source, nullptr);
+    EXPECT_EQ(source->monitor_calls.load(), 2);
+    EXPECT_FALSE(source->last_monitor.load());
+}
+
+TEST(SessionController, AReplaySpecReachesTheFactory) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    std::optional<ReplaySpec> seen;
+    SourceFactory factory = [&seen](const std::optional<ReplaySpec>& replay) {
+        seen = replay;
+        return std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
+    };
+    SessionController controller(std::move(factory), events, store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start(ReplaySpec{"C:/tracks/elbow.wav", 4.0, true}));
+    controller.Stop();
+
+    ASSERT_TRUE(seen.has_value());
+    EXPECT_EQ(seen->path, "C:/tracks/elbow.wav");
+    EXPECT_EQ(seen->speed, 4.0);
+    EXPECT_TRUE(seen->monitor);
 }
 
 TEST(SessionController, CancelDiscardsCaptureState) {

@@ -37,7 +37,15 @@ class ISessionEvents {
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
 };
 
-using SourceFactory = std::function<std::unique_ptr<IAudioSource>()>;
+// A replay request, carried into the source factory; absent means microphone
+struct ReplaySpec {
+    std::string path;
+    double speed = 1.0;
+    bool monitor = false;
+};
+
+using SourceFactory =
+    std::function<std::unique_ptr<IAudioSource>(const std::optional<ReplaySpec>&)>;
 
 // One capture session at a time. Every way a session can end has a storage
 // outcome: Stop finalises, Cancel erases, an interruption abandons (kept,
@@ -67,7 +75,7 @@ class SessionController {
 
     // True once audio flows; false if the source ended or the deadline
     // passed first, with the reason left in LastEnd
-    bool Start() {
+    bool Start(std::optional<ReplaySpec> replay = std::nullopt) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
@@ -98,7 +106,10 @@ class SessionController {
                     std::string("store refused the session: ") + e.what()};
             return false;
         }
-        source_ = factory_();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            source_ = factory_(replay);
+        }
         worker_ = std::thread([this] { GuardedRun(); });
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
@@ -130,6 +141,18 @@ class SessionController {
     void Cancel() {
         EndCapture();
         FinishSession(Outcome::kCancel);
+    }
+
+    // Hold the source's delivery; stop and cancel always win
+    void SetPaused(bool paused) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (source_ && running_) source_->SetPaused(paused);
+    }
+
+    // Toggle audible replay monitoring mid-session
+    void SetMonitor(bool monitor) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (source_ && running_) source_->SetMonitor(monitor);
     }
 
     bool Running() const {
@@ -251,10 +274,12 @@ class SessionController {
         }
     }
 
-    // Diarisation's causal work, spread over the recording so finalise only
-    // pays the tail. Snapshots are taken under the lock; the heavy Advance
-    // (models, clip re-decodes) runs outside it and off the capture thread
+    // Diarisation's causal work, spread over the recording; the heavy
+    // Advance runs outside the lock, off the capture thread
     void DiarLoop() {
+        // Accelerated replay delivers audio faster than real time; a wall
+        // floor keeps the tick rate sane at any speed
+        constexpr auto kMinTickGap = std::chrono::seconds(1);
         std::vector<float> audio;
         std::vector<asr::Turn> turns;
         std::unique_lock<std::mutex> lock(mutex_);
@@ -267,6 +292,7 @@ class SessionController {
             }
             audio = session_audio_;
             turns = session_turns_;
+            ++diar_ticks_;
             lock.unlock();
             // The same reconcile finalise runs, so turn spans agree
             diar::ReconcileTurns(turns);
@@ -284,6 +310,10 @@ class SessionController {
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
             lock.lock();
+            cv_.wait_for(lock, kMinTickGap, [this] { return diar_stop_; });
+            if (diar_stop_) {
+                return;
+            }
         }
     }
 
@@ -325,8 +355,19 @@ class SessionController {
                 return;
             }
         }
-        // No capture work may run once finalise starts
+        // No capture work may run once finalise starts; stage timings let a
+        // slow finalise name its stage
+        const auto finalise_start = std::chrono::steady_clock::now();
+        const auto stage = [&finalise_start](const char* name) {
+            std::fprintf(
+                stderr, "sotto-engine: finalise %s at %.1f s\n", name,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - finalise_start)
+                    .count());
+        };
         JoinDiarThread();
+        stage("capture joined");
+        std::fprintf(stderr, "sotto-engine: session audio %.1f s, %d capture ticks\n",
+                     session_audio_.size() / 16000.0, diar_ticks_);
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
@@ -336,6 +377,7 @@ class SessionController {
             }
         }
         transcriber_.Finish();
+        stage("transcriber drained");
 
         store::SessionId id;
         {
@@ -367,9 +409,9 @@ class SessionController {
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
-                // Each merged turn gets the text of its own audio; capture
-                // speculation filled most of the cache, so this mostly
-                // decodes only the tail
+                stage("diarised");
+                // Each merged turn gets the text of its own audio; the
+                // speculation cache means this mostly decodes only the tail
                 const auto turns = diar::MergeByCluster(result.slices);
                 const auto cache = diariser_->TakeTurnTexts();
                 const auto turn_texts = diar::DecodeTurnTexts(
@@ -378,6 +420,20 @@ class SessionController {
                         return transcriber_.DecodeClip(clip, first);
                     },
                     &cache);
+                stage("turns decoded");
+                {
+                    std::size_t with_text = 0;
+                    std::uint64_t longest = 0;
+                    for (std::size_t i = 0; i < turns.size(); ++i) {
+                        if (!turn_texts[i].empty()) ++with_text;
+                        longest = std::max(longest, turns[i].end_frame - turns[i].first_frame);
+                    }
+                    std::fprintf(stderr,
+                                 "sotto-engine: %zu turns, %zu with text, %zu cached, longest "
+                                 "%.1f s, %d clusters\n",
+                                 turns.size(), with_text, cache.size(), longest / 16000.0,
+                                 result.cluster_count);
+                }
                 std::vector<diar::RoleTurn> role_turns;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
                     role_turns.push_back({turns[i].cluster,
@@ -400,6 +456,7 @@ class SessionController {
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
                 }
+                stage("transcript sealed");
                 // The anchor learns only from named sessions, never a guess
                 if (roles.doctor_cluster >= 0) {
                     diariser_->AccrueDoctor(session_audio_, result.slices, roles.doctor_cluster);
@@ -446,6 +503,7 @@ class SessionController {
     std::thread worker_;
     std::thread diar_thread_;
     bool diar_stop_ = false;  // under mutex_
+    int diar_ticks_ = 0;      // under mutex_; diagnostics
     LevelMeter meter_;
     std::optional<Endpointer> endpointer_;
     TurnSink turn_sink_{*this};

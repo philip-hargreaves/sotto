@@ -134,12 +134,15 @@ void WhisperTranscriber::WorkerLoop() {
     }
 
     std::unique_lock<std::mutex> lock(mutex_);
+    // Clips yield to live windows but are never starved: one clip per two
+    // windows keeps speculation alive under an accelerated-replay backlog
+    int windows_since_clip = 0;
     while (!stopping_) {
         cv_.wait(lock, [this] { return !queue_.empty() || !clips_.empty() || stopping_; });
         if (stopping_) break;
 
-        // Live windows first: clips are background repair work
-        if (queue_.empty()) {
+        if (!clips_.empty() && (queue_.empty() || windows_since_clip >= 2)) {
+            windows_since_clip = 0;
             Clip clip = std::move(clips_.front());
             clips_.pop_front();
             busy_ = true;
@@ -162,8 +165,10 @@ void WhisperTranscriber::WorkerLoop() {
             continue;
         }
 
+        if (queue_.empty()) continue;  // spurious wake
         Window window = std::move(queue_.front());
         queue_.pop_front();
+        ++windows_since_clip;
         busy_ = true;
         ITurnSink* sink = sink_;
         std::optional<Turn> previous = previous_turn_;

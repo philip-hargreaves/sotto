@@ -44,3 +44,7 @@ internal/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Bundled demo recordings, staged by tools/stage-demo-tracks.ps1 (root only;
+# source dirs may be named Demo)
+/demo/

@@ -25,6 +25,19 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public void RecordingWaitsForTheEngine()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+
+        engine.SetConnected(false);
+        Assert.False(controls.StartRecordingCommand.CanExecute(null));
+
+        engine.SetConnected(true);
+        Assert.True(controls.StartRecordingCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task StatePropertyRaisesChangeNotification()
     {
         var (session, _, _) = TestSession.Create();

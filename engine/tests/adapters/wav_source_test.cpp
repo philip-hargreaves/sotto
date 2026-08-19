@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -9,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace sotto::audio {
@@ -257,6 +259,57 @@ TEST(WavSource, StopMidStreamEndsAsStoppedNotCompleted) {
     ASSERT_EQ(sink.ends.size(), 1u);
     EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped);
     EXPECT_EQ(sink.frames.size(), 480u);  // One packet, then the stop honoured
+}
+
+TEST(WavSource, RealTimeReplayIsPacedFlatOutIsNot) {
+    // Half a second of audio: paced delivery takes roughly that long
+    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(8000, 0))}));
+    RecordingSink sink;
+
+    const auto flat_start = std::chrono::steady_clock::now();
+    WavSource(file.path.string()).Run(sink);
+    const auto flat = std::chrono::steady_clock::now() - flat_start;
+    EXPECT_LT(flat, std::chrono::milliseconds(200));
+
+    const auto paced_start = std::chrono::steady_clock::now();
+    WavSource(file.path.string(), {.speed = 1.0}).Run(sink);
+    const auto paced = std::chrono::steady_clock::now() - paced_start;
+    EXPECT_GT(paced, std::chrono::milliseconds(400));
+    EXPECT_LT(paced, std::chrono::milliseconds(1500));
+}
+
+TEST(WavSource, PauseHoldsFramesAndResumeDeliversThemAll) {
+    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(4800, 0))}));
+    WavSource source(file.path.string());
+    RecordingSink sink;
+    source.SetPaused(true);
+
+    std::thread runner([&] { source.Run(sink); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    const auto held = sink.frames.size();
+    source.SetPaused(false);
+    runner.join();
+
+    EXPECT_LE(held, 480u) << "at most the packet in flight before the pause was seen";
+    EXPECT_EQ(sink.frames.size(), 4800u) << "paused audio is held, never dropped";
+    ASSERT_EQ(sink.ends.size(), 1u);
+    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
+}
+
+TEST(WavSource, StopWinsOverPause) {
+    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(4800, 0))}));
+    WavSource source(file.path.string());
+    RecordingSink sink;
+    source.SetPaused(true);
+
+    std::thread runner([&] { source.Run(sink); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    source.RequestStop();
+    runner.join();
+
+    ASSERT_EQ(sink.ends.size(), 1u);
+    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped)
+        << "a paused session can always be finalised";
 }
 
 }  // namespace

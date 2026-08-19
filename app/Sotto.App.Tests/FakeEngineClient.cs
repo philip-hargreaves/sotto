@@ -13,10 +13,25 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
     public event Action<string, JsonElement>? NotificationReceived;
 
+    public event Action<bool>? ConnectedChanged;
+
+    public bool Connected { get; private set; } = true;
+
+    public void SetConnected(bool connected)
+    {
+        Connected = connected;
+        ConnectedChanged?.Invoke(connected);
+    }
+
+    /// <summary>Every request, as (method, serialised params).</summary>
+    public List<(string Method, string Params)> Requests { get; } = [];
+
     public Task<JsonElement> RequestAsync(
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
+        Requests.Add((method, parameters is null ? "" : JsonSerializer.Serialize(parameters)));
+
         if (method == "engine/hello")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(

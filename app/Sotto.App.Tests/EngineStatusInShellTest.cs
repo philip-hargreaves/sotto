@@ -6,13 +6,19 @@ namespace Sotto.App.Tests;
 public class EngineStatusInShellTest
 {
     [Fact]
-    public void LabelsFollowTheEngineStatus()
+    public void LabelsFollowTheEngineStatusAndReadiness()
     {
         var bar = new StatusBarViewModel();
 
         bar.SetEngineState(EngineStatus.Running, null);
-        Assert.Equal("engine: running", bar.EngineStateLabel);
+        Assert.Equal("engine: starting models...", bar.EngineStateLabel);
+        Assert.True(bar.EngineStarting);
 
+        bar.SetEngineReady(true);
+        Assert.Equal("engine: ready", bar.EngineStateLabel);
+        Assert.False(bar.EngineStarting);
+
+        bar.SetEngineReady(false);
         bar.SetEngineState(EngineStatus.Restarting, null);
         Assert.Equal("engine: restarting", bar.EngineStateLabel);
 

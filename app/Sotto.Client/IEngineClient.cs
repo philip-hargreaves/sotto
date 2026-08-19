@@ -10,6 +10,11 @@ public interface IEngineClient : IAsyncDisposable
 {
     event Action<string, JsonElement>? NotificationReceived;
 
+    /// <summary>True while a verified transport is up; requests can succeed.</summary>
+    bool Connected { get; }
+
+    event Action<bool>? ConnectedChanged;
+
     Task<JsonElement> RequestAsync(
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default);

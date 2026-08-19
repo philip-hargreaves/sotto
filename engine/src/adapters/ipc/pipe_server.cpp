@@ -69,12 +69,13 @@ void PipeServer::QueueNotification(const std::string& method, json params) {
 }
 
 void PipeServer::PushNotification(const std::string& method, json params) {
+    constexpr unsigned kNotifyTimeoutMs = 2000;
     const std::string payload = Serialize(MakeNotification(method, std::move(params)));
     if (payload.size() > kMaxFrameBytes) {
         std::fputs("sotto-engine: pushed notification exceeded frame cap, dropped\n", stderr);
         return;
     }
-    if (!WriteFrame(payload)) {
+    if (!WriteFrame(payload, kNotifyTimeoutMs)) {
         std::fputs("sotto-engine: notification push failed, client gone\n", stderr);
     }
 }
@@ -177,8 +178,9 @@ void PipeServer::Reply(const Id& id, const json& envelope) {
     }
 }
 
-bool PipeServer::WriteFrame(const std::string& payload) {
+bool PipeServer::WriteFrame(const std::string& payload, unsigned timeout_ms) {
     const std::lock_guard<std::mutex> lock(write_mutex_);
+    if (write_failed_) return false;
     const std::string frame = EncodeFrame(payload);
     HANDLE pipe = static_cast<HANDLE>(pipe_);
     std::size_t written_total = 0;
@@ -188,6 +190,15 @@ bool PipeServer::WriteFrame(const std::string& payload) {
         if (!WriteFile(pipe, frame.data() + written_total,
                        static_cast<DWORD>(frame.size() - written_total), nullptr, &write.ov)) {
             if (GetLastError() != ERROR_IO_PENDING) return false;
+            // A client that stops draining must not stall the writer; a
+            // cancel tears the frame, so the stream is declared dead
+            if (timeout_ms != 0 &&
+                WaitForSingleObject(write.ov.hEvent, timeout_ms) != WAIT_OBJECT_0) {
+                CancelIoEx(pipe, &write.ov);
+                CompleteOverlapped(pipe, write.ov, written);
+                write_failed_ = true;
+                return false;
+            }
         }
         if (!CompleteOverlapped(pipe, write.ov, written)) return false;
         written_total += written;

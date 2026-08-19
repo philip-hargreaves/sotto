@@ -58,6 +58,14 @@ public class EngineConnectionTest
 
         public event Action<string, JsonElement>? NotificationReceived;
 
+        public event Action<bool>? ConnectedChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool Connected => true;
+
         public Task<JsonElement> RequestAsync(
             string method, object? parameters, TimeSpan timeout,
             CancellationToken cancellationToken = default)
