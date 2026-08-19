@@ -123,6 +123,10 @@ class SessionController {
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
         }
+        // Warm the note weights' file cache while the session records
+        if (note_writer_ != nullptr) {
+            note_writer_->Prepare();
+        }
 
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait_for(lock, settle_timeout_, [this] { return got_audio_ || ended_; });
@@ -142,6 +146,10 @@ class SessionController {
     // Idempotent; a stop is the user's, so it never counts as an interruption.
     // The recording is kept
     void Stop() {
+        // Re-warm in parallel with finalise; a long session may have evicted
+        if (note_writer_ != nullptr && Running()) {
+            note_writer_->Prepare();
+        }
         EndCapture();
         FinishSession(Outcome::kFinalise);
     }
@@ -524,6 +532,9 @@ class SessionController {
         JoinNoteThread();
         std::lock_guard<std::mutex> lock(mutex_);
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
+            // Whisper must not stay on the GPU beside the note model
+            // (measured: KV-cache corruption); it reloads next session
+            transcriber_.Release();
             try {
                 const std::string text = note_writer_->Write(
                     turns, [this](const std::string& partial) { events_.OnNotePartial(partial); });

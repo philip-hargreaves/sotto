@@ -47,6 +47,16 @@
     <Exec Command='mklink /J "$(TargetDir)AppX\models" "$(MSBuildProjectDirectory)\..\..\models"' />
   </Target>
 
+  <!-- Prompts ride the same junction, so a repo edit applies to the next note -->
+  <Target Name="LinkPrompts" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\prompts') And !Exists('$(TargetDir)prompts')">
+    <Exec Command='mklink /J "$(TargetDir)prompts" "$(MSBuildProjectDirectory)\..\..\prompts"' />
+  </Target>
+  <Target Name="LinkPromptsAppX" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\prompts') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\prompts')">
+    <Exec Command='mklink /J "$(TargetDir)AppX\prompts" "$(MSBuildProjectDirectory)\..\..\prompts"' />
+  </Target>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />

@@ -265,8 +265,13 @@ struct FakeNoteWriter : note::INoteWriter {
     bool fail = false;
     std::atomic<bool> block{false};
     std::atomic<bool> cancelled{false};
+    std::atomic<int> prepares{0};
     std::mutex mutex;
     std::vector<std::vector<asr::Turn>> calls;
+
+    void Prepare() override {
+        ++prepares;
+    }
 
     std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override {
         {
@@ -299,6 +304,11 @@ struct RecordingTranscriber : asr::ITranscriber {
     std::vector<std::pair<std::uint64_t, std::size_t>> windows;  // first_frame, count
     int begins = 0;
     int finishes = 0;
+    std::atomic<int> releases{0};
+
+    void Release() override {
+        ++releases;
+    }
 
     void Begin(asr::ITurnSink&) override {
         ++begins;
@@ -378,6 +388,24 @@ TEST(SessionController, TheNoteFollowsTheSeal) {
     EXPECT_EQ(calls.back(), "note s1") << "the note is stored after the seal";
     ASSERT_EQ(writer.calls.size(), 1u);
     EXPECT_FALSE(writer.calls[0].empty()) << "the writer gets the transcript";
+    EXPECT_GE(writer.prepares.load(), 1) << "the weights warm while the session records";
+}
+
+TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    RecordingTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(transcriber.releases.load(), 1) << "the GPU is freed before the note writes";
 }
 
 TEST(SessionController, AFailedNoteAnnouncesAndStoresNothing) {

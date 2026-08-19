@@ -20,6 +20,9 @@ class INoteWriter {
     virtual std::string Write(const std::vector<asr::Turn>& transcript,
                               const Progress& progress) = 0;
 
+    // Safe warm-up for a Write that may follow; never touches the GPU
+    virtual void Prepare() {}
+
     virtual void Cancel() {}
 };
 

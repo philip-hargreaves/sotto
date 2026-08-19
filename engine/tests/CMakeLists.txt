@@ -39,6 +39,7 @@ add_executable(engine_tests
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
     adapters/model_store_test.cpp
+    adapters/note_prompt_test.cpp
     adapters/ov_smoke_test.cpp
     adapters/pipe_security_test.cpp
     adapters/scripted_transcriber_test.cpp
@@ -83,6 +84,7 @@ add_executable(models_tests
     adapters/diariser_pipeline_test.cpp
     adapters/embedder_model_test.cpp
     adapters/fbank_parity_test.cpp
+    adapters/note_writer_test.cpp
     adapters/seg_model_test.cpp
     adapters/silero_vad_test.cpp
     adapters/speaker_embedder_test.cpp
@@ -91,7 +93,7 @@ target_compile_definitions(models_tests PRIVATE
     SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
     SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
 target_link_libraries(models_tests PRIVATE
-    sotto_diarisation sotto_models sotto_transcription sotto_vad sotto_warnings
+    sotto_diarisation sotto_models sotto_note sotto_transcription sotto_vad sotto_warnings
     nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
 # Dev evaluation tool for the research acceptance scorer; never shipped
