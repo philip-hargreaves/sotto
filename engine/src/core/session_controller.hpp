@@ -105,14 +105,14 @@ class SessionController {
             session_id_ = id;
             vad_.Reset();
             endpointer_.emplace(vad_);
+            vad_backlog_.clear();
             session_audio_.clear();
             session_turns_.clear();
             transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(mutex_);
             running_ = false;
-            end_ = {SourceEndReason::kFailed,
-                    std::string("store refused the session: ") + e.what()};
+            end_ = {SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
             return false;
         }
         {
@@ -250,9 +250,16 @@ class SessionController {
             controller.cv_.notify_all();
             if (!id.empty()) {
                 controller.store_.Append(id, frames, lost_frames);
-                for (const auto& window : controller.endpointer_->Push(frames)) {
-                    controller.transcriber_.Submit(window.frames, window.first_frame,
-                                                   window.first_new_frame);
+                // Hops buffer while the VAD loads; storage never waits
+                if (!controller.vad_.Ready()) {
+                    controller.vad_backlog_.insert(controller.vad_backlog_.end(), frames.begin(),
+                                                   frames.end());
+                } else {
+                    controller.DrainVadBacklog();
+                    for (const auto& window : controller.endpointer_->Push(frames)) {
+                        controller.transcriber_.Submit(window.frames, window.first_frame,
+                                                       window.first_new_frame);
+                    }
                 }
             }
             for (const auto& reading : controller.meter_.Push(frames)) {
@@ -351,6 +358,17 @@ class SessionController {
         }
     }
 
+    // Capture thread while running, finalise after it joins; never both
+    void DrainVadBacklog() {
+        if (vad_backlog_.empty()) {
+            return;
+        }
+        std::vector<float> backlog = std::exchange(vad_backlog_, {});
+        for (const auto& window : endpointer_->Push(backlog)) {
+            transcriber_.Submit(window.frames, window.first_frame, window.first_new_frame);
+        }
+    }
+
     void EndCapture() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -393,6 +411,7 @@ class SessionController {
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
+            DrainVadBacklog();  // a stop can land before the VAD does
             if (const auto tail = endpointer_->Flush()) {
                 transcriber_.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
             }
@@ -580,6 +599,7 @@ class SessionController {
     int diar_ticks_ = 0;       // under mutex_; diagnostics
     LevelMeter meter_;
     std::optional<Endpointer> endpointer_;
+    std::vector<float> vad_backlog_;  // capture thread, then finalise
     TurnSink turn_sink_{*this};
     mutable std::mutex mutex_;
     std::condition_variable cv_;

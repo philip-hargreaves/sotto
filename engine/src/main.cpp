@@ -14,6 +14,7 @@
 
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
+#include "adapters/diarisation/deferred_diariser.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
@@ -23,6 +24,7 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
+#include "adapters/vad/deferred_vad.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
 #include "core/cli_args.hpp"
@@ -148,23 +150,29 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
             transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();
         }
-        // Same pattern for the VAD: real endpointing when staged
+        // Same pattern for the VAD: real endpointing when staged. Compiles
+        // behind the serve loop; session/start waits on it, hello does not
         std::unique_ptr<sotto::audio::IStreamingVad> vad;
         try {
             model_store.Resolve("vad", "default");
-            vad = std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+            vad = std::make_unique<sotto::audio::DeferredVad>([&model_store, &ov_runtime] {
+                return std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+            });
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: capped windows (%s)\n", e.what());
             vad = std::make_unique<sotto::audio::PassthroughVad>();
         }
         // Diarisation needs both its models; without them turns simply keep
         // an empty speaker
-        std::unique_ptr<sotto::diar::SpeakerDiariser> diariser;
+        std::unique_ptr<sotto::diar::IDiariser> diariser;
         try {
             model_store.Resolve("diarisation", "default");
             model_store.Resolve("segmentation", "default");
-            diariser =
-                std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime, store_root);
+            diariser = std::make_unique<sotto::diar::DeferredDiariser>(
+                [&model_store, &ov_runtime, store_root] {
+                    return std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime,
+                                                                          store_root);
+                });
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }
