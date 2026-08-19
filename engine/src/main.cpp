@@ -6,6 +6,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -23,6 +24,7 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
+#include "core/cli_args.hpp"
 #include "core/session_controller.hpp"
 
 namespace {
@@ -60,17 +62,20 @@ class WireEvents : public sotto::audio::ISessionEvents {
 
 int main(int argc, char* argv[]) {
     try {
-        // argv: [1] private pipe name, [2] store root, [3] models root,
-        // [4] replay wav path; tests pass their own so runs collide with
-        // neither the app nor its stores
+        // Flags first, then positional: pipe name, store root, models root,
+        // replay wav; tests pass their own so runs collide with neither the
+        // app nor its stores
+        std::vector<std::string> args(argv + 1, argv + argc);
+        const std::string asr_device = sotto::TakeFlag(args, "--asr-device");
+
         std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\sotto-engine";
-        if (argc > 1) {
-            pipe_name = L"\\\\.\\pipe\\" + std::wstring(argv[1], argv[1] + std::strlen(argv[1]));
+        if (args.size() > 0) {
+            pipe_name = L"\\\\.\\pipe\\" + std::wstring(args[0].begin(), args[0].end());
         }
 
         std::filesystem::path store_root;
-        if (argc > 2) {
-            store_root = argv[2];
+        if (args.size() > 1) {
+            store_root = args[1];
         } else {
             char* local_app_data = nullptr;
             if (_dupenv_s(&local_app_data, nullptr, "LOCALAPPDATA") != 0 ||
@@ -83,8 +88,8 @@ int main(int argc, char* argv[]) {
 
         // Beside the executable is the production shape: the MSIX package dir
         std::filesystem::path models_root;
-        if (argc > 3) {
-            models_root = argv[3];
+        if (args.size() > 2) {
+            models_root = args[2];
         } else {
             wchar_t exe_path[MAX_PATH];
             GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
@@ -104,7 +109,7 @@ int main(int argc, char* argv[]) {
         // A replay request plays a wav through the same port; a launch-time
         // wav path (CI, scripts) forces every session to replay that file
         sotto::audio::SourceFactory factory =
-            [forced = argc > 4 ? std::string(argv[4]) : std::string()](
+            [forced = args.size() > 3 ? args[3] : std::string()](
                 const std::optional<sotto::audio::ReplaySpec>& replay)
             -> std::unique_ptr<sotto::audio::IAudioSource> {
             if (replay.has_value()) {
@@ -124,7 +129,8 @@ int main(int argc, char* argv[]) {
         std::unique_ptr<sotto::asr::ITranscriber> transcriber;
         try {
             model_store.Resolve("asr", "default");
-            transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime);
+            transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime,
+                                                                           asr_device);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
             transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();

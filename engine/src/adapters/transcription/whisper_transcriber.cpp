@@ -20,10 +20,13 @@ std::string Trimmed(const std::string& text) {
     return text.substr(begin, text.find_last_not_of(' ') - begin + 1);
 }
 
-DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime) {
+DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
+                           const std::string& device_override) {
     const models::ModelInfo& info = store.Resolve("asr", "default");
     store.Verify(info);
-    const std::string device = runtime.ResolveDevice(info.device);
+    const std::string device =
+        runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
+    std::fprintf(stderr, "sotto-engine: asr on %s\n", device.c_str());
 
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
         info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
@@ -66,9 +69,11 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 
 }  // namespace
 
-WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime)
-    : WhisperTranscriber(
-          DecodeLoader([&store, &runtime] { return MakeWhisperDecode(store, runtime); })) {}
+WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
+                                       std::string device_override)
+    : WhisperTranscriber(DecodeLoader([&store, &runtime, device = std::move(device_override)] {
+          return MakeWhisperDecode(store, runtime, device);
+      })) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });
