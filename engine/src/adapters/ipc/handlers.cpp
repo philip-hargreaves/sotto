@@ -121,6 +121,10 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.SetPaused(params.value("paused", true));
         return json::object();
     });
+    server.RegisterMethod("session/monitor", [&controller](const json& params) {
+        controller.SetMonitor(params.value("on", true));
+        return json::object();
+    });
     server.RegisterMethod("session/cancel", [&controller](const json&) {
         controller.Cancel();
         return json::object();

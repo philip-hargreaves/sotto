@@ -22,6 +22,7 @@ class WavSource : public IAudioSource {
     void Run(IAudioSink& sink) override;
     void RequestStop() override;
     void SetPaused(bool paused) override;
+    void SetMonitor(bool monitor) override;
 
    private:
     SourceEnd RunToEnd(IAudioSink& sink);
@@ -30,6 +31,7 @@ class WavSource : public IAudioSource {
     Config config_;
     std::atomic<bool> stop_requested_{false};
     std::atomic<bool> paused_{false};
+    std::atomic<bool> monitor_{false};
 };
 
 }  // namespace sotto::audio

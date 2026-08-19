@@ -111,7 +111,9 @@ std::string Refusal(const WavFormat& format) {
 
 }  // namespace
 
-WavSource::WavSource(std::string path, Config config) : path_(std::move(path)), config_(config) {}
+WavSource::WavSource(std::string path, Config config) : path_(std::move(path)), config_(config) {
+    monitor_.store(config.monitor, std::memory_order_relaxed);
+}
 
 void WavSource::RequestStop() {
     stop_requested_.store(true, std::memory_order_relaxed);
@@ -119,6 +121,10 @@ void WavSource::RequestStop() {
 
 void WavSource::SetPaused(bool paused) {
     paused_.store(paused, std::memory_order_relaxed);
+}
+
+void WavSource::SetMonitor(bool monitor) {
+    monitor_.store(monitor, std::memory_order_relaxed);
 }
 
 // OnEnd is the port's one guarantee, so Run funnels every outcome through it
@@ -151,7 +157,7 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
     std::vector<float> frames(kPacketFrames);
     std::vector<float> decimated;
     std::unique_ptr<WasapiPlayer> player;
-    if (config_.monitor) player = WasapiPlayer::Open();
+    bool player_failed = false;
     // Decimate by speed: the tape-speed effect, no exotic sample rate needed
     const std::size_t step =
         config_.speed > 1.0 ? static_cast<std::size_t>(config_.speed + 0.5) : 1;
@@ -194,8 +200,16 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
             }
         }
         sink.OnAudio(std::span<const float>(frames.data(), count), 0);
-        // After the sink and best-effort, so playback never throttles the feed
-        if (player) {
+        // After the sink and best-effort, so playback never throttles the
+        // feed; the toggle opens and closes the device mid-stream
+        const bool monitor = monitor_.load(std::memory_order_relaxed);
+        if (monitor && !player && !player_failed) {
+            player = WasapiPlayer::Open();
+            player_failed = player == nullptr;
+        } else if (!monitor && player) {
+            player.reset();
+        }
+        if (player && monitor) {
             decimated.clear();
             for (std::size_t i = 0; i < count; i += step) decimated.push_back(frames[i]);
             player->Write(decimated);
