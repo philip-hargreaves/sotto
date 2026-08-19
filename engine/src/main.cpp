@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -28,6 +29,7 @@
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
 #include "core/cli_args.hpp"
+#include "core/metrics.hpp"
 #include "core/session_controller.hpp"
 
 namespace {
@@ -141,11 +143,12 @@ int main(int argc, char* argv[]) {
         // on its worker thread, so the engine serves and records immediately
         // and queued windows decode once the model is ready
         sotto::models::OvRuntime ov_runtime;
+        sotto::metrics::Registry metrics;
         std::unique_ptr<sotto::asr::ITranscriber> transcriber;
         try {
             model_store.Resolve("asr", "default");
             transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime,
-                                                                           asr_device);
+                                                                           asr_device, &metrics);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
             transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();
@@ -155,8 +158,14 @@ int main(int argc, char* argv[]) {
         std::unique_ptr<sotto::audio::IStreamingVad> vad;
         try {
             model_store.Resolve("vad", "default");
-            vad = std::make_unique<sotto::audio::DeferredVad>([&model_store, &ov_runtime] {
-                return std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+            vad = std::make_unique<sotto::audio::DeferredVad>([&model_store, &ov_runtime,
+                                                               &metrics] {
+                const auto t0 = std::chrono::steady_clock::now();
+                auto built = std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+                metrics.RecordLoad(
+                    "vad",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+                return built;
             });
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: capped windows (%s)\n", e.what());
@@ -168,11 +177,16 @@ int main(int argc, char* argv[]) {
         try {
             model_store.Resolve("diarisation", "default");
             model_store.Resolve("segmentation", "default");
-            diariser = std::make_unique<sotto::diar::DeferredDiariser>(
-                [&model_store, &ov_runtime, store_root] {
-                    return std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime,
-                                                                          store_root);
-                });
+            diariser = std::make_unique<sotto::diar::DeferredDiariser>([&model_store, &ov_runtime,
+                                                                        store_root, &metrics] {
+                const auto t0 = std::chrono::steady_clock::now();
+                auto built = std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime,
+                                                                            store_root);
+                metrics.RecordLoad(
+                    "diarisation",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+                return built;
+            });
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }
@@ -182,15 +196,15 @@ int main(int argc, char* argv[]) {
             model_store.Resolve("note", "default");
             note_writer = std::make_unique<sotto::note::QwenNoteWriter>(
                 model_store, ov_runtime,
-                models_root.parent_path() / "prompts" / "note-narrative.md");
+                models_root.parent_path() / "prompts" / "note-narrative.md", &metrics);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
         }
         sotto::audio::SessionController controller(
             std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(3),
-            diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get());
+            diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
 
-        sotto::ipc::RegisterMethods(server, controller, model_store, session_store);
+        sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics);
         server.ServeOneClient();
         controller.Stop();
         return 0;

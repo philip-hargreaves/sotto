@@ -28,7 +28,7 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
 
 // Every method the engine serves
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models,
-                     sotto::store::ISessionStore& sessions);
+                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
+                     sotto::metrics::Registry* metrics = nullptr);
 
 }  // namespace sotto::ipc

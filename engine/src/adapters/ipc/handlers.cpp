@@ -97,10 +97,28 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
 }
 
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models,
-                     sotto::store::ISessionStore& sessions) {
+                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
+                     sotto::metrics::Registry* metrics) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
+    if (metrics != nullptr) {
+        server.RegisterMethod("engine/metrics", [metrics](const json&) {
+            const auto s = metrics->Take();
+            return json{
+                {"devices", s.devices},
+                {"loadSeconds", s.load_seconds},
+                {"stageSeconds", s.stage_seconds},
+                {"asrRealtimeFactor",
+                 s.decode_busy_seconds > 0 ? s.decoded_audio_seconds / s.decode_busy_seconds : 0},
+                {"audioSeconds", s.session_audio_seconds},
+                {"lostFrames", s.lost_frames},
+                {"diarTicks", s.diar_ticks},
+                {"turns", s.turns},
+                {"clusters", s.clusters},
+                {"replay", s.replay},
+                {"replaySpeed", s.replay_speed}};
+        });
+    }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
     server.RegisterMethod("session/list",
                           [&sessions](const json&) { return HandleSessionList(sessions); });

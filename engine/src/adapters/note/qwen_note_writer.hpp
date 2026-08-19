@@ -12,6 +12,10 @@ class ModelStore;
 class OvRuntime;
 }  // namespace sotto::models
 
+namespace sotto::metrics {
+class Registry;
+}  // namespace sotto::metrics
+
 namespace sotto::note {
 
 // Qwen behind the note port. The pipeline is loaded per Write and freed
@@ -19,7 +23,7 @@ namespace sotto::note {
 class QwenNoteWriter : public INoteWriter {
    public:
     QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                   std::filesystem::path prompt_path);
+                   std::filesystem::path prompt_path, metrics::Registry* metrics = nullptr);
     ~QwenNoteWriter() override;
 
     std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override;

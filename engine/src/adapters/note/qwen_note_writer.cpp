@@ -13,6 +13,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/note_prompt.hpp"
+#include "core/metrics.hpp"
 
 namespace sotto::note {
 
@@ -30,6 +31,7 @@ struct QwenNoteWriter::Impl {
     const models::ModelStore& store;
     models::OvRuntime& runtime;
     std::filesystem::path prompt_path;
+    metrics::Registry* metrics;
     std::unique_ptr<ov::genai::LLMPipeline> pipeline;
     std::atomic<bool> cancel{false};
     std::atomic<bool> prefetching{false};
@@ -37,8 +39,8 @@ struct QwenNoteWriter::Impl {
 };
 
 QwenNoteWriter::QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                               std::filesystem::path prompt_path)
-    : impl_(new Impl{store, runtime, std::move(prompt_path), nullptr, {}, {}, {}}) {}
+                               std::filesystem::path prompt_path, metrics::Registry* metrics)
+    : impl_(new Impl{store, runtime, std::move(prompt_path), metrics, nullptr, {}, {}, {}}) {}
 
 QwenNoteWriter::~QwenNoteWriter() {
     if (impl_->prefetch.joinable()) {
@@ -87,8 +89,14 @@ std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
         const auto t0 = std::chrono::steady_clock::now();
         impl_->pipeline = std::make_unique<ov::genai::LLMPipeline>(
             info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::fprintf(stderr, "sotto-engine: note on %s, loaded in %.1f s\n", device.c_str(),
-                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+                     seconds);
+        if (impl_->metrics != nullptr) {
+            impl_->metrics->RecordDevice("note", device);
+            impl_->metrics->RecordLoad("note", seconds);
+        }
     }
 
     ov::genai::GenerationConfig config;
