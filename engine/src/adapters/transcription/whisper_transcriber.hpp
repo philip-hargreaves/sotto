@@ -32,7 +32,9 @@ using DecodeLoader = std::function<DecodeFn()>;
 // Finish waits for it, so a finalised transcript is always complete
 class WhisperTranscriber : public ITranscriber {
    public:
-    WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime);
+    // device_override replaces the manifest device
+    WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
+                       std::string device_override = "");
     explicit WhisperTranscriber(DecodeFn decode);      // Tests inject the decode
     explicit WhisperTranscriber(DecodeLoader loader);  // Tests pace the load
     ~WhisperTranscriber() override;

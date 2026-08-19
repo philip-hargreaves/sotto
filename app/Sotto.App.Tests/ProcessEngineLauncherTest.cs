@@ -46,6 +46,22 @@ public class ProcessEngineLauncherTest
     }
 
     [Fact]
+    public async Task ExtraArgumentsJoinTheCommandLine()
+    {
+        // Split across base and extra; a mangled join exits at once
+        using var launcher = new ProcessEngineLauncher(
+            Path.Combine(Environment.SystemDirectory, "ping.exe"), "-n",
+            extraArguments: () => "60 127.0.0.1");
+        using var process = launcher.Launch();
+        var exited = WatchExit(process);
+
+        await Task.Delay(500);
+        Assert.False(process.HasExited);
+        process.Kill();
+        await exited.Task.WaitAsync(ExitWait);
+    }
+
+    [Fact]
     public void MissingExecutableThrows()
     {
         using var launcher = new ProcessEngineLauncher(@"C:\does\not\exist\engine.exe");

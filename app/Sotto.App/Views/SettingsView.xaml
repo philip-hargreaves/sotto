@@ -30,9 +30,18 @@
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                 Text="Replays a recorded consultation through the full pipeline, for testing and demos. Not a clinical feature."
                 TextWrapping="Wrap" />
+            <ToggleSwitch
+                Header="Low-power transcription"
+                IsOn="{x:Bind ViewModel.NpuTranscription, Mode=TwoWay}"
+                OffContent="GPU"
+                OnContent="NPU" />
             <TextBlock
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="Model tiers, privacy, devices and performance reporting land here as their features arrive."
+                Text="Runs transcription on the NPU to save battery. The engine restarts to apply; the first switch prepares the model and can take a few minutes."
+                TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="Model tiers, privacy and performance reporting land here as their features arrive."
                 TextWrapping="Wrap" />
         </StackPanel>
     </Grid>
