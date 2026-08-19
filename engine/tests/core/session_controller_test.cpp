@@ -324,6 +324,62 @@ struct RecordingTranscriber : asr::ITranscriber {
     }
 };
 
+bool WaitForFrames(FakeSessionStore& store, std::size_t n);
+
+struct GatedVad : PassthroughVad {
+    std::atomic<bool> ready{true};
+
+    bool Ready() const override {
+        return ready.load();
+    }
+};
+
+TEST(SessionController, WindowsAreIdenticalWhenTheVadArrivesLate) {
+    const auto run = [](bool vad_ready) {
+        RecordingEvents events;
+        FakeSessionStore store;
+        RecordingTranscriber transcriber;
+        GatedVad vad;
+        vad.ready = vad_ready;
+        SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio),
+                                     events, store, transcriber, vad, kTestSettle);
+        EXPECT_TRUE(controller.Start());
+        controller.Stop();
+        return transcriber.windows;
+    };
+
+    const auto ready = run(true);
+    const auto late = run(false);  // drained whole at finalise
+
+    ASSERT_FALSE(ready.empty());
+    EXPECT_EQ(ready, late) << "a deferred VAD must not change window boundaries";
+}
+
+TEST(SessionController, HopsBufferedWhileTheVadLoadsDrainMidSession) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    RecordingTranscriber transcriber;
+    GatedVad vad;
+    vad.ready = false;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    WaitForFrames(store, 200);
+    EXPECT_TRUE(transcriber.windows.empty()) << "nothing decodes before the VAD is up";
+
+    vad.ready = true;
+    WaitForFrames(store, 800);
+    controller.Stop();
+
+    std::size_t submitted = 0;
+    for (const auto& [first_frame, count] : transcriber.windows) {
+        EXPECT_EQ(first_frame, submitted) << "the backlog drains contiguously from frame zero";
+        submitted += count;
+    }
+    EXPECT_EQ(submitted, store.frames.size());
+}
+
 TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
     RecordingEvents events;
     FakeSessionStore store;

@@ -61,6 +61,11 @@ class DeferredLoad {
         return ready_.load() && error_ == nullptr;
     }
 
+    // True once the build finished, loaded or failed; never blocks
+    bool Settled() const {
+        return ready_.load();
+    }
+
    private:
     std::string name_;
     std::unique_ptr<T> built_;

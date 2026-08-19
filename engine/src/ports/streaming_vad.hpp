@@ -18,6 +18,11 @@ class IStreamingVad {
     virtual float SpeechProbability(std::span<const float> hop) = 0;
 
     virtual void Reset() = 0;
+
+    // False while a background load is pending; callers buffer, never block
+    virtual bool Ready() const {
+        return true;
+    }
 };
 
 }  // namespace sotto::audio

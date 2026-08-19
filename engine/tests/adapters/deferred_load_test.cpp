@@ -48,15 +48,21 @@ struct CountingVad : audio::IStreamingVad {
     }
 };
 
-TEST(DeferredVad, ResetWaitsForTheModel) {
+TEST(DeferredVad, NotReadyWhileLoadingAndResetNeverBlocks) {
     std::atomic<int> resets{0};
     audio::DeferredVad vad([&resets] {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         return std::make_unique<CountingVad>(resets);
     });
 
+    EXPECT_FALSE(vad.Ready());
     vad.Reset();
-    EXPECT_EQ(resets.load(), 1) << "Reset returns only once the model is up";
+    EXPECT_EQ(resets.load(), 0) << "a fresh model starts reset";
+
+    (void)vad.SpeechProbability({});  // waits for the load
+    EXPECT_TRUE(vad.Ready());
+    vad.Reset();
+    EXPECT_EQ(resets.load(), 1);
 }
 
 struct CountingDiariser : diar::IDiariser {
