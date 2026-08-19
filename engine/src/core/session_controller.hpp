@@ -111,8 +111,7 @@ class SessionController {
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(mutex_);
             running_ = false;
-            end_ = {SourceEndReason::kFailed,
-                    std::string("store refused the session: ") + e.what()};
+            end_ = {SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
             return false;
         }
         {

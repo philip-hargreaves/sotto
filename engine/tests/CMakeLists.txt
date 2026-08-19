@@ -33,6 +33,7 @@ add_executable(engine_tests
     adapters/capture_errors_test.cpp
     adapters/capture_timeline_test.cpp
     adapters/chunk_cipher_test.cpp
+    adapters/deferred_load_test.cpp
     adapters/db_test.cpp
     adapters/fbank_test.cpp
     adapters/framing_test.cpp
