@@ -14,8 +14,9 @@
 
 namespace sotto::diar {
 
-// Decodes per speculation pass; bounds a tick so a stop never waits long
-inline constexpr int kSpeculateBudget = 24;
+// Decodes per speculation pass; small so a long pass cannot stall the
+// causal stages that keep the settled frontier fresh
+inline constexpr int kSpeculateBudget = 4;
 
 // What capture accumulates for finalise to consume
 struct CaptureDiarisation {
@@ -47,11 +48,15 @@ class DiarWorker {
 
     // Resets the worker for the next session
     CaptureDiarisation Take() {
+        overlap_cache_.clear();
         return std::exchange(state_, {});
     }
 
    private:
     const std::vector<float>& EmbedSlice(std::span<const float> audio, const Region& slice);
+
+    // Provisional overlap-turn embeddings, recomputed across ticks otherwise
+    std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> overlap_cache_;
 
     audio::SileroVad& vad_;
     Segmenter& segmenter_;
