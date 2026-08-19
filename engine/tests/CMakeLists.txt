@@ -104,7 +104,8 @@ add_dependencies(gpu_tests ov_test_runtime)
 add_dependencies(models_tests ov_test_runtime)
 
 include(GoogleTest)
-gtest_discover_tests(engine_tests)
-gtest_discover_tests(capture_tests PROPERTIES LABELS microphone)
-gtest_discover_tests(gpu_tests PROPERTIES LABELS gpu)
-gtest_discover_tests(models_tests PROPERTIES LABELS models)
+# Cold CI runners can take >5 s (the default) just to start a fresh exe
+gtest_discover_tests(engine_tests DISCOVERY_TIMEOUT 60)
+gtest_discover_tests(capture_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS microphone)
+gtest_discover_tests(gpu_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS gpu)
+gtest_discover_tests(models_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS models)
