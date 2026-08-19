@@ -39,9 +39,8 @@ LoadedModel OvRuntime::Load(const ModelStore& store, std::string_view task, std:
     const auto start = std::chrono::steady_clock::now();
     // Same convention as the whisper pipeline: first launch compiles and
     // exports, every later launch imports the cached blob
-    loaded.model = core_.compile_model(
-        xml.string(), loaded.device,
-        ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
+    loaded.model = core_.compile_model(xml.string(), loaded.device,
+                                       ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
     loaded.load_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start);
     return loaded;
