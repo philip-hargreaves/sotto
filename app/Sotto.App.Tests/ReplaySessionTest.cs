@@ -61,13 +61,15 @@ public class ReplaySessionTest
             await Task.Delay(TimeSpan.FromSeconds(20));
             Assert.Equal(pidAtStart, host.EnginePid);
 
-            var noteReady = new TaskCompletionSource(
+            // A silent wav has no transcript, so the real note lane reports
+            // failure; either signal proves the pipeline answered
+            var noteDone = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             connection.NotificationReceived += (method, _) =>
             {
-                if (method == "note/ready")
+                if (method is "note/ready" or "note/failed")
                 {
-                    noteReady.TrySetResult();
+                    noteDone.TrySetResult();
                 }
             };
 
@@ -78,7 +80,7 @@ public class ReplaySessionTest
             await connection.RequestAsync("session/pause", new { paused = true }, Timeout);
             await connection.RequestAsync("session/pause", new { paused = false }, Timeout);
             await connection.RequestAsync("session/stop", null, TimeSpan.FromSeconds(60));
-            await noteReady.Task.WaitAsync(Timeout);
+            await noteDone.Task.WaitAsync(TimeSpan.FromSeconds(120));
         }
         finally
         {
@@ -123,6 +125,28 @@ public class ReplaySessionTest
             host.Start();
             await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
 
+            var noteReady = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var partials = 0;
+            connection.NotificationReceived += (method, parameters) =>
+            {
+                switch (method)
+                {
+                    case "note/partial":
+                        partials++;
+                        break;
+                    case "note/ready":
+                        noteReady.TrySetResult(parameters.GetProperty("text").GetString() ?? "");
+                        break;
+                    case "note/failed":
+                        noteReady.TrySetException(new InvalidOperationException(
+                            parameters.GetProperty("detail").GetString()));
+                        break;
+                    default:
+                        break;
+                }
+            };
+
             await connection.RequestAsync(
                 "session/start",
                 new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
@@ -136,6 +160,13 @@ public class ReplaySessionTest
             var labelled = transcript.GetProperty("turns").EnumerateArray()
                 .Count(t => t.GetProperty("speaker").GetString() is "doctor" or "patient");
             Assert.True(labelled > 5, $"expected a labelled transcript, got {labelled} labelled turns");
+
+            // The real note follows, streamed then stored
+            var note = await noteReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
+            Assert.False(string.IsNullOrWhiteSpace(note));
+            Assert.True(partials > 3, $"the note must stream, saw {partials} partials");
+            var stored = await connection.RequestAsync("session/note", new { id }, Timeout);
+            Assert.Equal(note, stored.GetProperty("text").GetString());
         }
         finally
         {

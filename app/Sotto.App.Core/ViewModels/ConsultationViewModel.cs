@@ -211,10 +211,29 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
+            // The note pane shows the note being written, then the sealed text
+            case "note/partial" when State == SessionState.Finalising
+                && parameters.ValueKind == JsonValueKind.Object:
+                Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";
+                break;
             case "note/ready" when State == SessionState.Finalising:
+                if (parameters.ValueKind == JsonValueKind.Object
+                    && parameters.TryGetProperty("text", out var noteText))
+                {
+                    Note.ClinicalNoteText = noteText.GetString() ?? "";
+                }
+
                 Note.Apply(NotePipelineEvent.NoteReady);
                 State = SessionState.Review;
                 Status.Append("clinical note ready");
+                break;
+            // The transcript is still usable, so review proceeds without a note
+            case "note/failed" when State == SessionState.Finalising:
+                Note.Apply(NotePipelineEvent.NoteFailed);
+                State = SessionState.Review;
+                Status.Append(parameters.ValueKind == JsonValueKind.Object
+                    ? $"clinical note failed: {parameters.GetProperty("detail").GetString()}"
+                    : "clinical note failed");
                 break;
             case "patient/ready":
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
