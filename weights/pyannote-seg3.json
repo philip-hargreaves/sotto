@@ -1,0 +1,34 @@
+{
+  "id": "pyannote-seg3",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/pyannote-seg3",
+  "files": {
+    "model.onnx": "5ddebfc5885930ad9b92c39d903e89c5170c9fc47533d885f416b1d360fa48dc"
+  },
+  "shards": {
+    "model.onnx": [
+      {
+        "name": "pyannote-seg3--model.onnx",
+        "size": 5916314,
+        "sha256": "5ddebfc5885930ad9b92c39d903e89c5170c9fc47533d885f416b1d360fa48dc"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "pyannote-seg3",
+    "task": "segmentation",
+    "tier": "default",
+    "licence": "MIT",
+    "runtime": {
+      "device": "CPU"
+    },
+    "source": {
+      "path": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\pyannote-seg3.onnx"
+    },
+    "files": {
+      "model.onnx": "5ddebfc5885930ad9b92c39d903e89c5170c9fc47533d885f416b1d360fa48dc"
+    }
+  },
+  "totalBytes": 5916314
+}

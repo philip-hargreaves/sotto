@@ -18,6 +18,19 @@ dotnet build sotto.slnx
 Configures and builds the engine, then the shell. Use the `release` presets for an optimised
 engine build.
 
+## Models
+
+Weights are not in git; they ship as GitHub Release assets described by the `weights/`
+registry (per-file SHA-256, sharded at 1.9 GiB). One command downloads, verifies, and
+installs them into `models/` and `demo/`:
+
+```powershell
+cmake --build --preset dev --target fetch-models
+```
+
+Interrupted downloads resume on re-run; a hash mismatch is fatal, never installed. Release
+packages carry the same tool as `get-models.cmd` - double-click it once beside the app.
+
 ## Tests
 
 ```powershell

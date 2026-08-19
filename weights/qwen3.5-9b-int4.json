@@ -1,0 +1,143 @@
+{
+  "id": "qwen3.5-9b-int4",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/qwen3.5-9b-int4",
+  "files": {
+    "chat_template.jinja": "a92e1dd97cb1cb175c9b70c0828e146bea4371c2643319b661b777e89811972e",
+    "config.json": "bc95267f40ebbb155e953086f32333d576bdf11066510b4045380f72279ae5ae",
+    "generation_config.json": "86f2223f5c89e1852550f70224eda5a32c5742ce8e42aa078f664b78536aee9b",
+    "openvino_detokenizer.bin": "48fc2c6a7a1056994982911eb9695826acef933c3d742364c56d16317a0b2a79",
+    "openvino_detokenizer.xml": "11a198490b62e03dc3a7fdc90bb68cc1fdde63d38cce78dcd5ae52b3b32d6579",
+    "openvino_model.bin": "920f6c12000ba2ab87e9d44a1d542627cd81cd86464593918a886ced7c4acca8",
+    "openvino_model.xml": "eb2c820bf04ac402b5523e8a5ca124a1a303121aa25880a9236a097326706adb",
+    "openvino_tokenizer.bin": "ea3fcce2251902efffbc774cbc8ffff69e981412347a1e510e430c6557a63701",
+    "openvino_tokenizer.xml": "f948b9f654820f391856fd7e7050db6b1bf709132d6f3de76c6f8bb27efc4b42",
+    "preprocessor_config.json": "3d649fc8858ef4769f2dcdd2b554938bee1ebbaa6761e7d76ec16d5c7c728813",
+    "tokenizer.json": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
+    "tokenizer_config.json": "7265308b78a3cd7071a7e6a69e49def4e54a01b9f9d0872885de7b8ef1ad073e"
+  },
+  "shards": {
+    "chat_template.jinja": [
+      {
+        "name": "qwen3.5-9b-int4--chat_template.jinja",
+        "size": 7909,
+        "sha256": "a92e1dd97cb1cb175c9b70c0828e146bea4371c2643319b661b777e89811972e"
+      }
+    ],
+    "config.json": [
+      {
+        "name": "qwen3.5-9b-int4--config.json",
+        "size": 2062,
+        "sha256": "bc95267f40ebbb155e953086f32333d576bdf11066510b4045380f72279ae5ae"
+      }
+    ],
+    "generation_config.json": [
+      {
+        "name": "qwen3.5-9b-int4--generation_config.json",
+        "size": 121,
+        "sha256": "86f2223f5c89e1852550f70224eda5a32c5742ce8e42aa078f664b78536aee9b"
+      }
+    ],
+    "openvino_detokenizer.bin": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_detokenizer.bin",
+        "size": 3828184,
+        "sha256": "48fc2c6a7a1056994982911eb9695826acef933c3d742364c56d16317a0b2a79"
+      }
+    ],
+    "openvino_detokenizer.xml": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_detokenizer.xml",
+        "size": 15814,
+        "sha256": "11a198490b62e03dc3a7fdc90bb68cc1fdde63d38cce78dcd5ae52b3b32d6579"
+      }
+    ],
+    "openvino_model.bin": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_model.bin.part01",
+        "size": 2040109465,
+        "sha256": "4533848f134c9b5345e6a5ee9dfd3e3358dfef41b94718efa506e5216c072ba0"
+      },
+      {
+        "name": "qwen3.5-9b-int4--openvino_model.bin.part02",
+        "size": 2040109465,
+        "sha256": "6a1084415948825b6c0c4386824803774a6da28776efb380997e4b2799937ab8"
+      },
+      {
+        "name": "qwen3.5-9b-int4--openvino_model.bin.part03",
+        "size": 1551815376,
+        "sha256": "fed3ad74e488861d36df286e4f793ac2ca00d1dba1d6d612a97435c5509e86c1"
+      }
+    ],
+    "openvino_model.xml": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_model.xml",
+        "size": 5259799,
+        "sha256": "eb2c820bf04ac402b5523e8a5ca124a1a303121aa25880a9236a097326706adb"
+      }
+    ],
+    "openvino_tokenizer.bin": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_tokenizer.bin",
+        "size": 9631154,
+        "sha256": "ea3fcce2251902efffbc774cbc8ffff69e981412347a1e510e430c6557a63701"
+      }
+    ],
+    "openvino_tokenizer.xml": [
+      {
+        "name": "qwen3.5-9b-int4--openvino_tokenizer.xml",
+        "size": 33359,
+        "sha256": "f948b9f654820f391856fd7e7050db6b1bf709132d6f3de76c6f8bb27efc4b42"
+      }
+    ],
+    "preprocessor_config.json": [
+      {
+        "name": "qwen3.5-9b-int4--preprocessor_config.json",
+        "size": 520,
+        "sha256": "3d649fc8858ef4769f2dcdd2b554938bee1ebbaa6761e7d76ec16d5c7c728813"
+      }
+    ],
+    "tokenizer.json": [
+      {
+        "name": "qwen3.5-9b-int4--tokenizer.json",
+        "size": 19989343,
+        "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4"
+      }
+    ],
+    "tokenizer_config.json": [
+      {
+        "name": "qwen3.5-9b-int4--tokenizer_config.json",
+        "size": 1129,
+        "sha256": "7265308b78a3cd7071a7e6a69e49def4e54a01b9f9d0872885de7b8ef1ad073e"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "qwen3.5-9b-int4",
+    "task": "note",
+    "tier": "default",
+    "licence": "Apache-2.0",
+    "runtime": {
+      "device": "GPU"
+    },
+    "source": {
+      "path": "C:\\dev\\intelliscribe\\ml-models\\summariser\\qwen3.5-9b-int4"
+    },
+    "files": {
+      "chat_template.jinja": "a92e1dd97cb1cb175c9b70c0828e146bea4371c2643319b661b777e89811972e",
+      "config.json": "bc95267f40ebbb155e953086f32333d576bdf11066510b4045380f72279ae5ae",
+      "generation_config.json": "86f2223f5c89e1852550f70224eda5a32c5742ce8e42aa078f664b78536aee9b",
+      "openvino_detokenizer.bin": "48fc2c6a7a1056994982911eb9695826acef933c3d742364c56d16317a0b2a79",
+      "openvino_detokenizer.xml": "11a198490b62e03dc3a7fdc90bb68cc1fdde63d38cce78dcd5ae52b3b32d6579",
+      "openvino_model.bin": "920f6c12000ba2ab87e9d44a1d542627cd81cd86464593918a886ced7c4acca8",
+      "openvino_model.xml": "eb2c820bf04ac402b5523e8a5ca124a1a303121aa25880a9236a097326706adb",
+      "openvino_tokenizer.bin": "ea3fcce2251902efffbc774cbc8ffff69e981412347a1e510e430c6557a63701",
+      "openvino_tokenizer.xml": "f948b9f654820f391856fd7e7050db6b1bf709132d6f3de76c6f8bb27efc4b42",
+      "preprocessor_config.json": "3d649fc8858ef4769f2dcdd2b554938bee1ebbaa6761e7d76ec16d5c7c728813",
+      "tokenizer_config.json": "7265308b78a3cd7071a7e6a69e49def4e54a01b9f9d0872885de7b8ef1ad073e",
+      "tokenizer.json": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4"
+    }
+  },
+  "totalBytes": 5670803700
+}

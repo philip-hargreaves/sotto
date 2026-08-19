@@ -1,0 +1,187 @@
+{
+  "id": "whisper-turbo-int8",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/whisper-turbo-int8",
+  "files": {
+    "added_tokens.json": "baa0435347ab385da4cc489ddf70daecd4d6832dc94b73e457dc83107641afd9",
+    "config.json": "a408b99fdb569240d07cf83ad9c8ffc319c7695e49730ce3d01cb07492fcb290",
+    "generation_config.json": "5f88c1e1a4104cadea086dec28c122b50776d26f59734a3fc67b13554cefbf19",
+    "merges.txt": "0b4a5df397fd681b15714777a7ce4af868bac7591eccde0f124b628dce9fba64",
+    "normalizer.json": "6c40cc36b4bb9c5aa8be0ff9023ea4e78a3ab718b3490a1d9cd3cb7ec56f130f",
+    "openvino_decoder_model.bin": "287efca08f7d55a1a5b0eff907ff3d957aeb5dd6d91b9613f303b392bba78b97",
+    "openvino_decoder_model.xml": "7c05e78d94f516be36cab5a3614700858a0d6e5ad86a6f1114fe1e36d64bc320",
+    "openvino_detokenizer.bin": "f2b3c47825a1089525ff65c0c8e49271e1dee69a401a04fc827ac2de5b7766e4",
+    "openvino_detokenizer.xml": "0568f7f50b6482092f6fae1c232f9db34f97a0d4614d71aecac36cef2b28d1e9",
+    "openvino_encoder_model.bin": "28cd74745fffa45a3f675ac81946a83d056234edd8f4acbd7b87bb310d23f66c",
+    "openvino_encoder_model.xml": "0c7468c6f204754451d1e670e7cacab5b5271cfd45aa466e8d55b90e1b47df4e",
+    "openvino_tokenizer.bin": "2b39f55ee479e6dfcd0a2896d0ff386940cdc5dee3fd3ce16e893b2098d32b16",
+    "openvino_tokenizer.xml": "6d8743e98c0e875c0c5bbf7d9d3c79358b042c20d0257f759dffee0de76cc3d7",
+    "preprocessor_config.json": "7115dbee2f5e34ad0507854a7a77f9116e6e2620c0efd226914bb63cc2055b50",
+    "special_tokens_map.json": "384dd595fb17ba285f1a3fc559f6014fcb7758de12b4884fc954caa69e1a4f2f",
+    "tokenizer.json": "5c1bf30c9e716e1477bedef846b01be0013daecb89e9e3ef7ab89b23c178df1b",
+    "tokenizer_config.json": "f09d324ac80733ee587337e270a5af05e86517e83cc1f8dd0fb8057a699e5cbd",
+    "vocab.json": "c7f182ff8cfb3dda449c79d5820dbef5ea7cef9f33d2d64cbf1656ee7eaad5e8"
+  },
+  "shards": {
+    "added_tokens.json": [
+      {
+        "name": "whisper-turbo-int8--added_tokens.json",
+        "size": 36259,
+        "sha256": "baa0435347ab385da4cc489ddf70daecd4d6832dc94b73e457dc83107641afd9"
+      }
+    ],
+    "config.json": [
+      {
+        "name": "whisper-turbo-int8--config.json",
+        "size": 1247,
+        "sha256": "a408b99fdb569240d07cf83ad9c8ffc319c7695e49730ce3d01cb07492fcb290"
+      }
+    ],
+    "generation_config.json": [
+      {
+        "name": "whisper-turbo-int8--generation_config.json",
+        "size": 4016,
+        "sha256": "5f88c1e1a4104cadea086dec28c122b50776d26f59734a3fc67b13554cefbf19"
+      }
+    ],
+    "merges.txt": [
+      {
+        "name": "whisper-turbo-int8--merges.txt",
+        "size": 543870,
+        "sha256": "0b4a5df397fd681b15714777a7ce4af868bac7591eccde0f124b628dce9fba64"
+      }
+    ],
+    "normalizer.json": [
+      {
+        "name": "whisper-turbo-int8--normalizer.json",
+        "size": 54408,
+        "sha256": "6c40cc36b4bb9c5aa8be0ff9023ea4e78a3ab718b3490a1d9cd3cb7ec56f130f"
+      }
+    ],
+    "openvino_decoder_model.bin": [
+      {
+        "name": "whisper-turbo-int8--openvino_decoder_model.bin",
+        "size": 172534710,
+        "sha256": "287efca08f7d55a1a5b0eff907ff3d957aeb5dd6d91b9613f303b392bba78b97"
+      }
+    ],
+    "openvino_decoder_model.xml": [
+      {
+        "name": "whisper-turbo-int8--openvino_decoder_model.xml",
+        "size": 415636,
+        "sha256": "7c05e78d94f516be36cab5a3614700858a0d6e5ad86a6f1114fe1e36d64bc320"
+      }
+    ],
+    "openvino_detokenizer.bin": [
+      {
+        "name": "whisper-turbo-int8--openvino_detokenizer.bin",
+        "size": 736198,
+        "sha256": "f2b3c47825a1089525ff65c0c8e49271e1dee69a401a04fc827ac2de5b7766e4"
+      }
+    ],
+    "openvino_detokenizer.xml": [
+      {
+        "name": "whisper-turbo-int8--openvino_detokenizer.xml",
+        "size": 9970,
+        "sha256": "0568f7f50b6482092f6fae1c232f9db34f97a0d4614d71aecac36cef2b28d1e9"
+      }
+    ],
+    "openvino_encoder_model.bin": [
+      {
+        "name": "whisper-turbo-int8--openvino_encoder_model.bin",
+        "size": 645332580,
+        "sha256": "28cd74745fffa45a3f675ac81946a83d056234edd8f4acbd7b87bb310d23f66c"
+      }
+    ],
+    "openvino_encoder_model.xml": [
+      {
+        "name": "whisper-turbo-int8--openvino_encoder_model.xml",
+        "size": 1515666,
+        "sha256": "0c7468c6f204754451d1e670e7cacab5b5271cfd45aa466e8d55b90e1b47df4e"
+      }
+    ],
+    "openvino_tokenizer.bin": [
+      {
+        "name": "whisper-turbo-int8--openvino_tokenizer.bin",
+        "size": 1902189,
+        "sha256": "2b39f55ee479e6dfcd0a2896d0ff386940cdc5dee3fd3ce16e893b2098d32b16"
+      }
+    ],
+    "openvino_tokenizer.xml": [
+      {
+        "name": "whisper-turbo-int8--openvino_tokenizer.xml",
+        "size": 27830,
+        "sha256": "6d8743e98c0e875c0c5bbf7d9d3c79358b042c20d0257f759dffee0de76cc3d7"
+      }
+    ],
+    "preprocessor_config.json": [
+      {
+        "name": "whisper-turbo-int8--preprocessor_config.json",
+        "size": 372,
+        "sha256": "7115dbee2f5e34ad0507854a7a77f9116e6e2620c0efd226914bb63cc2055b50"
+      }
+    ],
+    "special_tokens_map.json": [
+      {
+        "name": "whisper-turbo-int8--special_tokens_map.json",
+        "size": 2325,
+        "sha256": "384dd595fb17ba285f1a3fc559f6014fcb7758de12b4884fc954caa69e1a4f2f"
+      }
+    ],
+    "tokenizer.json": [
+      {
+        "name": "whisper-turbo-int8--tokenizer.json",
+        "size": 3930645,
+        "sha256": "5c1bf30c9e716e1477bedef846b01be0013daecb89e9e3ef7ab89b23c178df1b"
+      }
+    ],
+    "tokenizer_config.json": [
+      {
+        "name": "whisper-turbo-int8--tokenizer_config.json",
+        "size": 295870,
+        "sha256": "f09d324ac80733ee587337e270a5af05e86517e83cc1f8dd0fb8057a699e5cbd"
+      }
+    ],
+    "vocab.json": [
+      {
+        "name": "whisper-turbo-int8--vocab.json",
+        "size": 1086817,
+        "sha256": "c7f182ff8cfb3dda449c79d5820dbef5ea7cef9f33d2d64cbf1656ee7eaad5e8"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "whisper-turbo-int8",
+    "task": "asr",
+    "tier": "default",
+    "licence": "MIT",
+    "runtime": {
+      "device": "GPU"
+    },
+    "source": {
+      "path": "C:\\dev\\intelliscribe\\ml-models\\asr\\whisper-large-v3-turbo-int8"
+    },
+    "files": {
+      "added_tokens.json": "baa0435347ab385da4cc489ddf70daecd4d6832dc94b73e457dc83107641afd9",
+      "config.json": "a408b99fdb569240d07cf83ad9c8ffc319c7695e49730ce3d01cb07492fcb290",
+      "generation_config.json": "5f88c1e1a4104cadea086dec28c122b50776d26f59734a3fc67b13554cefbf19",
+      "merges.txt": "0b4a5df397fd681b15714777a7ce4af868bac7591eccde0f124b628dce9fba64",
+      "normalizer.json": "6c40cc36b4bb9c5aa8be0ff9023ea4e78a3ab718b3490a1d9cd3cb7ec56f130f",
+      "openvino_decoder_model.bin": "287efca08f7d55a1a5b0eff907ff3d957aeb5dd6d91b9613f303b392bba78b97",
+      "openvino_decoder_model.xml": "7c05e78d94f516be36cab5a3614700858a0d6e5ad86a6f1114fe1e36d64bc320",
+      "openvino_detokenizer.bin": "f2b3c47825a1089525ff65c0c8e49271e1dee69a401a04fc827ac2de5b7766e4",
+      "openvino_detokenizer.xml": "0568f7f50b6482092f6fae1c232f9db34f97a0d4614d71aecac36cef2b28d1e9",
+      "openvino_encoder_model.bin": "28cd74745fffa45a3f675ac81946a83d056234edd8f4acbd7b87bb310d23f66c",
+      "openvino_encoder_model.xml": "0c7468c6f204754451d1e670e7cacab5b5271cfd45aa466e8d55b90e1b47df4e",
+      "openvino_tokenizer.bin": "2b39f55ee479e6dfcd0a2896d0ff386940cdc5dee3fd3ce16e893b2098d32b16",
+      "openvino_tokenizer.xml": "6d8743e98c0e875c0c5bbf7d9d3c79358b042c20d0257f759dffee0de76cc3d7",
+      "preprocessor_config.json": "7115dbee2f5e34ad0507854a7a77f9116e6e2620c0efd226914bb63cc2055b50",
+      "special_tokens_map.json": "384dd595fb17ba285f1a3fc559f6014fcb7758de12b4884fc954caa69e1a4f2f",
+      "tokenizer_config.json": "f09d324ac80733ee587337e270a5af05e86517e83cc1f8dd0fb8057a699e5cbd",
+      "tokenizer.json": "5c1bf30c9e716e1477bedef846b01be0013daecb89e9e3ef7ab89b23c178df1b",
+      "vocab.json": "c7f182ff8cfb3dda449c79d5820dbef5ea7cef9f33d2d64cbf1656ee7eaad5e8"
+    }
+  },
+  "totalBytes": 828430608
+}
