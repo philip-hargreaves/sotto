@@ -138,6 +138,20 @@ TEST(Handlers, SessionListAndTranscriptRoundTrip) {
     EXPECT_EQ(built, LoadFixture("session-transcript.json"));
 }
 
+TEST(Handlers, SessionNoteReturnsTheStoredText) {
+    SessionStoreFixture fixture;
+    const auto id = fixture.store->Begin({16000, "", ""});
+    fixture.store->Finalise(id);
+    fixture.store->SaveNote(id, "The patient presents with a swollen left elbow.");
+
+    const auto outcome = HandleSessionNote(*fixture.store, json{{"id", id}});
+    ASSERT_TRUE(std::holds_alternative<json>(outcome));
+    EXPECT_EQ(std::get<json>(outcome)["text"], "The patient presents with a swollen left elbow.");
+
+    const auto missing = HandleSessionNote(*fixture.store, json{{"id", "nope"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(missing));
+}
+
 TEST(Handlers, SessionDeleteRemovesAndUnknownIdsError) {
     SessionStoreFixture fixture;
     const auto id = fixture.store->Begin({16000, "", ""});

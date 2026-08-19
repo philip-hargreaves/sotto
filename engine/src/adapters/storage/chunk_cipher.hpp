@@ -8,10 +8,11 @@
 
 namespace sotto::store {
 
-// Keeps each stream's IVs disjoint; audio and turns both count seq from zero
+// Keeps each stream's IVs disjoint; every domain counts seq from zero
 enum class Domain : std::uint8_t {
     kAudio = 0,
     kTurns = 1,
+    kNote = 2,
 };
 
 // AES-256-GCM under a per-session key. The IV is domain plus sequence,

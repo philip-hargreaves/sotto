@@ -98,6 +98,7 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
                   "  first_frame  INTEGER NOT NULL,"
                   "  frame_count  INTEGER NOT NULL,"
                   "  payload      BLOB NOT NULL);"
+                  "CREATE TABLE note(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL);"
                   "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     {
         Db::Transaction txn(*session.db);
@@ -276,6 +277,52 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
                             select.ColumnText(3), static_cast<int>(select.ColumnInt64(4))});
     }
     return sessions;
+}
+
+void SqliteSessionStore::SaveNote(const SessionId& id, const std::string& text) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RequireNotRecording(id);
+
+    const std::filesystem::path base = root_ / "sessions" / id;
+    if (!std::filesystem::exists(base.string() + ".db")) {
+        throw std::runtime_error("no session " + id);
+    }
+    std::ifstream key_file(base.string() + ".key", std::ios::binary);
+    const std::vector<std::uint8_t> wrapped((std::istreambuf_iterator<char>(key_file)),
+                                            std::istreambuf_iterator<char>());
+    const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
+    const std::vector<std::uint8_t> sealed = cipher.Seal(
+        Domain::kNote, id, 0, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+
+    Db db(base.string() + ".db");
+    db.Exec("CREATE TABLE IF NOT EXISTS note(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL)");
+    Db::Stmt insert = db.Prepare("INSERT OR REPLACE INTO note(seq, payload) VALUES(0, ?)");
+    insert.BindBlob(1, sealed);
+    insert.Step();
+}
+
+std::string SqliteSessionStore::ReadNote(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RequireNotRecording(id);
+
+    const std::filesystem::path base = root_ / "sessions" / id;
+    if (!std::filesystem::exists(base.string() + ".db")) {
+        throw std::runtime_error("no session " + id);
+    }
+    Db db(base.string() + ".db");
+    if (db.QueryInt64("SELECT count(*) FROM sqlite_master WHERE name = 'note'") == 0) {
+        return {};
+    }
+    Db::Stmt select = db.Prepare("SELECT payload FROM note WHERE seq = 0");
+    if (!select.Step()) {
+        return {};
+    }
+    std::ifstream key_file(base.string() + ".key", std::ios::binary);
+    const std::vector<std::uint8_t> wrapped((std::istreambuf_iterator<char>(key_file)),
+                                            std::istreambuf_iterator<char>());
+    const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
+    const auto plain = cipher.Open(Domain::kNote, id, 0, select.ColumnBlob(0));
+    return {plain.begin(), plain.end()};
 }
 
 std::vector<asr::Turn> SqliteSessionStore::ReadTurns(const SessionId& id) {

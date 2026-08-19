@@ -34,6 +34,8 @@ class SqliteSessionStore : public ISessionStore {
     void Abandon(const SessionId& id) override;
     std::vector<RecoverableSession> ScanRecoverable() override;
     std::vector<SessionSummary> ListSessions() override;
+    void SaveNote(const SessionId& id, const std::string& text) override;
+    std::string ReadNote(const SessionId& id) override;
     std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
     void Delete(const SessionId& id) override;
 

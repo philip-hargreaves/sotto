@@ -73,6 +73,17 @@ std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& s
     }
 }
 
+std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& sessions,
+                                            const json& params) {
+    const auto id = IdFrom(params);
+    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+    try {
+        return json{{"text", sessions.ReadNote(std::get<std::string>(id))}};
+    } catch (const std::exception& e) {
+        return Error{kSessionError, "Session error", json(e.what())};
+    }
+}
+
 std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessions,
                                               const json& params) {
     const auto id = IdFrom(params);
@@ -95,6 +106,9 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                           [&sessions](const json&) { return HandleSessionList(sessions); });
     server.RegisterMethod("session/transcript", [&sessions](const json& params) {
         return HandleSessionTranscript(sessions, params);
+    });
+    server.RegisterMethod("session/note", [&sessions](const json& params) {
+        return HandleSessionNote(sessions, params);
     });
     server.RegisterMethod("session/delete", [&sessions](const json& params) {
         return HandleSessionDelete(sessions, params);
@@ -129,10 +143,13 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.Cancel();
         return json::object();
     });
-    // Stub pipeline:
+    // The note lane announces itself when a writer is wired; without one the
+    // stub keeps today's contract. patient/ready is still a stub
     server.RegisterMethod("session/stop", [&server, &controller](const json&) {
         controller.Stop();
-        server.QueueNotification("note/ready", json::object());
+        if (!controller.HasNoteWriter()) {
+            server.QueueNotification("note/ready", json::object());
+        }
         server.QueueNotification("patient/ready", json::object());
         return json{{"sessionId", controller.LastFinalised()}};
     });
