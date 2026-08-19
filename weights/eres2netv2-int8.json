@@ -1,0 +1,43 @@
+{
+  "id": "eres2netv2-int8",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/eres2netv2-int8",
+  "files": {
+    "model.bin": "3c7da7d312da2ba295324309d95b1624bb21e42e105034dc3afa582f142742da",
+    "model.xml": "84b4454ca8eab5274f4ab04b73ed9d61fea63d33327f481cf5a981d77e5b7361"
+  },
+  "shards": {
+    "model.bin": [
+      {
+        "name": "eres2netv2-int8--model.bin",
+        "size": 17974252,
+        "sha256": "3c7da7d312da2ba295324309d95b1624bb21e42e105034dc3afa582f142742da"
+      }
+    ],
+    "model.xml": [
+      {
+        "name": "eres2netv2-int8--model.xml",
+        "size": 1306508,
+        "sha256": "84b4454ca8eab5274f4ab04b73ed9d61fea63d33327f481cf5a981d77e5b7361"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "eres2netv2-int8",
+    "task": "diarisation",
+    "tier": "default",
+    "licence": "Apache-2.0",
+    "runtime": {
+      "device": "CPU"
+    },
+    "source": {
+      "path": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\eres2netv2-int8.xml/.bin"
+    },
+    "files": {
+      "model.bin": "3c7da7d312da2ba295324309d95b1624bb21e42e105034dc3afa582f142742da",
+      "model.xml": "84b4454ca8eab5274f4ab04b73ed9d61fea63d33327f481cf5a981d77e5b7361"
+    }
+  },
+  "totalBytes": 19280760
+}

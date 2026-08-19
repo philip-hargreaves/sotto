@@ -1,0 +1,34 @@
+{
+  "id": "silero-vad",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/silero-vad",
+  "files": {
+    "model.onnx": "7671cd04b004e9076da0d4a7b1a5aec36adf161c39230c1cb94a4fd5db6bbd28"
+  },
+  "shards": {
+    "model.onnx": [
+      {
+        "name": "silero-vad--model.onnx",
+        "size": 2845718,
+        "sha256": "7671cd04b004e9076da0d4a7b1a5aec36adf161c39230c1cb94a4fd5db6bbd28"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "silero-vad",
+    "task": "vad",
+    "tier": "default",
+    "licence": "MIT",
+    "runtime": {
+      "device": "CPU"
+    },
+    "source": {
+      "path": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\silero_vad_op18_ifless.onnx"
+    },
+    "files": {
+      "model.onnx": "7671cd04b004e9076da0d4a7b1a5aec36adf161c39230c1cb94a4fd5db6bbd28"
+    }
+  },
+  "totalBytes": 2845718
+}

@@ -172,6 +172,24 @@ public class FetchTest : IDisposable
     }
 
     [Fact]
+    public async Task AStagedFileResumesFromTheShardBoundary()
+    {
+        using var server = new AssetServer(_upload);
+        var pack = PackTiny(server.BaseUrl);
+
+        // A previous run staged the first shard whole, then died
+        var stage = Path.Combine(_store, ".fetch", "tiny", "stage");
+        Directory.CreateDirectory(stage);
+        var first = pack.Shards["weights.bin"][0];
+        File.WriteAllBytes(Path.Combine(stage, "weights.bin"),
+            File.ReadAllBytes(Path.Combine(_upload, first.Name)));
+
+        Assert.True(await NewFetcher().InstallAsync(pack, _store));
+        AssertInstalled();
+        Assert.Equal(3, server.Requests);  // two remaining shards + config, never the first
+    }
+
+    [Fact]
     public async Task ACorruptAssetFailsAndInstallsNothing()
     {
         using var server = new AssetServer(_upload);

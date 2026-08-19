@@ -8,12 +8,12 @@ if (args.Length >= 3 && args[0] == "fetch")
 {
     var packs = Directory.EnumerateFiles(args[1], "*.json").Select(Pack.Load).ToList();
     var total = packs.Sum(p => p.TotalBytes);
+    var needed = total + Packer.ShardBytes;  // one shard of transient on top
     var free = new DriveInfo(Path.GetFullPath(args[2])).AvailableFreeSpace;
-    // Shards and the staged copy coexist briefly
-    if (free < 2 * total)
+    if (free < needed)
     {
         Console.Error.WriteLine(
-            $"not enough disk: {free / (1 << 30)} GiB free, {2 * total / (1 << 30)} GiB needed");
+            $"not enough disk: {free / (1 << 30)} GiB free, {needed / (1 << 30)} GiB needed");
         return 1;
     }
 

@@ -25,22 +25,11 @@ public sealed class Fetcher(HttpClient http, Action<string> log)
 
         var work = Path.Combine(root, ".fetch", pack.Id);
         var stage = Path.Combine(work, "stage");
-        Directory.CreateDirectory(work);
-        if (Directory.Exists(stage))
-        {
-            Directory.Delete(stage, recursive: true);
-        }
-
         Directory.CreateDirectory(stage);
 
         foreach (var (file, shards) in pack.Shards)
         {
-            foreach (var shard in shards)
-            {
-                await DownloadShardAsync(pack, shard, work, ct).ConfigureAwait(false);
-            }
-
-            Reassemble(pack, file, shards, work, stage);
+            await AssembleFileAsync(pack, file, shards, work, stage, ct).ConfigureAwait(false);
         }
 
         if (pack.Manifest is not null)
@@ -90,7 +79,7 @@ public sealed class Fetcher(HttpClient http, Action<string> log)
         return true;
     }
 
-    private async Task DownloadShardAsync(Pack pack, Shard shard, string work,
+    private async Task<string> DownloadShardAsync(Pack pack, Shard shard, string work,
         CancellationToken ct)
     {
         var path = Path.Combine(work, shard.Name);
@@ -114,7 +103,7 @@ public sealed class Fetcher(HttpClient http, Action<string> log)
 
                 if (Hashing.Sha256File(path) == shard.Sha256)
                 {
-                    return;
+                    return path;
                 }
 
                 // A corrupt shard cannot be resumed into a good one
@@ -168,23 +157,45 @@ public sealed class Fetcher(HttpClient http, Action<string> log)
         }
     }
 
-    private static void Reassemble(Pack pack, string file, List<Shard> shards, string work,
-        string stage)
+    // Each shard is appended to the staged file and deleted, so the peak
+    // transient cost is one shard, not a second copy of the model. The
+    // staged length always sits on a shard boundary, which is what makes
+    // an interrupted run resumable.
+    private async Task AssembleFileAsync(Pack pack, string file, List<Shard> shards, string work,
+        string stage, CancellationToken ct)
     {
         var path = Path.Combine(stage, file);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using (var output = File.Create(path))
+        var staged = File.Exists(path) ? new FileInfo(path).Length : 0;
+        var consumed = 0;
+        long boundary = 0;
+        while (consumed < shards.Count && boundary + shards[consumed].Size <= staged)
         {
-            foreach (var shard in shards)
+            boundary += shards[consumed].Size;
+            consumed++;
+        }
+
+        using (var output = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write))
+        {
+            output.SetLength(boundary);
+            output.Seek(boundary, SeekOrigin.Begin);
+            for (var i = consumed; i < shards.Count; i++)
             {
-                using var input = File.OpenRead(Path.Combine(work, shard.Name));
-                input.CopyTo(output);
+                var shardPath =
+                    await DownloadShardAsync(pack, shards[i], work, ct).ConfigureAwait(false);
+                using (var input = File.OpenRead(shardPath))
+                {
+                    await input.CopyToAsync(output, ct).ConfigureAwait(false);
+                }
+
+                await output.FlushAsync(ct).ConfigureAwait(false);
+                File.Delete(shardPath);
             }
         }
 
-        var actual = Hashing.Sha256File(path);
-        if (actual != pack.Files[file])
+        if (Hashing.Sha256File(path) != pack.Files[file])
         {
+            File.Delete(path);
             throw new InvalidDataException($"{file}: reassembled hash mismatch");
         }
     }
