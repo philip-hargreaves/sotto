@@ -24,6 +24,12 @@
     <Project Path="app/Sotto.Contract.Tests/Sotto.Contract.Tests.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
+    <Project Path="app/Sotto.Fetch/Sotto.Fetch.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Sotto.Fetch.Tests/Sotto.Fetch.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/engine/">
     <File Path="engine/CMakeLists.txt" />
