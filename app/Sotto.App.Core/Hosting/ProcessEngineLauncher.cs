@@ -11,15 +11,18 @@ namespace Sotto.App.Core.Hosting;
 /// Engine stderr goes to a log file so failures are diagnosable.
 /// </summary>
 public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
-    string? stderrPath = null)
+    string? stderrPath = null, Func<string>? extraArguments = null)
     : IEngineLauncher, IDisposable
 {
     private readonly JobObject _job = new();
 
     public IEngineProcess Launch()
     {
+        // Extra arguments are read per launch, so a restart picks up changes
+        var extra = extraArguments?.Invoke() ?? "";
         // CreateProcess may write into the command line, so it needs a buffer
-        Span<char> commandLine = ($"\"{exePath}\" {arguments}".TrimEnd() + '\0').ToCharArray();
+        Span<char> commandLine =
+            ($"\"{exePath}\" {arguments} {extra}".TrimEnd() + '\0').ToCharArray();
 
         using var stderr = OpenStderr();
         unsafe

@@ -36,11 +36,13 @@ public partial class App : Application
         services.AddSingleton<IUiDispatcher, UiDispatcher>();
 
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IEngineLauncher>(_ => new ProcessEngineLauncher(
+        services.AddSingleton<IEngineLauncher>(sp => new ProcessEngineLauncher(
             Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe"),
             stderrPath: Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "sotto", "engine.log")));
+                "sotto", "engine.log"),
+            extraArguments: () => sp.GetRequiredService<AppPreferences>().NpuTranscription
+                ? "--asr-device NPU" : ""));
         // Identity-free path: unpackaged runs have no ApplicationData
         var localState = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
