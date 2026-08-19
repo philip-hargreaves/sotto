@@ -20,6 +20,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(180);
 
     private readonly IEngineClient _engine;
+    private readonly Metrics.PerformanceCollector? _metrics;
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
@@ -50,9 +51,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public ConsultationViewModel(
         IEngineClient engine, IUiDispatcher dispatcher,
-        TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status)
+        TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
+        Metrics.PerformanceCollector? metrics = null)
     {
         _engine = engine;
+        _metrics = metrics;
         Transcript = transcript;
         Note = note;
         Status = status;
@@ -92,6 +95,9 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Recording;
         Status.SetMicVisible(true);
         Status.Append(replay is null ? "recording started" : "replay started");
+        _metrics?.SessionStarted(
+            replay is null ? "mic" : "replay", replay?.Speed ?? 0,
+            replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
 
     public async Task SetPausedAsync(bool paused)
@@ -125,6 +131,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Finalising;
         Paused = false;
         ActiveReplay = null;
+        _metrics?.StopRequested();
         Status.SetMicVisible(false);
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("finalising");
@@ -215,6 +222,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             case "note/partial" when State == SessionState.Finalising
                 && parameters.ValueKind == JsonValueKind.Object:
                 Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";
+                _metrics?.NotePartial();
                 break;
             case "note/ready" when State == SessionState.Finalising:
                 if (parameters.ValueKind == JsonValueKind.Object
@@ -226,14 +234,25 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 Note.Apply(NotePipelineEvent.NoteReady);
                 State = SessionState.Review;
                 Status.Append("clinical note ready");
+                if (_metrics is not null)
+                {
+                    _ = _metrics.SessionFinishedAsync(null, Note.ClinicalNoteText.Length);
+                }
+
                 break;
             // The transcript is still usable, so review proceeds without a note
             case "note/failed" when State == SessionState.Finalising:
                 Note.Apply(NotePipelineEvent.NoteFailed);
                 State = SessionState.Review;
-                Status.Append(parameters.ValueKind == JsonValueKind.Object
-                    ? $"clinical note failed: {parameters.GetProperty("detail").GetString()}"
-                    : "clinical note failed");
+                var noteFailure = parameters.ValueKind == JsonValueKind.Object
+                    ? parameters.GetProperty("detail").GetString() ?? "failed"
+                    : "failed";
+                Status.Append($"clinical note failed: {noteFailure}");
+                if (_metrics is not null)
+                {
+                    _ = _metrics.SessionFinishedAsync(noteFailure, 0);
+                }
+
                 break;
             case "patient/ready":
                 Note.Apply(NotePipelineEvent.PatientInfoReady);

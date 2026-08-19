@@ -1,5 +1,7 @@
 #include "adapters/ipc/handlers.hpp"
 
+#include <openvino/core/version.hpp>
+
 #include "core/version.hpp"
 
 namespace sotto::ipc {
@@ -116,7 +118,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 {"turns", s.turns},
                 {"clusters", s.clusters},
                 {"replay", s.replay},
-                {"replaySpeed", s.replay_speed}};
+                {"replaySpeed", s.replay_speed},
+                {"openvino", std::string(ov::get_openvino_version().buildNumber)}};
         });
     }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });

@@ -66,6 +66,13 @@ public partial class App : Application
 
         services.AddSingleton(_ => AppPreferences.Load(
             Path.Combine(localState, "preferences.json")));
+        services.AddSingleton<Core.Metrics.IMachineInfoProvider,
+            Core.Metrics.WmiMachineInfoProvider>();
+        services.AddSingleton(sp => new Core.Metrics.PerformanceCollector(
+            sp.GetRequiredService<IEngineClient>(),
+            () => sp.GetRequiredService<AppPreferences>().CollectPerformanceData,
+            () => sp.GetRequiredService<IEngineHost>().EnginePid,
+            Path.Combine(localState, "metrics.jsonl")));
         services.AddSingleton<TranscriptViewModel>();
         services.AddSingleton<NoteViewModel>();
         services.AddSingleton<StatusBarViewModel>();

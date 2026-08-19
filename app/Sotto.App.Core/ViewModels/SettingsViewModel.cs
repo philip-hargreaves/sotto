@@ -24,6 +24,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _status = status;
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
+        CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
     }
 
     [ObservableProperty]
@@ -38,6 +39,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (_preferences is not null)
         {
             _preferences.DemoTrayEnabled = value;
+            _preferences.Save();
+        }
+    }
+
+    /// <summary>Local performance collection; numbers and device names only.</summary>
+    [ObservableProperty]
+    public partial bool CollectPerformanceData { get; set; }
+
+    partial void OnCollectPerformanceDataChanged(bool value)
+    {
+        if (_preferences is not null)
+        {
+            _preferences.CollectPerformanceData = value;
             _preferences.Save();
         }
     }
