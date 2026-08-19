@@ -12,7 +12,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
         _session = session;
         _session.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(ConsultationViewModel.State))
+            if (e.PropertyName is nameof(ConsultationViewModel.State)
+                or nameof(ConsultationViewModel.EngineReady))
             {
                 OnPropertyChanged(nameof(State));
                 StartRecordingCommand.NotifyCanExecuteChanged();
@@ -28,7 +29,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanStartRecording))]
     private Task StartRecording() => _session.StartRecordingAsync();
 
-    private bool CanStartRecording() => _session.State == SessionState.Idle;
+    private bool CanStartRecording() =>
+        _session.State == SessionState.Idle && _session.EngineReady;
 
     [RelayCommand(CanExecute = nameof(CanStopRecording))]
     private Task StopRecording() => _session.StopRecordingAsync();

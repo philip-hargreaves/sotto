@@ -8,8 +8,10 @@ namespace Sotto.App.Core.Hosting;
 /// <summary>
 /// Launches the engine race-free: created suspended, assigned to a
 /// kill-on-close job, then resumed. Nothing it spawns can escape the job.
+/// Engine stderr goes to a log file so failures are diagnosable.
 /// </summary>
-public sealed class ProcessEngineLauncher(string exePath, string arguments = "")
+public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
+    string? stderrPath = null)
     : IEngineLauncher, IDisposable
 {
     private readonly JobObject _job = new();
@@ -19,11 +21,19 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "")
         // CreateProcess may write into the command line, so it needs a buffer
         Span<char> commandLine = ($"\"{exePath}\" {arguments}".TrimEnd() + '\0').ToCharArray();
 
+        using var stderr = OpenStderr();
         unsafe
         {
             var startup = new STARTUPINFOW { cb = (uint)sizeof(STARTUPINFOW) };
+            if (stderr is not null)
+            {
+                startup.dwFlags = STARTUPINFOW_FLAGS.STARTF_USESTDHANDLES;
+                startup.hStdError = new global::Windows.Win32.Foundation.HANDLE(
+                    stderr.SafeFileHandle.DangerousGetHandle());
+            }
+
             if (!PInvoke.CreateProcess(
-                    exePath, ref commandLine, null, null, false,
+                    exePath, ref commandLine, null, null, stderr is not null,
                     PROCESS_CREATION_FLAGS.CREATE_SUSPENDED | PROCESS_CREATION_FLAGS.CREATE_NO_WINDOW,
                     null,
                     Path.GetDirectoryName(exePath), in startup, out var info))
@@ -53,6 +63,31 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "")
             }
 
             return new EngineProcess(handle, info.dwProcessId);
+        }
+    }
+
+    // Truncated per launch; the handle is marked inheritable for the child
+    private FileStream? OpenStderr()
+    {
+        if (stderrPath is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(stderrPath)!);
+            var stream = new FileStream(
+                stderrPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+            PInvoke.SetHandleInformation(
+                stream.SafeFileHandle,
+                (uint)global::Windows.Win32.Foundation.HANDLE_FLAGS.HANDLE_FLAG_INHERIT,
+                global::Windows.Win32.Foundation.HANDLE_FLAGS.HANDLE_FLAG_INHERIT);
+            return stream;
+        }
+        catch (IOException)
+        {
+            return null;
         }
     }
 

@@ -14,6 +14,14 @@ public class SessionStateMachineTest
             remove { }
         }
 
+        public event Action<bool>? ConnectedChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool Connected => true;
+
         public Task<JsonElement> RequestAsync(
             string method, object? parameters, TimeSpan timeout,
             CancellationToken cancellationToken = default) =>
@@ -31,6 +39,14 @@ public class SessionStateMachineTest
             add { }
             remove { }
         }
+
+        public event Action<bool>? ConnectedChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool Connected => true;
 
         public Task<JsonElement> RequestAsync(
             string method, object? parameters, TimeSpan timeout,
@@ -56,7 +72,7 @@ public class SessionStateMachineTest
     }
 
     [Fact]
-    public async Task ATimedOutStopIsLoggedNotThrown()
+    public async Task ATimedOutStopRecoversToIdle()
     {
         var status = new StatusBarViewModel();
         var session = new ConsultationViewModel(
@@ -67,7 +83,8 @@ public class SessionStateMachineTest
         await session.StopRecordingAsync();
 
         Assert.Contains(status.LogEntries, line => line.Contains("timed out"));
-        Assert.Equal(SessionState.Finalising, session.State);
+        Assert.Contains(status.LogEntries, line => line.Contains("stop failed"));
+        Assert.Equal(SessionState.Idle, session.State);  // never wedged in Finalising
     }
 
     [Fact]

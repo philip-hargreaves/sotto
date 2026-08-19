@@ -24,6 +24,7 @@ public sealed partial class DemoTrayViewModel : ObservableObject
             switch (e.PropertyName)
             {
                 case nameof(ConsultationViewModel.State):
+                case nameof(ConsultationViewModel.EngineReady):
                     OnPropertyChanged(nameof(IsReplaying));
                     PlayCommand.NotifyCanExecuteChanged();
                     StopCommand.NotifyCanExecuteChanged();
@@ -35,6 +36,13 @@ public sealed partial class DemoTrayViewModel : ObservableObject
                 case nameof(ConsultationViewModel.AudioSeconds):
                     OnPropertyChanged(nameof(ProgressFraction));
                     OnPropertyChanged(nameof(ProgressText));
+                    // A replay finishes itself; nobody presses stop in a demo
+                    if (IsReplaying && _durationSeconds > 0
+                        && _session.AudioSeconds >= _durationSeconds - 0.05)
+                    {
+                        _ = _session.StopRecordingAsync();
+                    }
+
                     break;
                 default:
                     break;
@@ -92,6 +100,15 @@ public sealed partial class DemoTrayViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MonitorGlyph))]
     public partial bool MonitorAudio { get; set; }
 
+    // Mid-replay the toggle takes effect immediately
+    partial void OnMonitorAudioChanged(bool value)
+    {
+        if (IsReplaying)
+        {
+            _ = _session.SetMonitorAsync(value);
+        }
+    }
+
     public string MonitorGlyph => MonitorAudio ? "\uE767" : "\uE74F";  // volume / mute
 
     // ---- transport
@@ -105,7 +122,8 @@ public sealed partial class DemoTrayViewModel : ObservableObject
     private Task Play() => _session.StartRecordingAsync(
         new ReplayRequest(SelectedTrack!.Path, Speed, MonitorAudio));
 
-    private bool CanPlay() => _session.State == SessionState.Idle && SelectedTrack is not null;
+    private bool CanPlay() => _session.State == SessionState.Idle && _session.EngineReady
+        && SelectedTrack is not null;
 
     [RelayCommand(CanExecute = nameof(IsReplaying))]
     private Task Stop() => _session.StopRecordingAsync();

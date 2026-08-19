@@ -6,5 +6,6 @@ GetExitCodeProcess
 JOB_OBJECT_LIMIT
 JOBOBJECT_EXTENDED_LIMIT_INFORMATION
 ResumeThread
+SetHandleInformation
 SetInformationJobObject
 TerminateProcess

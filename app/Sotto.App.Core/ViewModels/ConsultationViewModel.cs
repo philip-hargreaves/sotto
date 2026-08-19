@@ -15,13 +15,18 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
-    // Stop waits for the tail window's decode, seconds of GPU work
-    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(60);
+    // Accelerated replay legitimately leaves a decode backlog for stop to
+    // drain; at 1x this is seconds
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(180);
 
     private readonly IEngineClient _engine;
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
+
+    /// <summary>False while the engine is still starting or reconnecting.</summary>
+    [ObservableProperty]
+    public partial bool EngineReady { get; private set; }
 
     [ObservableProperty]
     public partial bool Paused { get; private set; }
@@ -51,8 +56,19 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Transcript = transcript;
         Note = note;
         Status = status;
+        EngineReady = engine.Connected;
         _engine.NotificationReceived +=
             (method, parameters) => dispatcher.Post(() => HandleNotification(method, parameters));
+        // The status-bar label carries readiness; only the loss is log-worthy
+        _engine.ConnectedChanged += connected => dispatcher.Post(() =>
+        {
+            EngineReady = connected;
+            Status.SetEngineReady(connected);
+            if (!connected)
+            {
+                Status.Append("engine connection lost");
+            }
+        });
     }
 
     public async Task StartRecordingAsync(ReplayRequest? replay = null)
@@ -74,6 +90,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         AudioSeconds = 0;
         ActiveReplay = replay;
         State = SessionState.Recording;
+        Status.SetMicVisible(true);
         Status.Append(replay is null ? "recording started" : "replay started");
     }
 
@@ -90,6 +107,14 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
     }
 
+    public async Task SetMonitorAsync(bool on)
+    {
+        if (State == SessionState.Recording)
+        {
+            await RequestAsync("session/monitor", new { on }).ConfigureAwait(true);
+        }
+    }
+
     public async Task StopRecordingAsync()
     {
         if (State != SessionState.Recording)
@@ -100,9 +125,19 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Finalising;
         Paused = false;
         ActiveReplay = null;
+        Status.SetMicVisible(false);
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("finalising");
         var response = await RequestValueAsync("session/stop", StopTimeout).ConfigureAwait(true);
+        if (response is null)
+        {
+            // A failed stop must not wedge the UI; the recording is safe in
+            // the store either way
+            State = SessionState.Idle;
+            Note.Reset();
+            Status.Append("stop failed - the session is kept and can be recovered");
+            return;
+        }
 
         // The finalised transcript carries the speaker labels the live feed
         // could not; it replaces the pane once the engine has sealed it
@@ -155,6 +190,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Idle;
         Paused = false;
         ActiveReplay = null;
+        Status.SetMicVisible(false);
         Status.Append("recording cancelled");
     }
 
@@ -200,7 +236,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 Paused = false;
                 ActiveReplay = null;
                 Note.Reset();
-                Status.SetMicLevel(0, false);
+                Status.SetMicVisible(false);
                 Status.Append(parameters.ValueKind == JsonValueKind.Object
                     ? $"session interrupted: {parameters.GetProperty("detail").GetString()}"
                     : "session interrupted");

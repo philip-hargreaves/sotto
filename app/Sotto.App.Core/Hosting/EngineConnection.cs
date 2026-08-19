@@ -31,6 +31,19 @@ public sealed class EngineConnection : IEngineClient
 
     public event Action<string, JsonElement>? NotificationReceived;
 
+    public event Action<bool>? ConnectedChanged;
+
+    public bool Connected
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _transport is not null;
+            }
+        }
+    }
+
     // The last request started, for the crash report; not an accounting system
     public string? MethodInFlight => _methodInFlight;
 
@@ -125,6 +138,7 @@ public sealed class EngineConnection : IEngineClient
         if (old is not null)
         {
             _ = old.DisposeAsync().AsTask();
+            ConnectedChanged?.Invoke(false);
         }
     }
 
@@ -203,6 +217,11 @@ public sealed class EngineConnection : IEngineClient
                     _lastConnectError = null;
                     installed = true;
                 }
+            }
+
+            if (installed)
+            {
+                ConnectedChanged?.Invoke(true);
             }
 
             return true;

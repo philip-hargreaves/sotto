@@ -39,7 +39,7 @@
                 ToolTipService.ToolTip="Recording to replay">
                 <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="demo:DemoTrack">
-                        <TextBlock Text="{x:Bind Name}" />
+                        <TextBlock Text="{x:Bind Display}" />
                     </DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
@@ -82,7 +82,7 @@
                 Grid.Column="5"
                 VerticalAlignment="Center"
                 IsChecked="{x:Bind ViewModel.MonitorAudio, Mode=TwoWay}"
-                ToolTipService.ToolTip="Play the recording aloud during replay, sped up with the replay speed. Applies from the next replay.">
+                ToolTipService.ToolTip="Play the recording aloud, sped up with the replay speed.">
                 <FontIcon FontSize="13" Glyph="{x:Bind ViewModel.MonitorGlyph, Mode=OneWay}" />
             </ToggleButton>
 

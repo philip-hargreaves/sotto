@@ -94,6 +94,48 @@ public class DemoTrayViewModelTest
     }
 
     [Fact]
+    public async Task AReplayStopsItselfAtTheEndOfTheTrack()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var wav = SessionContractWav.Write(seconds: 1);
+        var tray = new DemoTrayViewModel(session, [new DemoTrack("Short", wav)]);
+        await tray.PlayCommand.ExecuteAsync(null);
+
+        for (var i = 0; i < 10; i++)
+        {
+            engine.RaiseNotification("audio.level", JsonSerializer.SerializeToElement(
+                new { level = 0.5, clipped = false }));
+        }
+
+        Assert.Equal(SessionState.Finalising, session.State);
+    }
+
+    [Fact]
+    public async Task MonitorTogglesLiveDuringAReplay()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var tray = new DemoTrayViewModel(session, [Track()]);
+        await tray.PlayCommand.ExecuteAsync(null);
+
+        tray.MonitorAudio = true;
+        tray.MonitorAudio = false;
+
+        Assert.Equal(2, engine.Requests.Count(r => r.Method == "session/monitor"));
+    }
+
+    [Fact]
+    public void PlayWaitsForTheEngine()
+    {
+        var (session, engine, _) = TestSession.Create();
+        engine.SetConnected(false);
+        var tray = new DemoTrayViewModel(session, [Track()]);
+
+        Assert.False(tray.PlayCommand.CanExecute(null));
+        engine.SetConnected(true);
+        Assert.True(tray.PlayCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void BrowseAddsASelectableTrack()
     {
         var (session, _, _) = TestSession.Create();

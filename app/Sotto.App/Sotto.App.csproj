@@ -21,10 +21,11 @@
     <ProjectReference Include="..\Sotto.App.Core\Sotto.App.Core.csproj" />
   </ItemGroup>
 
-  <!-- Ship the engine beside the app when it has been built; F5 works without it -->
+  <!-- Ship the engine beside the app when it has been built; F5 works without it.
+       Always the Release engine: a Debug engine is 5-10x slower through the
+       models and makes every timing observation misleading -->
   <PropertyGroup>
-    <EnginePreset Condition="'$(Configuration)' == 'Debug'">dev</EnginePreset>
-    <EnginePreset Condition="'$(Configuration)' != 'Debug'">release</EnginePreset>
+    <EnginePreset>release</EnginePreset>
     <EngineBinary>..\..\build\$(EnginePreset)\engine\sotto_engine.exe</EngineBinary>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(EngineBinary)')">

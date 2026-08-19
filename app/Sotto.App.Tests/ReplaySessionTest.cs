@@ -95,6 +95,61 @@ public class ReplaySessionTest
         }
     }
 
+    [Fact]
+    public async Task ARealTrackFinalisesToALabelledTranscript()
+    {
+        var track = Path.Combine(
+            Path.GetDirectoryName(FindModels()) ?? "", "demo", "day2_consultation02_mixed.wav");
+        if (!File.Exists(track))
+        {
+            return;  // demo tracks not staged on this machine
+        }
+
+        var pipeName = $"LOCAL\\sotto-track-{Guid.NewGuid():N}";
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(directory);
+        var models = FindModels();
+        using var launcher = new ProcessEngineLauncher(
+            FindEngine(),
+            $"{pipeName} \"{Path.Combine(directory, "store")}\""
+                + (models is null ? "" : $" \"{models}\""));
+        using var host = new EngineSupervisor(
+            launcher, new FakeSession(), TimeProvider.System,
+            new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
+        await using var connection = new EngineConnection(host, async (pid, ct) =>
+            await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
+        try
+        {
+            host.Start();
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
+
+            await connection.RequestAsync(
+                "session/start",
+                new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
+            await Task.Delay(TimeSpan.FromSeconds(20));  // ~5 min of audio at 16x
+            var stop = await connection.RequestAsync(
+                "session/stop", null, TimeSpan.FromSeconds(120));
+
+            var id = stop.GetProperty("sessionId").GetString();
+            var transcript = await connection.RequestAsync(
+                "session/transcript", new { id }, Timeout);
+            var labelled = transcript.GetProperty("turns").EnumerateArray()
+                .Count(t => t.GetProperty("speaker").GetString() is "doctor" or "patient");
+            Assert.True(labelled > 5, $"expected a labelled transcript, got {labelled} labelled turns");
+        }
+        finally
+        {
+            host.Shutdown();
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     private static string? FindModels()
     {
         for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))

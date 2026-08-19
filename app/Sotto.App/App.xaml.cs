@@ -37,7 +37,10 @@ public partial class App : Application
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IEngineLauncher>(_ => new ProcessEngineLauncher(
-            Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe")));
+            Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe"),
+            stderrPath: Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "sotto", "engine.log")));
         // Identity-free path: unpackaged runs have no ApplicationData
         var localState = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
