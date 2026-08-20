@@ -192,6 +192,25 @@ TEST(SessionStore, TheNoteIsNotPlaintextAtRest) {
     EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
 }
 
+TEST(SessionStore, ThePatientSheetRoundTripsEncrypted) {
+    TempRoot root;
+    const std::string sentinel = "SENTINEL-PATIENT-PHRASE";
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.Finalise(id);
+        EXPECT_EQ(store.ReadPatient(id), "");
+        store.SavePatient(id, sentinel);
+        EXPECT_EQ(store.ReadPatient(id), sentinel);
+        EXPECT_EQ(store.ReadNote(id), "") << "patient and note are separate";
+    }
+
+    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
+    const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
+    EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
+}
+
 TEST(SessionStore, TheNoteRefusesTheRecordingSessionAndUnknownIds) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);

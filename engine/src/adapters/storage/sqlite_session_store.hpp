@@ -36,6 +36,8 @@ class SqliteSessionStore : public ISessionStore {
     std::vector<SessionSummary> ListSessions() override;
     void SaveNote(const SessionId& id, const std::string& text) override;
     std::string ReadNote(const SessionId& id) override;
+    void SavePatient(const SessionId& id, const std::string& text) override;
+    std::string ReadPatient(const SessionId& id) override;
     std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
     void Delete(const SessionId& id) override;
 
@@ -52,6 +54,8 @@ class SqliteSessionStore : public ISessionStore {
         std::uint64_t pending_lost = 0;
     };
 
+    void SaveText(const SessionId& id, const char* table, Domain domain, const std::string& text);
+    std::string ReadText(const SessionId& id, const char* table, Domain domain);
     Open& RequireOpen(const SessionId& id);
     void RequireNotRecording(const SessionId& id);  // caller holds mutex_
     void EraseOnDisk(const SessionId& id);          // key, file, catalog row

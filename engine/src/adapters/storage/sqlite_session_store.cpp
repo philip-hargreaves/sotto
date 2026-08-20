@@ -99,6 +99,7 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
                   "  frame_count  INTEGER NOT NULL,"
                   "  payload      BLOB NOT NULL);"
                   "CREATE TABLE note(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL);"
+                  "CREATE TABLE patient(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL);"
                   "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     {
         Db::Transaction txn(*session.db);
@@ -280,6 +281,23 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
 }
 
 void SqliteSessionStore::SaveNote(const SessionId& id, const std::string& text) {
+    SaveText(id, "note", Domain::kNote, text);
+}
+
+std::string SqliteSessionStore::ReadNote(const SessionId& id) {
+    return ReadText(id, "note", Domain::kNote);
+}
+
+void SqliteSessionStore::SavePatient(const SessionId& id, const std::string& text) {
+    SaveText(id, "patient", Domain::kPatient, text);
+}
+
+std::string SqliteSessionStore::ReadPatient(const SessionId& id) {
+    return ReadText(id, "patient", Domain::kPatient);
+}
+
+void SqliteSessionStore::SaveText(const SessionId& id, const char* table, Domain domain,
+                                  const std::string& text) {
     std::lock_guard<std::mutex> lock(mutex_);
     RequireNotRecording(id);
 
@@ -292,16 +310,20 @@ void SqliteSessionStore::SaveNote(const SessionId& id, const std::string& text) 
                                             std::istreambuf_iterator<char>());
     const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
     const std::vector<std::uint8_t> sealed = cipher.Seal(
-        Domain::kNote, id, 0, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+        domain, id, 0, {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
 
     Db db(base.string() + ".db");
-    db.Exec("CREATE TABLE IF NOT EXISTS note(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL)");
-    Db::Stmt insert = db.Prepare("INSERT OR REPLACE INTO note(seq, payload) VALUES(0, ?)");
+    const std::string table_name(table);
+    db.Exec(("CREATE TABLE IF NOT EXISTS " + table_name +
+             "(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL)")
+                .c_str());
+    Db::Stmt insert = db.Prepare(
+        ("INSERT OR REPLACE INTO " + table_name + "(seq, payload) VALUES(0, ?)").c_str());
     insert.BindBlob(1, sealed);
     insert.Step();
 }
 
-std::string SqliteSessionStore::ReadNote(const SessionId& id) {
+std::string SqliteSessionStore::ReadText(const SessionId& id, const char* table, Domain domain) {
     std::lock_guard<std::mutex> lock(mutex_);
     RequireNotRecording(id);
 
@@ -310,10 +332,13 @@ std::string SqliteSessionStore::ReadNote(const SessionId& id) {
         throw std::runtime_error("no session " + id);
     }
     Db db(base.string() + ".db");
-    if (db.QueryInt64("SELECT count(*) FROM sqlite_master WHERE name = 'note'") == 0) {
+    Db::Stmt exists = db.Prepare("SELECT count(*) FROM sqlite_master WHERE name = ?");
+    exists.BindText(1, table);
+    if (!exists.Step() || exists.ColumnInt64(0) == 0) {
         return {};
     }
-    Db::Stmt select = db.Prepare("SELECT payload FROM note WHERE seq = 0");
+    const std::string table_name(table);
+    Db::Stmt select = db.Prepare(("SELECT payload FROM " + table_name + " WHERE seq = 0").c_str());
     if (!select.Step()) {
         return {};
     }
@@ -321,7 +346,7 @@ std::string SqliteSessionStore::ReadNote(const SessionId& id) {
     const std::vector<std::uint8_t> wrapped((std::istreambuf_iterator<char>(key_file)),
                                             std::istreambuf_iterator<char>());
     const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
-    const auto plain = cipher.Open(Domain::kNote, id, 0, select.ColumnBlob(0));
+    const auto plain = cipher.Open(domain, id, 0, select.ColumnBlob(0));
     return {plain.begin(), plain.end()};
 }
 

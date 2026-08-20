@@ -9,6 +9,7 @@ namespace Sotto.App.Tests;
 /// The whole shell stack against the real engine: supervisor, launcher and
 /// connection together. A kill mid-idle must heal without a new client.
 /// </summary>
+[Collection("engine")]
 [Trait("Category", "Integration")]
 [Trait("Requires", "Engine")]
 public class TransportRecoveryTest
@@ -20,37 +21,7 @@ public class TransportRecoveryTest
         public bool ConsultationActive { get; set; }
     }
 
-    // An explicit override, else the most recently built binary under any
-    // preset, so a fresh build is never shadowed by a stale one.
-    private static string FindEngine()
-    {
-        const string exe = "sotto_engine.exe";
-        var overridePath = Environment.GetEnvironmentVariable("SOTTO_ENGINE_PATH");
-        if (!string.IsNullOrEmpty(overridePath))
-        {
-            return overridePath;
-        }
-
-        for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))
-        {
-            var buildRoot = Path.Combine(dir, "build");
-            if (Directory.Exists(buildRoot))
-            {
-                var newest = Directory
-                    .EnumerateFiles(buildRoot, exe, SearchOption.AllDirectories)
-                    .Select(path => new FileInfo(path))
-                    .OrderByDescending(info => info.LastWriteTimeUtc)
-                    .FirstOrDefault();
-                if (newest is not null)
-                {
-                    return newest.FullName;
-                }
-            }
-        }
-
-        throw new FileNotFoundException(
-            $"{exe} not found, build it with: cmake --workflow --preset dev");
-    }
+    private static string FindEngine() => EnginePath.Find();
 
     // Requests fail fast while the connection is (re)dialling, so poll
     private static async Task<JsonElement> RetryAsync(Func<Task<JsonElement>> request)

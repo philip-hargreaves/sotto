@@ -7,6 +7,7 @@ namespace Sotto.App.Tests;
 /// Replay speed must not change the sealed transcript: same audio in, same
 /// turns out. Compares 16x against 1x on the same recording.
 /// </summary>
+[Collection("engine")]
 [Trait("Category", "Integration")]
 [Trait("Requires", "EngineSlow")]  // ~10 min: a full consult at 1x; run on demand
 public class SpeedParityTest
@@ -108,27 +109,7 @@ public class SpeedParityTest
         return null;
     }
 
-    private static string FindEngine()
-    {
-        for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))
-        {
-            var buildRoot = Path.Combine(dir, "build");
-            if (Directory.Exists(buildRoot))
-            {
-                var newest = Directory
-                    .EnumerateFiles(buildRoot, "sotto_engine.exe", SearchOption.AllDirectories)
-                    .Select(path => new FileInfo(path))
-                    .OrderByDescending(info => info.LastWriteTimeUtc)
-                    .FirstOrDefault();
-                if (newest is not null)
-                {
-                    return newest.FullName;
-                }
-            }
-        }
-
-        throw new FileNotFoundException("sotto_engine.exe not found");
-    }
+    private static string FindEngine() => EnginePath.Find();
 
     private static async Task<System.Text.Json.JsonElement> RetryAsync(
         Func<Task<System.Text.Json.JsonElement>> request)

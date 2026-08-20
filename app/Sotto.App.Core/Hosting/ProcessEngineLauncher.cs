@@ -69,7 +69,8 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         }
     }
 
-    // Truncated per launch; the handle is marked inheritable for the child
+    // Appended across launches so a crash's last words survive the relaunch;
+    // the handle is marked inheritable for the child
     private FileStream? OpenStderr()
     {
         if (stderrPath is null)
@@ -81,7 +82,7 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         {
             Directory.CreateDirectory(Path.GetDirectoryName(stderrPath)!);
             var stream = new FileStream(
-                stderrPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                stderrPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
             PInvoke.SetHandleInformation(
                 stream.SafeFileHandle,
                 (uint)global::Windows.Win32.Foundation.HANDLE_FLAGS.HANDLE_FLAG_INHERIT,

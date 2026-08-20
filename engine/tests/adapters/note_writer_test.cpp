@@ -60,6 +60,54 @@ TEST(QwenNoteWriter, CancelInterruptsAGeneration) {
     EXPECT_LT(seen, 40) << "cancel must stop generation promptly";
 }
 
+TEST(QwenNoteWriter, WritesThePatientSheetFromANote) {
+    if (!std::filesystem::exists(kModels / "qwen3.5-9b-int4")) {
+        GTEST_SKIP() << "note model not staged";
+    }
+    models::ModelStore store(kModels);
+    models::OvRuntime runtime;
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+
+    int partials = 0;
+    const std::string sheet = writer.WritePatient(
+        "The patient presents with a swollen left elbow, present for one week, not painful "
+        "but slightly warm. The working diagnosis is bursitis. The plan is ibuprofen 400 mg "
+        "twice daily after food, stopping if heartburn occurs, and blood tests. The patient "
+        "was advised to seek help if the elbow becomes very red or very painful.",
+        [&partials](const std::string&) { partials++; });
+
+    ASSERT_FALSE(sheet.empty());
+    EXPECT_GT(partials, 3);
+    EXPECT_NE(sheet.find("Your appointment today"), std::string::npos);
+    EXPECT_NE(sheet.find("When to contact us"), std::string::npos);
+    EXPECT_EQ(sheet.find("doctor"), std::string::npos);
+}
+
+// The production path: the patient sheet is a second generation on the
+// same resident pipeline, straight after the note
+TEST(QwenNoteWriter, ThePatientSheetFollowsTheNoteOnTheSamePipeline) {
+    if (!std::filesystem::exists(kModels / "qwen3.5-9b-int4")) {
+        GTEST_SKIP() << "note model not staged";
+    }
+#ifdef _DEBUG
+    const bool debug_build = true;
+#else
+    const bool debug_build = false;
+#endif
+    if (debug_build) {
+        GTEST_SKIP() << "OpenVINO 2026.3 debug GPU plugin asserts on a second generation";
+    }
+    models::ModelStore store(kModels);
+    models::OvRuntime runtime;
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+
+    const std::string note = writer.Write(ElbowTranscript(), nullptr);
+    ASSERT_FALSE(note.empty());
+    const std::string sheet = writer.WritePatient(note, nullptr);
+    ASSERT_FALSE(sheet.empty());
+    EXPECT_NE(sheet.find("Your appointment today"), std::string::npos);
+}
+
 TEST(QwenNoteWriter, AnEmptyTranscriptRefusesToWrite) {
     models::ModelStore store(kModels);
     models::OvRuntime runtime;

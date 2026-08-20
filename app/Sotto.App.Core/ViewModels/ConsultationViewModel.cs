@@ -60,6 +60,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Note = note;
         Status = status;
         EngineReady = engine.Connected;
+        Note.TranslateRequested = TranslateAsync;
         _engine.NotificationReceived +=
             (method, parameters) => dispatcher.Post(() => HandleNotification(method, parameters));
         // The status-bar label carries readiness; only the loss is log-worthy
@@ -69,10 +70,53 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             Status.SetEngineReady(connected);
             if (!connected)
             {
+                // A restarted engine will never answer the in-flight translation
+                Note.TranslationRunning = false;
                 Status.Append("engine connection lost");
             }
+            else
+            {
+                _ = LoadLanguagesAsync();
+            }
         });
+        if (EngineReady)
+        {
+            _ = LoadLanguagesAsync();
+        }
     }
+
+    // Empty when the engine ships without a translation model
+    private async Task LoadLanguagesAsync()
+    {
+        try
+        {
+            var response = await _engine
+                .RequestAsync("translate/languages", null, RequestTimeout)
+                .ConfigureAwait(true);
+            Note.Languages.Clear();
+            foreach (var language in response.GetProperty("languages").EnumerateArray())
+            {
+                Note.Languages.Add(language.GetString() ?? "");
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public async Task TranslateAsync(string language)
+    {
+        if (_finalisedSessionId is null)
+        {
+            return;
+        }
+
+        Note.TranslationText = "";
+        await RequestAsync("patient/translate", new { id = _finalisedSessionId, language })
+            .ConfigureAwait(true);
+    }
+
+    private string? _finalisedSessionId;
 
     public async Task StartRecordingAsync(ReplayRequest? replay = null)
     {
@@ -151,7 +195,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         if (response is { ValueKind: JsonValueKind.Object } stop
             && stop.TryGetProperty("sessionId", out var sessionId))
         {
-            await LoadFinalTranscriptAsync(sessionId.GetString()).ConfigureAwait(true);
+            _finalisedSessionId = sessionId.GetString();
+            await LoadFinalTranscriptAsync(_finalisedSessionId).ConfigureAwait(true);
         }
     }
 
@@ -254,9 +299,38 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 }
 
                 break;
+            case "patient/partial" when parameters.ValueKind == JsonValueKind.Object:
+                Note.PatientInfoText = parameters.GetProperty("text").GetString() ?? "";
+                break;
             case "patient/ready":
+                if (parameters.ValueKind == JsonValueKind.Object
+                    && parameters.TryGetProperty("text", out var patientText))
+                {
+                    Note.PatientInfoText = patientText.GetString() ?? "";
+                }
+
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
                 Status.Append("patient information ready");
+                break;
+            case "patient/failed":
+                Note.Apply(NotePipelineEvent.PatientInfoFailed);
+                Status.Append(parameters.ValueKind == JsonValueKind.Object
+                    ? $"patient information failed: {parameters.GetProperty("detail").GetString()}"
+                    : "patient information failed");
+                break;
+            case "translate/partial" when parameters.ValueKind == JsonValueKind.Object:
+                Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";
+                break;
+            case "translate/ready" when parameters.ValueKind == JsonValueKind.Object:
+                Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";
+                Note.TranslationRunning = false;
+                Status.Append($"translated to {parameters.GetProperty("language").GetString()}");
+                break;
+            case "translate/failed":
+                Note.TranslationRunning = false;
+                Status.Append(parameters.ValueKind == JsonValueKind.Object
+                    ? $"translation failed: {parameters.GetProperty("detail").GetString()}"
+                    : "translation failed");
                 break;
             case "audio.level" when parameters.ValueKind == JsonValueKind.Object:
                 Status.SetMicLevel(

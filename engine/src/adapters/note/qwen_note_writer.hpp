@@ -28,12 +28,20 @@ class QwenNoteWriter : public INoteWriter {
 
     std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override;
 
+    bool WritesPatient() const override {
+        return true;
+    }
+
+    std::string WritePatient(const std::string& note, const Progress& progress) override;
+
     // Loads the pipeline in the background; idempotent, retried on failure
     void Prepare() override;
 
     void Cancel() override;
 
    private:
+    std::string Generate(const std::string& prompt, const Progress& progress);
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

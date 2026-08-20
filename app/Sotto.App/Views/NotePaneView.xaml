@@ -31,6 +31,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <TextBlock
                         Foreground="{ThemeResource PatientBrush}"
@@ -40,6 +42,26 @@
                         AcceptsReturn="True"
                         IsSpellCheckEnabled="False"
                         Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}"
+                        TextWrapping="Wrap" />
+                    <StackPanel
+                        Grid.Row="2"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <ComboBox
+                            MinWidth="160"
+                            ItemsSource="{x:Bind ViewModel.Languages, Mode=OneWay}"
+                            PlaceholderText="Language"
+                            SelectedItem="{x:Bind ViewModel.SelectedLanguage, Mode=TwoWay}" />
+                        <Button
+                            Command="{x:Bind ViewModel.TranslateCommand}"
+                            Content="Translate" />
+                    </StackPanel>
+                    <TextBox
+                        Grid.Row="3"
+                        AcceptsReturn="True"
+                        IsReadOnly="True"
+                        IsSpellCheckEnabled="False"
+                        Text="{x:Bind ViewModel.TranslationText, Mode=OneWay}"
                         TextWrapping="Wrap" />
                 </Grid>
             </TabViewItem>

@@ -61,10 +61,12 @@ class ISessionStore {
 
     virtual std::vector<SessionSummary> ListSessions() = 0;
 
-    // The clinical note, written after finalise; ReadNote is empty when no
-    // note was saved and throws for an unknown session
+    // The clinical note and patient information, written after finalise;
+    // reads are empty when nothing was saved and throw for an unknown session
     virtual void SaveNote(const SessionId& id, const std::string& text) = 0;
     virtual std::string ReadNote(const SessionId& id) = 0;
+    virtual void SavePatient(const SessionId& id, const std::string& text) = 0;
+    virtual std::string ReadPatient(const SessionId& id) = 0;
 
     // Read-back and disposal; both refuse the session currently recording
     virtual std::vector<asr::Turn> ReadTurns(const SessionId& id) = 0;
