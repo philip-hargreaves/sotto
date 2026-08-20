@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <map>
 #include <openvino/openvino.hpp>
 #include <string>
 #include <string_view>
@@ -25,6 +26,9 @@ class OvRuntime {
                      const std::string& xml_name);
 
     std::string ResolveDevice(const std::string& requested);
+
+    // Device id -> driver-reported full name (NPU with its architecture)
+    std::map<std::string, std::string> DescribeDevices();
 
    private:
     ov::Core core_;

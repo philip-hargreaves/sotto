@@ -204,7 +204,8 @@ int main(int argc, char* argv[]) {
             std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(3),
             diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
 
-        sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics);
+        sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
+                                    &ov_runtime);
         server.ServeOneClient();
         controller.Stop();
         return 0;

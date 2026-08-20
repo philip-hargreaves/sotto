@@ -30,9 +30,19 @@ public sealed class WmiMachineInfoProvider : IMachineInfoProvider
             "ProcessorNameString", null) as string ?? "unknown";
         var ramGb = (int)Math.Round(
             GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024.0 * 1024 * 1024));
-        var os = $"{Registry.GetValue(
-            @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-            "ProductName", "Windows")} {Environment.OSVersion.Version.Build}";
+        // ProductName still says "Windows 10" on Windows 11; the build says
+        const string versionKey =
+            @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+        var product = Registry.GetValue(versionKey, "ProductName", "Windows") as string
+            ?? "Windows";
+        var build = Environment.OSVersion.Version.Build;
+        if (build >= 22000)
+        {
+            product = product.Replace("Windows 10", "Windows 11");
+        }
+
+        var display = Registry.GetValue(versionKey, "DisplayVersion", "") as string;
+        var os = $"{product} {display} (build {build})".Replace("  ", " ");
 
         var gpus = new List<GpuInfo>();
         GpuInfo? npu = null;
