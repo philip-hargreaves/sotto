@@ -25,6 +25,8 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
+#include "adapters/translate/nllb_translator.hpp"
+#include "adapters/translate/translate_lane.hpp"
 #include "adapters/vad/deferred_vad.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
@@ -212,12 +214,26 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
         }
+        // Translation runs on the CPU, so it never contends with the GPU
+        std::unique_ptr<sotto::translate::NllbTranslator> translator;
+        std::unique_ptr<sotto::translate::TranslateLane> translate_lane;
+        try {
+            model_store.Resolve("translation", "default");
+            translator =
+                std::make_unique<sotto::translate::NllbTranslator>(model_store, ov_runtime);
+            translate_lane = std::make_unique<sotto::translate::TranslateLane>(
+                *translator, [&server](const std::string& method, const nlohmann::json& params) {
+                    server.PushNotification(method, params);
+                });
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: no translation (%s)\n", e.what());
+        }
         sotto::audio::SessionController controller(
             std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(3),
             diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
-                                    &ov_runtime);
+                                    &ov_runtime, translator.get(), translate_lane.get());
         server.ServeOneClient();
         controller.Stop();
         return 0;

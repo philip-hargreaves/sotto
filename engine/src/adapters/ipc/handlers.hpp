@@ -11,6 +11,11 @@ namespace sotto::models {
 class OvRuntime;
 }  // namespace sotto::models
 
+namespace sotto::translate {
+class ITranslator;
+class TranslateLane;
+}  // namespace sotto::translate
+
 namespace sotto::ipc {
 
 std::variant<json, Error> HandleHello(const json& params);
@@ -34,6 +39,8 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
                      const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
                      sotto::metrics::Registry* metrics = nullptr,
-                     sotto::models::OvRuntime* runtime = nullptr);
+                     sotto::models::OvRuntime* runtime = nullptr,
+                     sotto::translate::ITranslator* translator = nullptr,
+                     sotto::translate::TranslateLane* translate_lane = nullptr);
 
 }  // namespace sotto::ipc

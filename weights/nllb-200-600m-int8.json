@@ -1,0 +1,169 @@
+{
+  "id": "nllb-200-600m-int8",
+  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "target": "models/nllb-200-600m-int8",
+  "files": {
+    "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",
+    "generation_config.json": "ec0e7781184aa37a75a8a85327ac4a80dba7d46f727ff0e1aa8c720ed84ebe7c",
+    "languages.json": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17",
+    "openvino_config.json": "24c0f5322f7dfc4f5301364896d4b935c98db6462fa0cf778107dfbb788a8954",
+    "openvino_decoder_model.bin": "312a3b97a33a4dac3e3f56dd6ec10b2ea994a1d712d43e5b6900ed728ca708d7",
+    "openvino_decoder_model.xml": "8ab412daab1db9a563dbf33823c3899beb5e448d57c6873fd5ed4ac119d459ff",
+    "openvino_detokenizer.bin": "fe5f772370b9b10991e9088a63b372c86ad89794be82bb82dd50546b9faa7149",
+    "openvino_detokenizer.xml": "1d8463746dba54cd84cbc67442022aa8ce2041d1dd3332ae485abadf21f25872",
+    "openvino_encoder_model.bin": "c7755342cc4fc8b7a1fc4903a91f1e0d3788233552c6aed2869ce1ec171d7776",
+    "openvino_encoder_model.xml": "dbefbc114c8f30b22c082b84c3a30d9968ac8df8c393d5f8a3c8bf462e33fd02",
+    "openvino_tokenizer.bin": "00363721d140eda6daf88376a548cd2eaebdac3161326cd773c8d7991053fe78",
+    "openvino_tokenizer.xml": "11c893efb4087f89d079eeeb04b78811d019c793dc26a6337363b8c0a3aec14c",
+    "sentencepiece.bpe.model": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+    "special_tokens_map.json": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc",
+    "tokenizer.json": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901",
+    "tokenizer_config.json": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415"
+  },
+  "shards": {
+    "config.json": [
+      {
+        "name": "nllb-200-600m-int8--config.json",
+        "size": 870,
+        "sha256": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3"
+      }
+    ],
+    "generation_config.json": [
+      {
+        "name": "nllb-200-600m-int8--generation_config.json",
+        "size": 193,
+        "sha256": "ec0e7781184aa37a75a8a85327ac4a80dba7d46f727ff0e1aa8c720ed84ebe7c"
+      }
+    ],
+    "languages.json": [
+      {
+        "name": "nllb-200-600m-int8--languages.json",
+        "size": 1207,
+        "sha256": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17"
+      }
+    ],
+    "openvino_config.json": [
+      {
+        "name": "nllb-200-600m-int8--openvino_config.json",
+        "size": 516,
+        "sha256": "24c0f5322f7dfc4f5301364896d4b935c98db6462fa0cf778107dfbb788a8954"
+      }
+    ],
+    "openvino_decoder_model.bin": [
+      {
+        "name": "nllb-200-600m-int8--openvino_decoder_model.bin",
+        "size": 466925364,
+        "sha256": "312a3b97a33a4dac3e3f56dd6ec10b2ea994a1d712d43e5b6900ed728ca708d7"
+      }
+    ],
+    "openvino_decoder_model.xml": [
+      {
+        "name": "nllb-200-600m-int8--openvino_decoder_model.xml",
+        "size": 1168370,
+        "sha256": "8ab412daab1db9a563dbf33823c3899beb5e448d57c6873fd5ed4ac119d459ff"
+      }
+    ],
+    "openvino_detokenizer.bin": [
+      {
+        "name": "nllb-200-600m-int8--openvino_detokenizer.bin",
+        "size": 4362330,
+        "sha256": "fe5f772370b9b10991e9088a63b372c86ad89794be82bb82dd50546b9faa7149"
+      }
+    ],
+    "openvino_detokenizer.xml": [
+      {
+        "name": "nllb-200-600m-int8--openvino_detokenizer.xml",
+        "size": 7976,
+        "sha256": "1d8463746dba54cd84cbc67442022aa8ce2041d1dd3332ae485abadf21f25872"
+      }
+    ],
+    "openvino_encoder_model.bin": [
+      {
+        "name": "nllb-200-600m-int8--openvino_encoder_model.bin",
+        "size": 416151328,
+        "sha256": "c7755342cc4fc8b7a1fc4903a91f1e0d3788233552c6aed2869ce1ec171d7776"
+      }
+    ],
+    "openvino_encoder_model.xml": [
+      {
+        "name": "nllb-200-600m-int8--openvino_encoder_model.xml",
+        "size": 611839,
+        "sha256": "dbefbc114c8f30b22c082b84c3a30d9968ac8df8c393d5f8a3c8bf462e33fd02"
+      }
+    ],
+    "openvino_tokenizer.bin": [
+      {
+        "name": "nllb-200-600m-int8--openvino_tokenizer.bin",
+        "size": 17337086,
+        "sha256": "00363721d140eda6daf88376a548cd2eaebdac3161326cd773c8d7991053fe78"
+      }
+    ],
+    "openvino_tokenizer.xml": [
+      {
+        "name": "nllb-200-600m-int8--openvino_tokenizer.xml",
+        "size": 33091,
+        "sha256": "11c893efb4087f89d079eeeb04b78811d019c793dc26a6337363b8c0a3aec14c"
+      }
+    ],
+    "sentencepiece.bpe.model": [
+      {
+        "name": "nllb-200-600m-int8--sentencepiece.bpe.model",
+        "size": 4852054,
+        "sha256": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a"
+      }
+    ],
+    "special_tokens_map.json": [
+      {
+        "name": "nllb-200-600m-int8--special_tokens_map.json",
+        "size": 4487,
+        "sha256": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc"
+      }
+    ],
+    "tokenizer.json": [
+      {
+        "name": "nllb-200-600m-int8--tokenizer.json",
+        "size": 32240136,
+        "sha256": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901"
+      }
+    ],
+    "tokenizer_config.json": [
+      {
+        "name": "nllb-200-600m-int8--tokenizer_config.json",
+        "size": 41770,
+        "sha256": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415"
+      }
+    ]
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "id": "nllb-200-600m-int8",
+    "task": "translation",
+    "tier": "default",
+    "licence": "CC-BY-NC-4.0",
+    "runtime": {
+      "device": "CPU"
+    },
+    "source": {
+      "path": "C:\\dev\\sotto\\build\\nllb-export\\nllb-200-600m-int8"
+    },
+    "files": {
+      "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",
+      "generation_config.json": "ec0e7781184aa37a75a8a85327ac4a80dba7d46f727ff0e1aa8c720ed84ebe7c",
+      "languages.json": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17",
+      "openvino_config.json": "24c0f5322f7dfc4f5301364896d4b935c98db6462fa0cf778107dfbb788a8954",
+      "openvino_decoder_model.bin": "312a3b97a33a4dac3e3f56dd6ec10b2ea994a1d712d43e5b6900ed728ca708d7",
+      "openvino_decoder_model.xml": "8ab412daab1db9a563dbf33823c3899beb5e448d57c6873fd5ed4ac119d459ff",
+      "openvino_detokenizer.bin": "fe5f772370b9b10991e9088a63b372c86ad89794be82bb82dd50546b9faa7149",
+      "openvino_detokenizer.xml": "1d8463746dba54cd84cbc67442022aa8ce2041d1dd3332ae485abadf21f25872",
+      "openvino_encoder_model.bin": "c7755342cc4fc8b7a1fc4903a91f1e0d3788233552c6aed2869ce1ec171d7776",
+      "openvino_encoder_model.xml": "dbefbc114c8f30b22c082b84c3a30d9968ac8df8c393d5f8a3c8bf462e33fd02",
+      "openvino_tokenizer.bin": "00363721d140eda6daf88376a548cd2eaebdac3161326cd773c8d7991053fe78",
+      "openvino_tokenizer.xml": "11c893efb4087f89d079eeeb04b78811d019c793dc26a6337363b8c0a3aec14c",
+      "sentencepiece.bpe.model": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+      "special_tokens_map.json": "27d4e8cb8b9a7c0f8234273dfefa64568f859c796f058037b4228948b84cd5fc",
+      "tokenizer_config.json": "78f074bb0808578ea85ec87d35300180a988df88d23e9d9d3c93661e1a0f9415",
+      "tokenizer.json": "b3be18cc91c94d4a1d83731ace4dac0b90a7db024edecdeb9fe7d19ec01ce901"
+    }
+  },
+  "totalBytes": 943738617
+}
