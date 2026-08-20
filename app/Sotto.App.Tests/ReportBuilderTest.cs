@@ -57,12 +57,12 @@ public class ReportBuilderTest
     }
 
     [Fact]
-    public void SmokeRunsAreStruckAndExcludedFromComparison()
+    public void AcceleratedReplaysAreExcludedFromComparison()
     {
         var html = ReportBuilder.Build(Machine,
             [Session("GPU.0", 33.4, 1.0), Session("NPU", 11.2, 16.0)], DateTimeOffset.UtcNow);
 
-        Assert.Contains("class=\"smoke\"", html);
+        Assert.Contains("Replay &#215;16", html);  // × html-encoded
         Assert.DoesNotContain("Transcription by Device", html);
     }
 

@@ -34,7 +34,7 @@ public static class ReportBuilder
         html.Append("h2{font-size:1.1rem;margin:2rem 0 .2rem}table{border-collapse:collapse;");
         html.Append("width:100%;font-size:.9rem;margin-top:.6rem}th,td{text-align:left;");
         html.Append("padding:.4rem .7rem;border-bottom:1px solid #ddd}th{color:#555;");
-        html.Append("font-weight:600}.smoke{color:#aaa;text-decoration:line-through}");
+        html.Append("font-weight:600}");
         html.Append(".sub{color:#666;font-size:.9rem;margin:.1rem 0}pre{background:#f6f6f6;");
         html.Append("padding:1rem;overflow-x:auto;font-size:.8rem}</style></head><body>");
         html.Append("<h1>Sotto Performance Report</h1>");
@@ -201,7 +201,7 @@ public static class ReportBuilder
             .Append("<th>Stop to note done (s)</th></tr>");
         foreach (var s in sessions)
         {
-            html.Append(Comparable(s) ? "<tr>" : "<tr class=\"smoke\">");
+            html.Append("<tr>");
             var speed = Number(s, "replaySpeed");
             Cell(html, Text(s, "start")?[..16].Replace('T', ' '));
             Cell(html, Text(s, "track") ?? "Microphone");
