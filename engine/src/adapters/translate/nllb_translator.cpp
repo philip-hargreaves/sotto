@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 #include <openvino/openvino.hpp>
 #include <stdexcept>
+#include <thread>
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -41,6 +42,8 @@ struct NllbTranslator::Impl {
     std::int64_t decoder_start = 2;
     std::mutex mutex;  // one translation at a time; guards the requests
     bool loaded = false;
+    std::mutex prepare_mutex;  // guards the one warm thread
+    std::thread loader;
     ov::Core core;  // tokenizer models need the tokenizers extension
     ov::InferRequest tokenizer;
     ov::InferRequest detokenizer;
@@ -85,7 +88,8 @@ struct NllbTranslator::Impl {
 
     // NLLB is a sentence-level model: one line at a time keeps the sheet's
     // structure and its quality
-    std::string TranslateLine(const std::string& line, std::int64_t target) {
+    std::string TranslateLine(const std::string& line, std::int64_t target,
+                              const std::function<void(const std::string&)>& partial = {}) {
         ov::Tensor input(ov::element::string, ov::Shape{1});
         input.data<std::string>()[0] = line;
         tokenizer.set_input_tensor(input);
@@ -134,13 +138,17 @@ struct NllbTranslator::Impl {
             }
             generated.push_back(token);
             step = {token};
+            if (partial) {
+                partial(Detokenize(generated));
+            }
         }
         return Detokenize(generated);
     }
 
     // NLLB is trained on single sentences and stops early on longer input,
     // so a line is translated one sentence at a time
-    std::string TranslateSentences(const std::string& line, std::int64_t target) {
+    std::string TranslateSentences(const std::string& line, std::int64_t target,
+                                   const std::function<void(const std::string&)>& partial = {}) {
         std::string out;
         std::size_t from = 0;
         while (from < line.size() && !cancel.load()) {
@@ -156,7 +164,10 @@ struct NllbTranslator::Impl {
                 if (!out.empty()) {
                     out += ' ';
                 }
-                out += TranslateLine(sentence, target);
+                const std::string prefix = out;
+                out += TranslateLine(sentence, target, [&](const std::string& text) {
+                    if (partial) partial(prefix + text);
+                });
             }
             from = end + (end < line.size() ? 1 : 0);
         }
@@ -172,7 +183,38 @@ NllbTranslator::NllbTranslator(const models::ModelStore& store, models::OvRuntim
     impl_->decoder_start = impl_->languages.at("special").at("decoderStart").get<std::int64_t>();
 }
 
-NllbTranslator::~NllbTranslator() = default;
+NllbTranslator::~NllbTranslator() {
+    std::thread loader;
+    {
+        std::lock_guard<std::mutex> lock(impl_->prepare_mutex);
+        loader = std::move(impl_->loader);
+    }
+    if (loader.joinable()) {
+        loader.join();
+    }
+}
+
+// The load costs ~12 s of CPU; started while the patient sheet writes, it
+// finishes before the translate button enables. A failed warm is retried
+// by the first Translate.
+void NllbTranslator::Prepare() {
+    std::lock_guard<std::mutex> lock(impl_->prepare_mutex);
+    if (impl_->loaded || impl_->loader.joinable()) {
+        return;
+    }
+    impl_->loader = std::thread([impl = impl_.get()] {
+        const auto t0 = std::chrono::steady_clock::now();
+        try {
+            std::lock_guard<std::mutex> lock(impl->mutex);
+            impl->Load();
+            std::fprintf(
+                stderr, "sotto-engine: translator warmed in %.1f s\n",
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: translator warm failed (%s)\n", e.what());
+        }
+    });
+}
 
 std::vector<std::string> NllbTranslator::Languages() {
     std::vector<std::string> names;
@@ -208,7 +250,10 @@ std::string NllbTranslator::Translate(const std::string& text, const std::string
             translated += '\n';
         }
         if (!line.empty() && line.find_first_not_of(" \t") != std::string::npos) {
-            translated += impl_->TranslateSentences(line, target);
+            const std::string prefix = translated;
+            translated += impl_->TranslateSentences(line, target, [&](const std::string& text) {
+                if (progress) progress(prefix + text);
+            });
         }
         if (progress) {
             progress(translated);

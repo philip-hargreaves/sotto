@@ -17,6 +17,10 @@ class ITranslator {
 
     virtual std::vector<std::string> Languages() = 0;
 
+    // Starts any slow loading in the background so the first Translate is
+    // warm; safe to call repeatedly
+    virtual void Prepare() {}
+
     virtual std::string Translate(const std::string& text, const std::string& language,
                                   const Progress& progress) = 0;
 

@@ -13,6 +13,10 @@
 #define NOMINMAX
 #include <windows.h>
 
+#ifdef _DEBUG
+#include <crtdbg.h>
+#endif
+
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
 #include "adapters/diarisation/deferred_diariser.hpp"
@@ -63,6 +67,15 @@ class WireEvents : public sotto::audio::ISessionEvents {
 
     void OnNoteReady(const std::string& text) override {
         server_.PushNotification("note/ready", {{"text", text}});
+        // The translator warms while the patient sheet writes, so the first
+        // translation is as fast as the rest
+        if (translator_ != nullptr) {
+            translator_->Prepare();
+        }
+    }
+
+    void SetTranslator(sotto::translate::ITranslator* translator) {
+        translator_ = translator;
     }
 
     void OnNoteFailed(const std::string& detail) override {
@@ -87,11 +100,20 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     sotto::ipc::PipeServer& server_;
+    sotto::translate::ITranslator* translator_ = nullptr;
 };
 
 }  // namespace
 
 int main(int argc, char* argv[]) {
+#ifdef _DEBUG
+    // A debug-CRT assert must reach stderr and abort, never hang the
+    // headless engine behind a modal dialog
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
     try {
         // Flags first, then positional: pipe name, store root, models root,
         // replay wav; tests pass their own so runs collide with neither the
@@ -225,6 +247,7 @@ int main(int argc, char* argv[]) {
                 *translator, [&server](const std::string& method, const nlohmann::json& params) {
                     server.PushNotification(method, params);
                 });
+            events.SetTranslator(translator.get());
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no translation (%s)\n", e.what());
         }

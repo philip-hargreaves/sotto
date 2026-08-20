@@ -15,13 +15,15 @@ namespace sotto::translate {
 
 // NLLB-200 behind the translator port: encoder once, then a greedy decode
 // over the stateful decoder. Runs on the manifest device (CPU), so it
-// never touches the GPU models. Loads lazily on first use.
+// never touches the GPU models. Loads on Prepare, else on first use.
 class NllbTranslator : public ITranslator {
    public:
     NllbTranslator(const models::ModelStore& store, models::OvRuntime& runtime);
     ~NllbTranslator() override;
 
     std::vector<std::string> Languages() override;
+
+    void Prepare() override;
 
     std::string Translate(const std::string& text, const std::string& language,
                           const Progress& progress) override;
