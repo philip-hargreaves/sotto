@@ -18,8 +18,8 @@ class Registry;
 
 namespace sotto::note {
 
-// Qwen behind the note port. The pipeline is loaded per Write and freed
-// after; the prompt file is re-read per note.
+// Qwen behind the note port. Prepare starts one background load and the
+// pipeline stays resident; the prompt file is re-read per note.
 class QwenNoteWriter : public INoteWriter {
    public:
     QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
@@ -28,7 +28,7 @@ class QwenNoteWriter : public INoteWriter {
 
     std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override;
 
-    // Reads the weights back into the file cache, off the GPU
+    // Loads the pipeline in the background; idempotent, retried on failure
     void Prepare() override;
 
     void Cancel() override;
