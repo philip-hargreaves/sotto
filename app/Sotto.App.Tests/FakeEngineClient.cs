@@ -11,6 +11,8 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 {
     private static readonly JsonElement Empty = JsonSerializer.SerializeToElement(new { });
 
+    private static readonly string[] FakeLanguages = ["French", "Polish", "Urdu"];
+
     public event Action<string, JsonElement>? NotificationReceived;
 
     public event Action<bool>? ConnectedChanged;
@@ -47,6 +49,12 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
             }
 
             return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        }
+
+        if (method == "translate/languages")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(
+                new { languages = FakeLanguages }));
         }
 
         if (method == "engine/metrics")

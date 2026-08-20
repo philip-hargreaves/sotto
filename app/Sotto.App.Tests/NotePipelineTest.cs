@@ -88,6 +88,126 @@ public class NotePipelineTest
     }
 
     [Fact]
+    public async Task PatientInformationStreamsAndSeals()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the note" }));
+
+        engine.RaiseNotification("patient/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Your appointment" }));
+        Assert.Equal("Your appointment", note.PatientInfoText);
+
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Your appointment today ..." }));
+        Assert.Equal("Your appointment today ...", note.PatientInfoText);
+        Assert.Equal(NotePipelineState.AllReady, note.PipelineState);
+    }
+
+    [Fact]
+    public async Task AFailedPatientSheetHasItsOwnState()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the note" }));
+
+        engine.RaiseNotification("patient/failed", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { detail = "generation failed" }));
+
+        Assert.Equal(NotePipelineState.PatientFailed, note.PipelineState);
+        Assert.Equal(SessionState.Review, session.State);
+    }
+
+    [Fact]
+    public async Task TranslationFlowsThroughTheEngine()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the note" }));
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the sheet" }));
+
+        Assert.Contains("Polish", note.Languages);
+        note.SelectedLanguage = "Polish";
+        Assert.True(note.TranslateCommand.CanExecute(null));
+        await note.TranslateCommand.ExecuteAsync(null);
+
+        var request = engine.Requests.Single(r => r.Method == "patient/translate");
+        Assert.Contains("Polish", request.Params);
+        Assert.Contains("s1", request.Params);
+
+        engine.RaiseNotification("translate/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Twoja" }));
+        engine.RaiseNotification("translate/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Twoja wizyta", language = "Polish" }));
+        Assert.Equal("Twoja wizyta", note.TranslationText);
+    }
+
+    [Fact]
+    public async Task TranslationWaitsForTheStoredSheet()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the note" }));
+        note.SelectedLanguage = "French";
+
+        // The sheet is still streaming: text exists in the pane, but the
+        // engine has stored nothing yet - a request now would error
+        engine.RaiseNotification("patient/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Your appointment" }));
+        Assert.False(note.TranslateCommand.CanExecute(null));
+
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Your appointment today ..." }));
+        Assert.True(note.TranslateCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ASecondTranslationWaitsForTheFirst()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready");
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the sheet" }));
+        note.SelectedLanguage = "French";
+
+        await note.TranslateCommand.ExecuteAsync(null);
+        Assert.False(note.TranslateCommand.CanExecute(null));
+
+        engine.RaiseNotification("translate/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Votre rendez-vous", language = "French" }));
+        Assert.True(note.TranslateCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AFailedTranslationReleasesTheButton()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready");
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "the sheet" }));
+        note.SelectedLanguage = "French";
+
+        await note.TranslateCommand.ExecuteAsync(null);
+        engine.RaiseNotification("translate/failed", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { detail = "boom" }));
+
+        Assert.True(note.TranslateCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task NewConsultationResetsThePipeline()
     {
         var (session, engine, note) = TestSession.Create();

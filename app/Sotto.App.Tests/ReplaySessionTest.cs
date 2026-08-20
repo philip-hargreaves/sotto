@@ -8,6 +8,7 @@ namespace Sotto.App.Tests;
 /// "Press play" through the whole shell stack against the real engine with
 /// real models: connect, idle, replay, pause, stop.
 /// </summary>
+[Collection("engine")]
 [Trait("Category", "Integration")]
 [Trait("Requires", "Engine")]
 public class ReplaySessionTest
@@ -114,7 +115,8 @@ public class ReplaySessionTest
         using var launcher = new ProcessEngineLauncher(
             FindEngine(),
             $"{pipeName} \"{Path.Combine(directory, "store")}\""
-                + (models is null ? "" : $" \"{models}\""));
+                + (models is null ? "" : $" \"{models}\""),
+            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-track-test.log"));
         using var host = new EngineSupervisor(
             launcher, new FakeSession(), TimeProvider.System,
             new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
@@ -126,6 +128,8 @@ public class ReplaySessionTest
             await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
 
             var noteReady = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var patientReady = new TaskCompletionSource<string>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             var partials = 0;
             connection.NotificationReceived += (method, parameters) =>
@@ -142,6 +146,14 @@ public class ReplaySessionTest
                         noteReady.TrySetException(new InvalidOperationException(
                             parameters.GetProperty("detail").GetString()));
                         break;
+                    case "patient/ready":
+                        patientReady.TrySetResult(
+                            parameters.GetProperty("text").GetString() ?? "");
+                        break;
+                    case "patient/failed":
+                        patientReady.TrySetException(new InvalidOperationException(
+                            parameters.GetProperty("detail").GetString()));
+                        break;
                     default:
                         break;
                 }
@@ -152,7 +164,7 @@ public class ReplaySessionTest
                 new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
             await Task.Delay(TimeSpan.FromSeconds(20));  // ~5 min of audio at 16x
             var stop = await connection.RequestAsync(
-                "session/stop", null, TimeSpan.FromSeconds(120));
+                "session/stop", null, TimeSpan.FromSeconds(240));
 
             var id = stop.GetProperty("sessionId").GetString();
             var transcript = await connection.RequestAsync(
@@ -167,6 +179,13 @@ public class ReplaySessionTest
             Assert.True(partials > 3, $"the note must stream, saw {partials} partials");
             var stored = await connection.RequestAsync("session/note", new { id }, Timeout);
             Assert.Equal(note, stored.GetProperty("text").GetString());
+
+            // The patient sheet follows the note
+            var patient = await patientReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
+            Assert.Contains("Your appointment today", patient);
+            var storedPatient =
+                await connection.RequestAsync("session/patient", new { id }, Timeout);
+            Assert.Equal(patient, storedPatient.GetProperty("text").GetString());
         }
         finally
         {
@@ -195,27 +214,7 @@ public class ReplaySessionTest
         return null;
     }
 
-    private static string FindEngine()
-    {
-        for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))
-        {
-            var buildRoot = Path.Combine(dir, "build");
-            if (Directory.Exists(buildRoot))
-            {
-                var newest = Directory
-                    .EnumerateFiles(buildRoot, "sotto_engine.exe", SearchOption.AllDirectories)
-                    .Select(path => new FileInfo(path))
-                    .OrderByDescending(info => info.LastWriteTimeUtc)
-                    .FirstOrDefault();
-                if (newest is not null)
-                {
-                    return newest.FullName;
-                }
-            }
-        }
-
-        throw new FileNotFoundException("sotto_engine.exe not found");
-    }
+    private static string FindEngine() => EnginePath.Find();
 
     private static async Task<JsonElement> RetryAsync(Func<Task<JsonElement>> request)
     {
