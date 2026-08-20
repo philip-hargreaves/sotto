@@ -3,12 +3,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
-#include <fstream>
+#include <memory>
+#include <mutex>
 #include <openvino/genai/llm_pipeline.hpp>
 #include <stdexcept>
 #include <thread>
 #include <utility>
-#include <vector>
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -32,43 +32,83 @@ struct QwenNoteWriter::Impl {
     models::OvRuntime& runtime;
     std::filesystem::path prompt_path;
     metrics::Registry* metrics;
-    std::unique_ptr<ov::genai::LLMPipeline> pipeline;
+    std::mutex swap_mutex;   // guards pipeline
+    std::mutex state_mutex;  // guards loader, load_error, loading
+    std::shared_ptr<ov::genai::LLMPipeline> pipeline;
+    std::exception_ptr load_error;
+    std::thread loader;
+    std::atomic<bool> loading{false};
     std::atomic<bool> cancel{false};
-    std::atomic<bool> prefetching{false};
-    std::thread prefetch;
+
+    void Load() {
+        const models::ModelInfo& info = store.Resolve("note", "default");
+        store.Verify(info);
+        const std::string device = runtime.ResolveDevice(info.device);
+        const auto t0 = std::chrono::steady_clock::now();
+        auto built = std::make_shared<ov::genai::LLMPipeline>(
+            info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "sotto-engine: note on %s, loaded in %.1f s\n", device.c_str(),
+                     seconds);
+        if (metrics != nullptr) {
+            metrics->RecordDevice("note", device);
+            metrics->RecordLoad("note", seconds);
+        }
+        std::lock_guard<std::mutex> lock(swap_mutex);
+        pipeline = std::move(built);
+    }
+
+    std::shared_ptr<ov::genai::LLMPipeline> Pipeline() {
+        std::lock_guard<std::mutex> lock(swap_mutex);
+        return pipeline;
+    }
+
+    void JoinLoader() {
+        std::thread finished;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            finished = std::move(loader);
+        }
+        if (finished.joinable()) {
+            finished.join();
+        }
+    }
 };
 
 QwenNoteWriter::QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
                                std::filesystem::path prompt_path, metrics::Registry* metrics)
-    : impl_(new Impl{store, runtime, std::move(prompt_path), metrics, nullptr, {}, {}, {}}) {}
+    : impl_(new Impl{store, runtime, std::move(prompt_path), metrics}) {}
 
 QwenNoteWriter::~QwenNoteWriter() {
-    if (impl_->prefetch.joinable()) {
-        impl_->prefetch.join();
-    }
+    impl_->JoinLoader();
 }
 
+// Starts the one background load; the ~14 s cost lands during capture, not
+// on the stop path. A failed attempt is retried on the next call.
 void QwenNoteWriter::Prepare() {
-    if (impl_->prefetching.exchange(true)) {
-        return;  // one prefetch at a time
-    }
-    if (impl_->prefetch.joinable()) {
-        impl_->prefetch.join();
-    }
-    impl_->prefetch = std::thread([impl = impl_.get()] {
-        try {
-            const models::ModelInfo& info = impl->store.Resolve("note", "default");
-            std::vector<char> buffer(std::size_t{1} << 20);
-            for (const auto& entry : std::filesystem::directory_iterator(info.dir)) {
-                if (!entry.is_regular_file()) continue;
-                std::ifstream in(entry.path(), std::ios::binary);
-                while (in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()))) {
-                }
-            }
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+    std::thread finished;
+    {
+        std::lock_guard<std::mutex> lock(impl_->state_mutex);
+        if (impl_->loading.load() || impl_->Pipeline() != nullptr) {
+            return;
         }
-        impl->prefetching = false;
-    });
+        finished = std::move(impl_->loader);
+        impl_->load_error = nullptr;
+        impl_->loading = true;
+        impl_->loader = std::thread([impl = impl_.get()] {
+            try {
+                impl->Load();
+            } catch (...) {
+                std::lock_guard<std::mutex> lock(impl->state_mutex);
+                impl->load_error = std::current_exception();
+            }
+            impl->loading = false;
+        });
+    }
+    if (finished.joinable()) {
+        finished.join();
+    }
 }
 
 std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
@@ -79,24 +119,17 @@ std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     impl_->cancel = false;
     const std::string prompt = LoadPrompt(impl_->prompt_path) + TranscriptBlock(transcript);
 
-    // Loaded per note and freed after: an idle resident model through a
-    // real-time session measured fatal (GPU demotion), as did cohabiting
-    // with Whisper during generation
-    {
-        const models::ModelInfo& info = impl_->store.Resolve("note", "default");
-        impl_->store.Verify(info);
-        const std::string device = impl_->runtime.ResolveDevice(info.device);
-        const auto t0 = std::chrono::steady_clock::now();
-        impl_->pipeline = std::make_unique<ov::genai::LLMPipeline>(
-            info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
-        const double seconds =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "sotto-engine: note on %s, loaded in %.1f s\n", device.c_str(),
-                     seconds);
-        if (impl_->metrics != nullptr) {
-            impl_->metrics->RecordDevice("note", device);
-            impl_->metrics->RecordLoad("note", seconds);
+    Prepare();
+    impl_->JoinLoader();
+    // A strong reference for the whole generation: a swap or teardown can
+    // never free the model under an in-flight call
+    const auto pipeline = impl_->Pipeline();
+    if (pipeline == nullptr) {
+        std::lock_guard<std::mutex> lock(impl_->state_mutex);
+        if (impl_->load_error != nullptr) {
+            std::rethrow_exception(impl_->load_error);
         }
+        throw std::runtime_error("note model unavailable");
     }
 
     ov::genai::GenerationConfig config;
@@ -120,13 +153,7 @@ std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
         }
         return ov::genai::StreamingStatus::RUNNING;
     };
-    try {
-        impl_->pipeline->generate(wrapped, config, streamer);
-    } catch (...) {
-        impl_->pipeline.reset();
-        throw;
-    }
-    impl_->pipeline.reset();
+    pipeline->generate(wrapped, config, streamer);
     return Trimmed(text);
 }
 

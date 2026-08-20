@@ -176,6 +176,7 @@ public static class ReportBuilder
             ("Transcript finalise (s)",
                 s => Number(s, "engine", "stageSeconds", "transcript sealed")),
             ("Note prefill (s)", NotePrefill),
+            ("Note generation (s)", NoteGeneration),
             ("Stop to note done (s)", s => Number(s, "note", "readyAfterStopSeconds")),
         };
         foreach (var (label, value) in rows)
@@ -198,7 +199,7 @@ public static class ReportBuilder
         html.Append("<table><tr><th>Started</th><th>Recording</th><th>Source</th>")
             .Append("<th>Device</th><th>Transcription RTF</th><th>Audio length</th>")
             .Append("<th>Transcript finalise (s)</th><th>Note prefill (s)</th>")
-            .Append("<th>Stop to note done (s)</th></tr>");
+            .Append("<th>Note generation (s)</th><th>Stop to note done (s)</th></tr>");
         foreach (var s in sessions)
         {
             html.Append("<tr>");
@@ -211,6 +212,7 @@ public static class ReportBuilder
             Cell(html, Clock(Number(s, "engine", "audioSeconds")));
             Cell(html, Format(Number(s, "engine", "stageSeconds", "transcript sealed")));
             Cell(html, Format(NotePrefill(s)));
+            Cell(html, Format(NoteGeneration(s)));
             Cell(html, Format(Number(s, "note", "readyAfterStopSeconds")));
             html.Append("</tr>");
         }
@@ -218,18 +220,18 @@ public static class ReportBuilder
         html.Append("</table>");
     }
 
-    // First words minus finalise and model load: the prompt-processing cost
+    // First words minus finalise: the prompt-processing cost. The note
+    // model loads during capture, so its load is not on the stop path
     private static double? NotePrefill(JsonElement s)
     {
         var first = Number(s, "note", "firstPartialAfterStopSeconds");
         var sealedAt = Number(s, "engine", "stageSeconds", "transcript sealed");
-        var load = Number(s, "engine", "loadSeconds", "note");
-        if (first is null || sealedAt is null || load is null)
+        if (first is null || sealedAt is null)
         {
             return null;
         }
 
-        return Math.Max(0, Math.Round(first.Value - sealedAt.Value - load.Value, 1));
+        return Math.Max(0, Math.Round(first.Value - sealedAt.Value, 1));
     }
 
 
@@ -237,6 +239,15 @@ public static class ReportBuilder
     {
         var speed = Number(session, "replaySpeed");
         return speed is null || speed <= 1.0;
+    }
+
+    private static double? NoteGeneration(JsonElement s)
+    {
+        var first = Number(s, "note", "firstPartialAfterStopSeconds");
+        var done = Number(s, "note", "readyAfterStopSeconds");
+        return first is null || done is null
+            ? null
+            : Math.Max(0, Math.Round(done.Value - first.Value, 1));
     }
 
     private static string Clock(double? seconds)
