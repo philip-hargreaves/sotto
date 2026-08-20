@@ -14,6 +14,7 @@
 
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
+#include "core/metrics.hpp"
 #include "core/per_turn.hpp"
 #include "core/role_naming.hpp"
 #include "core/turn_reconcile.hpp"
@@ -64,7 +65,8 @@ class SessionController {
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
                       diar::IDiariser* diariser = nullptr,
                       std::uint64_t diar_advance_frames = 5 * kSampleRate,
-                      note::INoteWriter* note_writer = nullptr)
+                      note::INoteWriter* note_writer = nullptr,
+                      metrics::Registry* metrics = nullptr)
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
@@ -72,6 +74,7 @@ class SessionController {
           vad_(vad),
           diariser_(diariser),
           note_writer_(note_writer),
+          metrics_(metrics),
           diar_advance_frames_(diar_advance_frames),
           settle_timeout_(settle_timeout) {}
 
@@ -126,6 +129,9 @@ class SessionController {
         // Warm the note weights' file cache while the session records
         if (note_writer_ != nullptr) {
             note_writer_->Prepare();
+        }
+        if (metrics_ != nullptr) {
+            metrics_->BeginSession(replay.has_value(), replay.has_value() ? replay->speed : 0.0);
         }
 
         std::unique_lock<std::mutex> lock(mutex_);
@@ -397,16 +403,22 @@ class SessionController {
         // No capture work may run once finalise starts; stage timings let a
         // slow finalise name its stage
         const auto finalise_start = std::chrono::steady_clock::now();
-        const auto stage = [&finalise_start](const char* name) {
-            std::fprintf(
-                stderr, "sotto-engine: finalise %s at %.1f s\n", name,
+        const auto stage = [this, &finalise_start](const char* name) {
+            const double seconds =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - finalise_start)
-                    .count());
+                    .count();
+            std::fprintf(stderr, "sotto-engine: finalise %s at %.1f s\n", name, seconds);
+            if (metrics_ != nullptr) {
+                metrics_->RecordStage(name, seconds);
+            }
         };
         JoinDiarThread();
         stage("capture joined");
         std::fprintf(stderr, "sotto-engine: session audio %.1f s, %d capture ticks\n",
                      session_audio_.size() / 16000.0, diar_ticks_);
+        if (metrics_ != nullptr) {
+            metrics_->RecordSession(session_audio_.size() / 16000.0, lost_frames_, diar_ticks_);
+        }
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
@@ -483,6 +495,10 @@ class SessionController {
                                  "%.1f s, %d clusters\n",
                                  turns.size(), with_text, cache.size(), longest / 16000.0,
                                  result.cluster_count);
+                    if (metrics_ != nullptr) {
+                        metrics_->RecordTranscript(static_cast<int>(with_text),
+                                                   result.cluster_count);
+                    }
                 }
                 std::vector<diar::RoleTurn> role_turns;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
@@ -589,6 +605,7 @@ class SessionController {
     IStreamingVad& vad_;
     diar::IDiariser* diariser_;
     note::INoteWriter* note_writer_;
+    metrics::Registry* metrics_;
     std::uint64_t diar_advance_frames_;
     std::chrono::milliseconds settle_timeout_;
     std::unique_ptr<IAudioSource> source_;

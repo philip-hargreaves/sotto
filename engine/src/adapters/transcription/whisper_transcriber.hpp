@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -19,6 +20,10 @@ class ModelStore;
 class OvRuntime;
 }  // namespace sotto::models
 
+namespace sotto::metrics {
+class Registry;
+}  // namespace sotto::metrics
+
 namespace sotto::asr {
 
 using DecodeFn = std::function<std::vector<Turn>(std::span<const float>, std::uint64_t)>;
@@ -34,9 +39,10 @@ class WhisperTranscriber : public ITranscriber {
    public:
     // device_override replaces the manifest device
     WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
-                       std::string device_override = "");
-    explicit WhisperTranscriber(DecodeFn decode);      // Tests inject the decode
-    explicit WhisperTranscriber(DecodeLoader loader);  // Tests pace the load
+                       std::string device_override = "", metrics::Registry* metrics = nullptr);
+    explicit WhisperTranscriber(DecodeFn decode);  // Tests inject the decode
+    explicit WhisperTranscriber(DecodeLoader loader,
+                                metrics::Registry* metrics = nullptr);  // Tests pace the load
     ~WhisperTranscriber() override;
 
     void Begin(ITurnSink& sink) override;
@@ -66,10 +72,12 @@ class WhisperTranscriber : public ITranscriber {
 
     void WorkerLoop();
     void LoadIfPending();
+    void RecordDecode(std::size_t frames, std::chrono::steady_clock::time_point t0);
 
     DecodeLoader factory_;  // The reload recipe Release re-arms from
     DecodeLoader loader_;
     DecodeFn decode_;  // Worker-thread only once the loader has run
+    metrics::Registry* metrics_ = nullptr;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<Window> queue_;

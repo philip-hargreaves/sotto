@@ -24,6 +24,24 @@ std::string OvRuntime::ResolveDevice(const std::string& requested) {
     throw std::runtime_error("unsupported device in manifest: " + requested);
 }
 
+std::map<std::string, std::string> OvRuntime::DescribeDevices() {
+    std::map<std::string, std::string> devices;
+    for (const auto& device : core_.get_available_devices()) {
+        try {
+            std::string name = core_.get_property(device, ov::device::full_name);
+            if (device.rfind("NPU", 0) == 0) {
+                try {
+                    name += " (arch " + core_.get_property(device, ov::device::architecture) + ")";
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+            }
+            devices[device] = name;
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+    return devices;
+}
+
 LoadedModel OvRuntime::Load(const ModelStore& store, std::string_view task, std::string_view tier,
                             const std::string& xml_name) {
     const ModelInfo& info = store.Resolve(task, tier);

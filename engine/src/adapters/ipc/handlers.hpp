@@ -7,6 +7,10 @@
 #include "adapters/models/model_store.hpp"
 #include "core/session_controller.hpp"
 
+namespace sotto::models {
+class OvRuntime;
+}  // namespace sotto::models
+
 namespace sotto::ipc {
 
 std::variant<json, Error> HandleHello(const json& params);
@@ -28,7 +32,8 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
 
 // Every method the engine serves
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models,
-                     sotto::store::ISessionStore& sessions);
+                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
+                     sotto::metrics::Registry* metrics = nullptr,
+                     sotto::models::OvRuntime* runtime = nullptr);
 
 }  // namespace sotto::ipc

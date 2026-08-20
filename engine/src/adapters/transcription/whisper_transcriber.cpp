@@ -1,5 +1,6 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <memory>
 #include <openvino/genai/whisper_pipeline.hpp>
@@ -7,6 +8,7 @@
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
+#include "core/metrics.hpp"
 #include "core/turn_assembly.hpp"
 #include "ports/audio_source.hpp"
 
@@ -21,12 +23,13 @@ std::string Trimmed(const std::string& text) {
 }
 
 DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
-                           const std::string& device_override) {
+                           const std::string& device_override, metrics::Registry* metrics) {
     const models::ModelInfo& info = store.Resolve("asr", "default");
     store.Verify(info);
     const std::string device =
         runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
     std::fprintf(stderr, "sotto-engine: asr on %s\n", device.c_str());
+    if (metrics != nullptr) metrics->RecordDevice("asr", device);
 
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
         info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
@@ -70,17 +73,19 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 }  // namespace
 
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
-                                       std::string device_override)
-    : WhisperTranscriber(DecodeLoader([&store, &runtime, device = std::move(device_override)] {
-          return MakeWhisperDecode(store, runtime, device);
-      })) {}
+                                       std::string device_override, metrics::Registry* metrics)
+    : WhisperTranscriber(
+          DecodeLoader([&store, &runtime, device = std::move(device_override), metrics] {
+              return MakeWhisperDecode(store, runtime, device, metrics);
+          }),
+          metrics) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
-WhisperTranscriber::WhisperTranscriber(DecodeLoader loader)
-    : factory_(loader), loader_(std::move(loader)) {
+WhisperTranscriber::WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics)
+    : factory_(loader), loader_(std::move(loader)), metrics_(metrics) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
@@ -140,12 +145,27 @@ std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
 // Load off the hot path: the engine serves and sessions record while the
 // pipeline compiles; queued windows decode afterwards. A failed load drains
 // windows without turns, so nothing hangs
+void WhisperTranscriber::RecordDecode(std::size_t frames,
+                                      std::chrono::steady_clock::time_point t0) {
+    if (metrics_ != nullptr) {
+        metrics_->RecordDecode(
+            static_cast<double>(frames) / 16000.0,
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    }
+}
+
 void WhisperTranscriber::LoadIfPending() {
     if (!loader_) {
         return;
     }
+    const auto t0 = std::chrono::steady_clock::now();
     try {
         decode_ = loader_();
+        if (metrics_ != nullptr) {
+            metrics_->RecordLoad(
+                "asr",
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
     }
@@ -188,11 +208,13 @@ void WhisperTranscriber::WorkerLoop() {
             std::string text;
             try {
                 if (decode_) {
+                    const auto t0 = std::chrono::steady_clock::now();
                     for (const Turn& turn : decode_(clip.frames, clip.first_frame)) {
                         if (turn.text.empty()) continue;
                         if (!text.empty()) text += ' ';
                         text += turn.text;
                     }
+                    RecordDecode(clip.frames.size(), t0);
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
@@ -216,7 +238,9 @@ void WhisperTranscriber::WorkerLoop() {
         // the audio is already stored
         try {
             if (decode_) {
+                const auto t0 = std::chrono::steady_clock::now();
                 auto turns = decode_(window.frames, window.first_frame);
+                RecordDecode(window.frames.size(), t0);
                 AnchorFirstTurn(turns, window.first_frame);
                 DropReheardTurns(turns, window.first_new_frame);
                 // The dedup backstop acts at the window boundary only: within

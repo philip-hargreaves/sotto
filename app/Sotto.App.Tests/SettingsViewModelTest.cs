@@ -82,6 +82,41 @@ public class SettingsViewModelTest
         Assert.True(settings.DemoTrayEnabled);
     }
 
+    private sealed class FixedMachine : Sotto.App.Core.Metrics.IMachineInfoProvider
+    {
+        public Sotto.App.Core.Metrics.MachineInfo Describe() =>
+            new("TestCpu", 32, "TestOs", [], null);
+    }
+
+    [Fact]
+    public async Task ExportWritesTheHtmlReport()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        var collector = new Sotto.App.Core.Metrics.PerformanceCollector(
+            new FakeEngineClient(), () => true, () => null, Path.Combine(dir, "metrics.jsonl"));
+        collector.SessionStarted("mic", 0, null);
+        collector.StopRequested();
+        await collector.SessionFinishedAsync(null, 10);
+        var settings = new SettingsViewModel(
+            machine: new FixedMachine(), metrics: collector, exportDirectory: dir);
+
+        settings.ExportPerformanceReportCommand.Execute(null);
+
+        Assert.StartsWith("saved ", settings.ExportResult);
+        var report = Directory.GetFiles(dir, "sotto-perf-*.html").Single();
+        Assert.Contains("TestCpu", File.ReadAllText(report));
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void ExportWithoutDataExplainsItself()
+    {
+        var settings = new SettingsViewModel(machine: new FixedMachine());
+        settings.ExportPerformanceReportCommand.Execute(null);
+        Assert.Equal("no performance data collected yet", settings.ExportResult);
+    }
+
     [Fact]
     public void PreferencesRoundTripThroughTheFile()
     {

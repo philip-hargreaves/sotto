@@ -49,6 +49,12 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
             return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
         }
 
+        if (method == "engine/metrics")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(
+                new { devices = new { asr = "GPU.0" }, asrRealtimeFactor = 33.4 }));
+        }
+
         if (method == "session/transcript")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(new

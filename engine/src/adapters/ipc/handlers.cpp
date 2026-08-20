@@ -1,5 +1,10 @@
 #include "adapters/ipc/handlers.hpp"
 
+#include <memory>
+#include <openvino/core/version.hpp>
+#include <optional>
+
+#include "adapters/models/ov_runtime.hpp"
 #include "core/version.hpp"
 
 namespace sotto::ipc {
@@ -97,10 +102,35 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
 }
 
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models,
-                     sotto::store::ISessionStore& sessions) {
+                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
+                     sotto::metrics::Registry* metrics, sotto::models::OvRuntime* runtime) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
+    if (metrics != nullptr) {
+        // Device names are enumerated once, on the first fetch
+        auto hardware = std::make_shared<std::optional<json>>();
+        server.RegisterMethod("engine/metrics", [metrics, runtime, hardware](const json&) {
+            if (!hardware->has_value()) {
+                *hardware = runtime != nullptr ? json(runtime->DescribeDevices()) : json::object();
+            }
+            const auto s = metrics->Take();
+            return json{
+                {"devices", s.devices},
+                {"loadSeconds", s.load_seconds},
+                {"stageSeconds", s.stage_seconds},
+                {"asrRealtimeFactor",
+                 s.decode_busy_seconds > 0 ? s.decoded_audio_seconds / s.decode_busy_seconds : 0},
+                {"audioSeconds", s.session_audio_seconds},
+                {"lostFrames", s.lost_frames},
+                {"diarTicks", s.diar_ticks},
+                {"turns", s.turns},
+                {"clusters", s.clusters},
+                {"replay", s.replay},
+                {"replaySpeed", s.replay_speed},
+                {"hardware", **hardware},
+                {"openvino", std::string(ov::get_openvino_version().buildNumber)}};
+        });
+    }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
     server.RegisterMethod("session/list",
                           [&sessions](const json&) { return HandleSessionList(sessions); });

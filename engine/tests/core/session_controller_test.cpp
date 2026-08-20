@@ -380,6 +380,26 @@ TEST(SessionController, HopsBufferedWhileTheVadLoadsDrainMidSession) {
     EXPECT_EQ(submitted, store.frames.size());
 }
 
+TEST(SessionController, MetricsCarryTheSessionAndItsStages) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    metrics::Registry registry;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 nullptr, &registry);
+
+    ASSERT_TRUE(controller.Start(ReplaySpec{"x.wav", 4.0, false}));
+    controller.Stop();
+
+    const auto s = registry.Take();
+    EXPECT_TRUE(s.replay);
+    EXPECT_EQ(s.replay_speed, 4.0);
+    EXPECT_TRUE(s.stage_seconds.contains("transcriber drained"));
+    EXPECT_TRUE(s.stage_seconds.contains("capture joined"));
+}
+
 TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
     RecordingEvents events;
     FakeSessionStore store;

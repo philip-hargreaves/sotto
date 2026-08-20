@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "adapters/transcription/whisper_transcriber.hpp"
+#include "core/metrics.hpp"
 
 namespace sotto::asr {
 namespace {
@@ -66,6 +67,28 @@ TEST(WhisperWorker, TurnsArriveInSubmitOrder) {
 
     ASSERT_EQ(sink.turns.size(), 5u);
     for (std::uint64_t i = 0; i < 5; ++i) EXPECT_EQ(sink.turns[i].first_frame, i * 10);
+}
+
+TEST(WhisperWorker, DecodesAccumulateIntoTheMetrics) {
+    metrics::Registry registry;
+    {
+        RecordingSink sink;
+        WhisperTranscriber transcriber(
+            DecodeLoader([] {
+                return DecodeFn(
+                    [](std::span<const float>, std::uint64_t) { return std::vector<Turn>{}; });
+            }),
+            &registry);
+        transcriber.Begin(sink);
+        const std::vector<float> window(16000);
+        transcriber.Submit(window, 0);
+        transcriber.Submit(window, 16000);
+        transcriber.Finish();
+    }
+
+    const auto s = registry.Take();
+    EXPECT_EQ(s.decoded_audio_seconds, 2.0);
+    EXPECT_GE(s.decode_busy_seconds, 0.0);
 }
 
 TEST(WhisperWorker, ReleaseFreesAndTheNextSubmitReloads) {

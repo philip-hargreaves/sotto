@@ -39,9 +39,23 @@
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                 Text="Runs transcription on the NPU to save battery. The engine restarts to apply; the first switch prepares the model and can take a few minutes."
                 TextWrapping="Wrap" />
+            <ToggleSwitch
+                Header="Collect performance data"
+                IsOn="{x:Bind ViewModel.CollectPerformanceData, Mode=TwoWay}"
+                OffContent="Off"
+                OnContent="On" />
             <TextBlock
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="Model tiers, privacy and performance reporting land here as their features arrive."
+                Text="Records timings, device names and memory use per session - never audio or text - to a local file (metrics.jsonl in the app's data folder), for comparing hardware."
+                TextWrapping="Wrap" />
+            <Button Command="{x:Bind ViewModel.ExportPerformanceReportCommand}" Content="Export performance report" />
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="{x:Bind ViewModel.ExportResult, Mode=OneWay}"
+                TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="Model tiers and privacy land here as their features arrive."
                 TextWrapping="Wrap" />
         </StackPanel>
     </Grid>
