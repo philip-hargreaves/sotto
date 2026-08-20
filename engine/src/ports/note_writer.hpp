@@ -20,7 +20,17 @@ class INoteWriter {
     virtual std::string Write(const std::vector<asr::Turn>& transcript,
                               const Progress& progress) = 0;
 
-    // Safe warm-up for a Write that may follow; never touches the GPU
+    // Patient information from the finished note, on the same model; a
+    // writer that only writes notes returns false and is still valid
+    virtual bool WritesPatient() const {
+        return false;
+    }
+
+    virtual std::string WritePatient(const std::string&, const Progress&) {
+        return {};
+    }
+
+    // Starts the background model load; idempotent
     virtual void Prepare() {}
 
     virtual void Cancel() {}

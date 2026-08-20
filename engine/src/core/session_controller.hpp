@@ -42,6 +42,11 @@ class ISessionEvents {
     virtual void OnNotePartial(const std::string&) {}
     virtual void OnNoteReady(const std::string&) {}
     virtual void OnNoteFailed(const std::string&) {}
+
+    // Patient information follows the note on the same thread
+    virtual void OnPatientPartial(const std::string&) {}
+    virtual void OnPatientReady(const std::string&) {}
+    virtual void OnPatientFailed(const std::string&) {}
 };
 
 // A replay request, carried into the source factory; absent means microphone
@@ -570,18 +575,40 @@ class SessionController {
             // Whisper must not stay on the GPU beside the note model
             // (measured: KV-cache corruption); it reloads next session
             transcriber_.Release();
+            std::string note;
             try {
-                const std::string text = note_writer_->Write(
+                note = note_writer_->Write(
                     turns, [this](const std::string& partial) { events_.OnNotePartial(partial); });
                 try {
-                    store_.SaveNote(id, text);
+                    store_.SaveNote(id, note);
                 } catch (...) {  // NOLINT(bugprone-empty-catch)
                 }
-                events_.OnNoteReady(text);
+                events_.OnNoteReady(note);
             } catch (const std::exception& e) {
                 events_.OnNoteFailed(e.what());
+                return;
             } catch (...) {
                 events_.OnNoteFailed("note generation failed");
+                return;
+            }
+            // Patient information follows from the finished note; a failure
+            // here leaves the note intact
+            if (!note_writer_->WritesPatient() || note.empty()) {
+                return;
+            }
+            try {
+                const std::string patient = note_writer_->WritePatient(
+                    note,
+                    [this](const std::string& partial) { events_.OnPatientPartial(partial); });
+                try {
+                    store_.SavePatient(id, patient);
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+                events_.OnPatientReady(patient);
+            } catch (const std::exception& e) {
+                events_.OnPatientFailed(e.what());
+            } catch (...) {
+                events_.OnPatientFailed("patient information failed");
             }
         });
     }

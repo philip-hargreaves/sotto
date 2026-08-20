@@ -140,6 +140,16 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     server.RegisterMethod("session/note", [&sessions](const json& params) {
         return HandleSessionNote(sessions, params);
     });
+    server.RegisterMethod(
+        "session/patient", [&sessions](const json& params) -> std::variant<json, Error> {
+            const auto id = IdFrom(params);
+            if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            try {
+                return json{{"text", sessions.ReadPatient(std::get<std::string>(id))}};
+            } catch (const std::exception& e) {
+                return Error{kSessionError, "Session error", json(e.what())};
+            }
+        });
     server.RegisterMethod("session/delete", [&sessions](const json& params) {
         return HandleSessionDelete(sessions, params);
     });
@@ -173,14 +183,14 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.Cancel();
         return json::object();
     });
-    // The note lane announces itself when a writer is wired; without one the
-    // stub keeps today's contract. patient/ready is still a stub
+    // The note and patient lanes announce themselves when a writer is
+    // wired; without one the stubs keep the contract for CI
     server.RegisterMethod("session/stop", [&server, &controller](const json&) {
         controller.Stop();
         if (!controller.HasNoteWriter()) {
             server.QueueNotification("note/ready", json::object());
+            server.QueueNotification("patient/ready", json::object());
         }
-        server.QueueNotification("patient/ready", json::object());
         return json{{"sessionId", controller.LastFinalised()}};
     });
 }

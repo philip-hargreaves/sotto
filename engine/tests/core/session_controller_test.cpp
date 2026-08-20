@@ -139,10 +139,44 @@ struct RecordingEvents : ISessionEvents {
         note_done = true;
     }
 
+    void OnPatientPartial(const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        patient_partials.push_back(text);
+    }
+
+    void OnPatientReady(const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        patient_ready = text;
+        patient_done = true;
+    }
+
+    void OnPatientFailed(const std::string& detail) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        patient_failed = detail;
+        patient_done = true;
+    }
+
     std::vector<std::string> note_partials;
     std::string note_ready;
     std::string note_failed;
     bool note_done = false;
+    std::vector<std::string> patient_partials;
+    std::string patient_ready;
+    std::string patient_failed;
+    bool patient_done = false;
+
+    bool WaitForPatient() {
+        for (int i = 0; i < 400; ++i) {
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                if (patient_done) {
+                    return true;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return false;
+    }
 
     bool WaitForNote() {
         for (int i = 0; i < 400; ++i) {
@@ -246,6 +280,19 @@ struct FakeSessionStore : store::ISessionStore {
         return note;
     }
 
+    void SavePatient(const store::SessionId& id, const std::string& text) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("patient " + id);
+        patient = text;
+    }
+
+    std::string ReadPatient(const store::SessionId&) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        return patient;
+    }
+
+    std::string patient;
+
     std::vector<asr::Turn> ReadTurns(const store::SessionId&) override {
         return {};
     }
@@ -263,14 +310,33 @@ struct FakeSessionStore : store::ISessionStore {
 struct FakeNoteWriter : note::INoteWriter {
     std::string result = "the clinical note";
     bool fail = false;
+    bool patient = false;
+    bool fail_patient = false;
     std::atomic<bool> block{false};
     std::atomic<bool> cancelled{false};
     std::atomic<int> prepares{0};
     std::mutex mutex;
     std::vector<std::vector<asr::Turn>> calls;
+    std::string patient_input;
 
     void Prepare() override {
         ++prepares;
+    }
+
+    bool WritesPatient() const override {
+        return patient;
+    }
+
+    std::string WritePatient(const std::string& note_text, const Progress& progress) override {
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            patient_input = note_text;
+        }
+        progress("Your appointment");
+        if (fail_patient) {
+            throw std::runtime_error("patient generation failed");
+        }
+        return "the patient sheet";
     }
 
     std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override {
@@ -482,6 +548,69 @@ TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {
 
     ASSERT_TRUE(events.WaitForNote());
     EXPECT_EQ(transcriber.releases.load(), 1) << "the GPU is freed before the note writes";
+}
+
+TEST(SessionController, PatientInformationFollowsTheNote) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.patient = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForPatient());
+    EXPECT_EQ(events.note_ready, "the clinical note");
+    EXPECT_EQ(writer.patient_input, "the clinical note") << "the note is the patient input";
+    EXPECT_EQ(events.patient_partials, (std::vector<std::string>{"Your appointment"}));
+    EXPECT_EQ(events.patient_ready, "the patient sheet");
+    EXPECT_EQ(store.patient, "the patient sheet");
+}
+
+TEST(SessionController, AFailedPatientLeavesTheNoteIntact) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.patient = true;
+    writer.fail_patient = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForPatient());
+    EXPECT_EQ(events.patient_failed, "patient generation failed");
+    EXPECT_TRUE(events.patient_ready.empty());
+    EXPECT_EQ(events.note_ready, "the clinical note");
+    EXPECT_EQ(store.note, "the clinical note");
+    EXPECT_TRUE(store.patient.empty());
+}
+
+TEST(SessionController, ANoteOnlyWriterSkipsThePatientLane) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_TRUE(events.patient_partials.empty());
+    EXPECT_TRUE(writer.patient_input.empty());
 }
 
 TEST(SessionController, AFailedNoteAnnouncesAndStoresNothing) {

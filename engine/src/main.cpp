@@ -67,6 +67,18 @@ class WireEvents : public sotto::audio::ISessionEvents {
         server_.PushNotification("note/failed", {{"detail", detail}});
     }
 
+    void OnPatientPartial(const std::string& text) override {
+        server_.PushNotification("patient/partial", {{"text", text}});
+    }
+
+    void OnPatientReady(const std::string& text) override {
+        server_.PushNotification("patient/ready", {{"text", text}});
+    }
+
+    void OnPatientFailed(const std::string& detail) override {
+        server_.PushNotification("patient/failed", {{"detail", detail}});
+    }
+
    private:
     static const char* ReasonName(sotto::audio::SourceEndReason reason) {
         return reason == sotto::audio::SourceEndReason::kDeviceLost ? "deviceLost" : "failed";

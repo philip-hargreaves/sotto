@@ -116,9 +116,19 @@ std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
-    impl_->cancel = false;
-    const std::string prompt = LoadPrompt(impl_->prompt_path) + TranscriptBlock(transcript);
+    return Generate(LoadPrompt(impl_->prompt_path) + TranscriptBlock(transcript), progress);
+}
 
+std::string QwenNoteWriter::WritePatient(const std::string& note, const Progress& progress) {
+    if (note.empty()) {
+        throw std::runtime_error("nothing to write: the note is empty");
+    }
+    const auto prompt_path = impl_->prompt_path.parent_path() / "patient-info.md";
+    return Generate(LoadPrompt(prompt_path) + note + "\n", progress);
+}
+
+std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& progress) {
+    impl_->cancel = false;
     Prepare();
     impl_->JoinLoader();
     // A strong reference for the whole generation: a swap or teardown can
