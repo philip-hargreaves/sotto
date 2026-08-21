@@ -4,7 +4,9 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,6 +28,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/qwen_note_writer.hpp"
+#include "adapters/note/worker_note_writer.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
@@ -61,8 +64,23 @@ class WireEvents : public sotto::audio::ISessionEvents {
                                  {{"reason", ReasonName(reason)}, {"detail", detail}});
     }
 
+    // Partials are cumulative, so intermediates can drop freely: a ~12 Hz
+    // cap keeps the pipe and the shell's bindings calm at token cadence
+    void PushPartial(const std::string& method, nlohmann::json params) {
+        const auto now = std::chrono::steady_clock::now();
+        {
+            std::lock_guard<std::mutex> lock(throttle_mutex_);
+            auto& last = last_partial_[method];
+            if (now - last < std::chrono::milliseconds(80)) {
+                return;
+            }
+            last = now;
+        }
+        server_.PushNotification(method, std::move(params));
+    }
+
     void OnNotePartial(const std::string& text) override {
-        server_.PushNotification("note/partial", {{"text", text}});
+        PushPartial("note/partial", {{"text", text}});
     }
 
     void OnNoteReady(const std::string& text) override {
@@ -83,7 +101,7 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     void OnPatientPartial(const std::string& text) override {
-        server_.PushNotification("patient/partial", {{"text", text}});
+        PushPartial("patient/partial", {{"text", text}});
     }
 
     void OnPatientReady(const std::string& text) override {
@@ -101,6 +119,8 @@ class WireEvents : public sotto::audio::ISessionEvents {
 
     sotto::ipc::PipeServer& server_;
     sotto::translate::ITranslator* translator_ = nullptr;
+    std::mutex throttle_mutex_;
+    std::map<std::string, std::chrono::steady_clock::time_point> last_partial_;
 };
 
 }  // namespace
@@ -167,7 +187,8 @@ int main(int argc, char* argv[]) {
             -> std::unique_ptr<sotto::audio::IAudioSource> {
             if (replay.has_value()) {
                 return std::make_unique<sotto::audio::WavSource>(
-                    replay->path, sotto::audio::WavSource::Config{replay->speed, replay->monitor});
+                    replay->path, sotto::audio::WavSource::Config{replay->speed, replay->monitor,
+                                                                  replay->start_frame});
             }
             if (!forced.empty()) {
                 return std::make_unique<sotto::audio::WavSource>(forced);
@@ -226,13 +247,24 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }
-        // The prompt lives beside the models dir so edits apply per note
-        std::unique_ptr<sotto::note::QwenNoteWriter> note_writer;
+        // The prompt lives beside the models dir so edits apply per note.
+        // Generation runs in its own supervised process: a GPU driver fault
+        // there costs a respawn, never the engine (measured; see ADR-0027)
+        std::unique_ptr<sotto::note::INoteWriter> note_writer;
         try {
             model_store.Resolve("note", "default");
-            note_writer = std::make_unique<sotto::note::QwenNoteWriter>(
-                model_store, ov_runtime,
-                models_root.parent_path() / "prompts" / "note-narrative.md", &metrics);
+            const auto prompt = models_root.parent_path() / "prompts" / "note-narrative.md";
+            wchar_t exe_path[MAX_PATH]{};
+            GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+            const auto host = std::filesystem::path(exe_path).parent_path() / "sotto_note_host.exe";
+            if (std::filesystem::exists(host)) {
+                note_writer =
+                    std::make_unique<sotto::note::WorkerNoteWriter>(host, models_root, prompt);
+            } else {
+                std::fprintf(stderr, "sotto-engine: note host missing, writing in-process\n");
+                note_writer = std::make_unique<sotto::note::QwenNoteWriter>(model_store, ov_runtime,
+                                                                            prompt, &metrics);
+            }
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
         }
@@ -244,8 +276,13 @@ int main(int argc, char* argv[]) {
             translator =
                 std::make_unique<sotto::translate::NllbTranslator>(model_store, ov_runtime);
             translate_lane = std::make_unique<sotto::translate::TranslateLane>(
-                *translator, [&server](const std::string& method, const nlohmann::json& params) {
-                    server.PushNotification(method, params);
+                *translator,
+                [&server, &events](const std::string& method, const nlohmann::json& params) {
+                    if (method == "translate/partial") {
+                        events.PushPartial(method, params);
+                    } else {
+                        server.PushNotification(method, params);
+                    }
                 });
             events.SetTranslator(translator.get());
         } catch (const std::exception& e) {
