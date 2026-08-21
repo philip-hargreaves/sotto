@@ -16,6 +16,7 @@
 #include "core/level_meter.hpp"
 #include "core/metrics.hpp"
 #include "core/per_turn.hpp"
+#include "core/resume_source.hpp"
 #include "core/role_naming.hpp"
 #include "core/turn_reconcile.hpp"
 #include "ports/audio_source.hpp"
@@ -54,6 +55,7 @@ struct ReplaySpec {
     std::string path;
     double speed = 1.0;
     bool monitor = false;
+    std::uint64_t start_frame = 0;  // resume: skip audio already captured
 };
 
 using SourceFactory =
@@ -91,8 +93,11 @@ class SessionController {
     SessionController& operator=(const SessionController&) = delete;
 
     // True once audio flows; false if the source ended or the deadline
-    // passed first, with the reason left in LastEnd
-    bool Start(std::optional<ReplaySpec> replay = std::nullopt) {
+    // passed first, with the reason left in LastEnd. A resume replays the
+    // crashed session's stored audio ahead of the live source, into a new
+    // session that supersedes the old one at its first storage outcome.
+    bool Start(std::optional<ReplaySpec> replay = std::nullopt,
+               const store::SessionId& resume_from = {}) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
@@ -107,10 +112,15 @@ class SessionController {
             end_ = {};
             meter_ = LevelMeter{};
         }
+        std::vector<float> resumed_audio;
         try {
+            if (!resume_from.empty()) {
+                resumed_audio = store_.ReadAudio(resume_from);
+            }
             const store::SessionId id = store_.Begin({kSampleRate, "", ""});
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
+            resumed_from_ = resume_from;
             vad_.Reset();
             endpointer_.emplace(vad_);
             vad_backlog_.clear();
@@ -125,7 +135,15 @@ class SessionController {
         }
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            source_ = factory_(replay);
+            if (!resumed_audio.empty()) {
+                if (replay.has_value()) {
+                    replay->start_frame += resumed_audio.size();
+                }
+                source_ =
+                    std::make_unique<ResumeSource>(std::move(resumed_audio), factory_(replay));
+            } else {
+                source_ = factory_(replay);
+            }
         }
         worker_ = std::thread([this] { GuardedRun(); });
         if (diariser_ != nullptr) {
@@ -203,6 +221,12 @@ class SessionController {
     store::SessionId LastFinalised() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return last_finalised_;
+    }
+
+    // The recording session's id, so the shell can resume it after a crash
+    store::SessionId CurrentSession() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return session_id_;
     }
 
     bool HasNoteWriter() const {
@@ -561,6 +585,19 @@ class SessionController {
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
+        // The resumed-from session is superseded: everything it held flowed
+        // into this one before any outcome could be reached
+        std::string resumed;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            resumed = std::exchange(resumed_from_, {});
+        }
+        if (!resumed.empty()) {
+            try {
+                store_.Delete(resumed);
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+        }
         if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {
             StartNoteLane(id, std::move(note_input));
         }
@@ -572,9 +609,11 @@ class SessionController {
         JoinNoteThread();
         std::lock_guard<std::mutex> lock(mutex_);
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
-            // Whisper must not stay on the GPU beside the note model
-            // (measured: KV-cache corruption); it reloads next session
-            transcriber_.Release();
+            // An in-process note model needs whisper off the GPU first
+            // (measured: KV-cache corruption); a worker-process model does not
+            if (note_writer_->WantsTranscriberReleased()) {
+                transcriber_.Release();
+            }
             std::string note;
             try {
                 note = note_writer_->Write(
@@ -653,6 +692,7 @@ class SessionController {
     bool stop_requested_ = false;
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
+    store::SessionId resumed_from_;
     store::SessionId last_finalised_;
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined

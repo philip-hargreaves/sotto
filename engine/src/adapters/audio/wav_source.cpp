@@ -153,6 +153,11 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
     }
 
     std::size_t remaining = header.data_bytes / bytes_per_frame;
+    if (config_.start_frame > 0) {
+        const auto skip = std::min<std::uint64_t>(config_.start_frame, remaining);
+        in.seekg(static_cast<std::streamoff>(skip * bytes_per_frame), std::ios::cur);
+        remaining -= static_cast<std::size_t>(skip);
+    }
     std::vector<std::int16_t> pcm(kPacketFrames);
     std::vector<float> frames(kPacketFrames);
     std::vector<float> decimated;

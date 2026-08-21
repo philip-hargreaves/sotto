@@ -261,6 +261,8 @@ struct FakeSessionStore : store::ISessionStore {
         calls.push_back("abandon " + id);
     }
 
+    bool refuse_read_audio = false;
+
     std::vector<store::RecoverableSession> ScanRecoverable() override {
         return {};
     }
@@ -297,7 +299,21 @@ struct FakeSessionStore : store::ISessionStore {
         return {};
     }
 
-    void Delete(const store::SessionId&) override {}
+    std::vector<float> ReadAudio(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        if (refuse_read_audio) {
+            throw std::runtime_error("no session " + id);
+        }
+        calls.push_back("readAudio " + id);
+        return stored_audio;
+    }
+
+    void Delete(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("delete " + id);
+    }
+
+    std::vector<float> stored_audio;
 
     std::vector<std::string> Calls() {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -1227,6 +1243,41 @@ TEST(SessionController, StopBeforeStartIsANoOp) {
 
     EXPECT_FALSE(controller.Running());
     EXPECT_TRUE(store.Calls().empty());
+}
+
+TEST(SessionController, AResumedSessionReplaysStoredAudioThenSupersedesTheOld) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.stored_audio = std::vector<float>(LevelMeter::kWindowFrames * 3, 0.5F);
+    RecordingTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start(std::nullopt, "old-session"));
+    ASSERT_TRUE(WaitForFrames(store, LevelMeter::kWindowFrames * 3 + Window().size()));
+    controller.Stop();
+
+    const auto calls = store.Calls();
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "readAudio old-session"), calls.end());
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "delete old-session"), calls.end())
+        << "the old session is superseded once the new one seals";
+    // The new session's store holds the stored audio and the live audio as
+    // one continuous stream
+    EXPECT_EQ(store.frames.size(), LevelMeter::kWindowFrames * 3 + Window().size());
+}
+
+TEST(SessionController, AResumeOfAMissingSessionFailsTheStart) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.refuse_read_audio = true;
+    RecordingTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle);
+
+    EXPECT_FALSE(controller.Start(std::nullopt, "gone"));
+    EXPECT_FALSE(controller.Running());
 }
 
 }  // namespace

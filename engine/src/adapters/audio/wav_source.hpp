@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 
 #include "ports/audio_source.hpp"
@@ -15,6 +16,7 @@ class WavSource : public IAudioSource {
     struct Config {
         double speed = 0.0;    // 1 = real time, >1 faster, 0 = as fast as possible
         bool monitor = false;  // also play aloud, decimated by speed
+        std::uint64_t start_frame = 0;  // resume: skip audio already captured
     };
 
     explicit WavSource(std::string path, Config config = {});

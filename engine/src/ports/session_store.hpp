@@ -68,8 +68,12 @@ class ISessionStore {
     virtual void SavePatient(const SessionId& id, const std::string& text) = 0;
     virtual std::string ReadPatient(const SessionId& id) = 0;
 
-    // Read-back and disposal; both refuse the session currently recording
+    // Read-back and disposal; all refuse the session currently recording
     virtual std::vector<asr::Turn> ReadTurns(const SessionId& id) = 0;
+
+    // The stored capture in order, the basis for resuming a crashed session
+    virtual std::vector<float> ReadAudio(const SessionId& id) = 0;
+
     virtual void Delete(const SessionId& id) = 0;
 };
 

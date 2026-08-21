@@ -39,6 +39,7 @@ class SqliteSessionStore : public ISessionStore {
     void SavePatient(const SessionId& id, const std::string& text) override;
     std::string ReadPatient(const SessionId& id) override;
     std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
+    std::vector<float> ReadAudio(const SessionId& id) override;
     void Delete(const SessionId& id) override;
 
    private:
