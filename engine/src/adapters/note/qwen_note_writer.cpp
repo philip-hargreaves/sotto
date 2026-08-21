@@ -55,8 +55,30 @@ struct QwenNoteWriter::Impl {
             metrics->RecordDevice("note", device);
             metrics->RecordLoad("note", seconds);
         }
+        WarmPromptPrefix(*built);
         std::lock_guard<std::mutex> lock(swap_mutex);
         pipeline = std::move(built);
+    }
+
+    // One discarded token on the fixed instruction block parks its KV in the
+    // pipeline state; generation then reuses the shared prefix and only the
+    // transcript prefills at stop (measured: 2.1 s -> 1.3 s to first token).
+    // Reuse changes the prefill's numeric path, so notes are equivalent but
+    // not byte-stable across runs.
+    void WarmPromptPrefix(ov::genai::LLMPipeline& built) {
+        try {
+            const auto t0 = std::chrono::steady_clock::now();
+            ov::genai::GenerationConfig config;
+            config.max_new_tokens = 1;
+            config.do_sample = false;
+            config.apply_chat_template = false;
+            built.generate("<|im_start|>user\n" + LoadPrompt(prompt_path), config);
+            std::fprintf(
+                stderr, "sotto-engine: note prefix warmed in %.1f s\n",
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: note prefix warm failed (%s)\n", e.what());
+        }
     }
 
     std::shared_ptr<ov::genai::LLMPipeline> Pipeline() {

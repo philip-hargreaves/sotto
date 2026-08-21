@@ -382,6 +382,32 @@ std::vector<asr::Turn> SqliteSessionStore::ReadTurns(const SessionId& id) {
     return turns;
 }
 
+std::vector<float> SqliteSessionStore::ReadAudio(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    RequireNotRecording(id);
+
+    const std::filesystem::path base = root_ / "sessions" / id;
+    if (!std::filesystem::exists(base.string() + ".db")) {
+        throw std::runtime_error("no session " + id);
+    }
+    std::ifstream key_file(base.string() + ".key", std::ios::binary);
+    const std::vector<std::uint8_t> wrapped((std::istreambuf_iterator<char>(key_file)),
+                                            std::istreambuf_iterator<char>());
+    const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
+
+    Db db(base.string() + ".db");
+    Db::Stmt select = db.Prepare("SELECT seq, payload FROM chunks ORDER BY seq");
+    std::vector<float> audio;
+    while (select.Step()) {
+        const auto plain =
+            cipher.Open(Domain::kAudio, id, static_cast<std::uint64_t>(select.ColumnInt64(0)),
+                        select.ColumnBlob(1));
+        const auto* frames = reinterpret_cast<const float*>(plain.data());
+        audio.insert(audio.end(), frames, frames + plain.size() / sizeof(float));
+    }
+    return audio;
+}
+
 void SqliteSessionStore::RequireNotRecording(const SessionId& id) {
     if (open_.has_value() && open_->id == id) {
         throw std::runtime_error(id + " is still recording");

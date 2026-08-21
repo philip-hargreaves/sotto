@@ -130,6 +130,24 @@ TEST(SessionStore, TurnsRoundTripEncrypted) {
     EXPECT_EQ(turns[1].text, "about three weeks");
 }
 
+TEST(SessionStore, StoredAudioReadsBackForResume) {
+    TempRoot root;
+    SessionId id;
+    std::vector<float> audio(16000);
+    for (std::size_t i = 0; i < audio.size(); ++i) {
+        audio[i] = static_cast<float>(i % 100) / 100.0F;
+    }
+    {
+        SqliteSessionStore store(root.path, std::chrono::milliseconds(10));
+        id = store.Begin({16000, "", ""});
+        store.Append(id, audio, 0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }  // destroyed mid-recording, as a crash leaves it
+
+    SqliteSessionStore store(root.path, std::chrono::milliseconds(10));
+    EXPECT_EQ(store.ReadAudio(id), audio);
+}
+
 TEST(SessionStore, TurnTextIsNotPlaintextAtRest) {
     TempRoot root;
     const std::string sentinel = "SENTINEL-HYPERTENSION-PHRASE";

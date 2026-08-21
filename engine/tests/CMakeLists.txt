@@ -91,7 +91,8 @@ add_executable(models_tests
     adapters/silero_vad_test.cpp
     adapters/speaker_embedder_test.cpp
     adapters/translate_test.cpp
-    adapters/whisper_real_test.cpp)
+    adapters/whisper_real_test.cpp
+    adapters/worker_note_writer_test.cpp)
 target_compile_definitions(models_tests PRIVATE
     SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
     SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
@@ -107,7 +108,7 @@ sotto_deploy_openvino(ov_test_runtime)
 add_dependencies(diar_eval_runner ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)
 add_dependencies(gpu_tests ov_test_runtime)
-add_dependencies(models_tests ov_test_runtime)
+add_dependencies(models_tests ov_test_runtime sotto_note_host)
 
 include(GoogleTest)
 # Cold CI runners can take >5 s (the default) just to start a fresh exe

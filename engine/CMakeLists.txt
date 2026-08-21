@@ -89,10 +89,11 @@ target_link_libraries(sotto_transcription
     PRIVATE sotto_models sotto_warnings openvino::genai)
 
 add_library(sotto_note STATIC
-    src/adapters/note/qwen_note_writer.cpp)
+    src/adapters/note/qwen_note_writer.cpp
+    src/adapters/note/worker_note_writer.cpp)
 target_link_libraries(sotto_note
     PUBLIC sotto_core
-    PRIVATE sotto_models sotto_warnings openvino::genai)
+    PRIVATE sotto_models sotto_warnings nlohmann_json::nlohmann_json openvino::genai)
 
 add_library(sotto_translate STATIC
     src/adapters/translate/nllb_translator.cpp)
@@ -165,5 +166,12 @@ target_link_libraries(sotto_engine PRIVATE
     sotto_translate sotto_vad sotto_warnings)
 sotto_deploy_openvino(ov_engine_runtime)
 add_dependencies(sotto_engine ov_engine_runtime)
+
+# The note model's own process; deployed beside the engine that spawns it
+add_executable(sotto_note_host src/note_host_main.cpp)
+target_link_libraries(sotto_note_host PRIVATE
+    sotto_ipc sotto_models sotto_note sotto_warnings)
+add_dependencies(sotto_note_host ov_engine_runtime)
+add_dependencies(sotto_engine sotto_note_host)
 
 add_subdirectory(tests)
