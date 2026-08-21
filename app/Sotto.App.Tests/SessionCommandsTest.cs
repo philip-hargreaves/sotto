@@ -72,4 +72,32 @@ public class SessionCommandsTest
 
         Assert.Equal(SessionState.Idle, session.State);
     }
+
+    [Fact]
+    public async Task ARestartedEngineResumesTheLiveSession()
+    {
+        var (session, engine, _) = TestSession.Create();
+        await session.StartRecordingAsync();
+
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        var starts = engine.Requests.Where(r => r.Method == "session/start").ToList();
+        Assert.Equal(2, starts.Count);
+        Assert.Contains("resume", starts[1].Params);
+        Assert.Contains("s1", starts[1].Params);
+        Assert.Equal(SessionState.Recording, session.State);
+    }
+
+    [Fact]
+    public async Task ARestartWhileIdleDoesNotResume()
+    {
+        var (session, engine, _) = TestSession.Create();
+
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/start");
+        Assert.Equal(SessionState.Idle, session.State);
+    }
 }

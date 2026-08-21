@@ -41,6 +41,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 Protocol.JsonOptions));
         }
 
+        if (method == "session/start")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        }
+
         if (method == "session/stop")
         {
             if (autoNotify)

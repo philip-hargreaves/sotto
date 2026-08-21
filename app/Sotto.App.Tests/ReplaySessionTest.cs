@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Sotto.App.Core.Hosting;
 using Sotto.Client;
@@ -186,6 +187,101 @@ public class ReplaySessionTest
             var storedPatient =
                 await connection.RequestAsync("session/patient", new { id }, Timeout);
             Assert.Equal(patient, storedPatient.GetProperty("text").GetString());
+        }
+        finally
+        {
+            host.Shutdown();
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AKilledEngineResumesTheSessionAndTheConsultSurvives()
+    {
+        var track = Path.Combine(
+            Path.GetDirectoryName(FindModels()) ?? "", "demo", "day2_consultation02_mixed.wav");
+        if (!File.Exists(track))
+        {
+            return;  // demo tracks not staged on this machine
+        }
+
+        var pipeName = $"LOCAL\\sotto-resume-{Guid.NewGuid():N}";
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(directory);
+        var models = FindModels();
+        using var launcher = new ProcessEngineLauncher(
+            FindEngine(),
+            $"{pipeName} \"{Path.Combine(directory, "store")}\""
+                + (models is null ? "" : $" \"{models}\""),
+            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-resume-test.log"));
+        using var host = new EngineSupervisor(
+            launcher, new FakeSession(), TimeProvider.System,
+            new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
+        await using var connection = new EngineConnection(host, async (pid, ct) =>
+            await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
+        try
+        {
+            host.Start();
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
+
+            var noteReady = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            connection.NotificationReceived += (method, parameters) =>
+            {
+                switch (method)
+                {
+                    case "note/ready":
+                        noteReady.TrySetResult(parameters.GetProperty("text").GetString() ?? "");
+                        break;
+                    case "note/failed":
+                        noteReady.TrySetException(new InvalidOperationException(
+                            parameters.GetProperty("detail").GetString()));
+                        break;
+                    default:
+                        break;
+                }
+            };
+
+            var started = await connection.RequestAsync(
+                "session/start",
+                new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
+            var firstId = started.GetProperty("sessionId").GetString();
+
+            // Mid-consult, the engine dies the way the driver fault kills it
+            await Task.Delay(TimeSpan.FromSeconds(8));
+            Process.GetProcessById(host.EnginePid!.Value).Kill();
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
+
+            // The shell's resume: stored audio replays ahead of the rest of the file
+            var resumed = await connection.RequestAsync(
+                "session/start",
+                new
+                {
+                    resume = firstId,
+                    replay = new { path = track, speed = 16.0, monitor = false },
+                }, TimeSpan.FromSeconds(60));
+            var secondId = resumed.GetProperty("sessionId").GetString();
+            Assert.NotEqual(firstId, secondId);
+
+            await Task.Delay(TimeSpan.FromSeconds(14));
+            var stop = await connection.RequestAsync("session/stop", null, TimeSpan.FromSeconds(240));
+            Assert.Equal(secondId, stop.GetProperty("sessionId").GetString());
+
+            // The transcript covers the whole consult, not just the tail
+            var transcript = await connection.RequestAsync(
+                "session/transcript", new { id = secondId }, Timeout);
+            var labelled = transcript.GetProperty("turns").EnumerateArray()
+                .Count(t => t.GetProperty("speaker").GetString() is "doctor" or "patient");
+            Assert.True(labelled > 5, $"expected a full labelled transcript, got {labelled} turns");
+
+            var note = await noteReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
+            Assert.False(string.IsNullOrWhiteSpace(note));
         }
         finally
         {

@@ -77,6 +77,10 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             else
             {
                 _ = LoadLanguagesAsync();
+                if (State == SessionState.Recording)
+                {
+                    _ = ResumeAfterRestartAsync();
+                }
             }
         });
         if (EngineReady)
@@ -117,6 +121,35 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     }
 
     private string? _finalisedSessionId;
+    private string? _recordingSessionId;
+
+    // A restarted engine lost the live session, but its audio is stored:
+    // resume replays it into a fresh session and recording carries on
+    private async Task ResumeAfterRestartAsync()
+    {
+        var resume = _recordingSessionId;
+        if (resume is null)
+        {
+            return;
+        }
+
+        var replay = ActiveReplay;
+        var parameters = replay is null
+            ? (object)new { resume }
+            : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
+        var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
+        if (response is null)
+        {
+            State = SessionState.Idle;
+            Status.SetMicVisible(false);
+            Status.Append("could not resume after engine restart - the session is kept");
+            return;
+        }
+
+        _recordingSessionId = response.Value.TryGetProperty("sessionId", out var id)
+            ? id.GetString() : null;
+        Status.Append("recording resumed after engine restart");
+    }
 
     public async Task StartRecordingAsync(ReplayRequest? replay = null)
     {
@@ -128,11 +161,14 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         var parameters = replay is null
             ? null
             : new { replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
-        if (!await RequestAsync("session/start", parameters).ConfigureAwait(true))
+        var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
+        if (response is null)
         {
             return;
         }
 
+        _recordingSessionId = response.Value.TryGetProperty("sessionId", out var id)
+            ? id.GetString() : null;
         Paused = false;
         AudioSeconds = 0;
         ActiveReplay = replay;

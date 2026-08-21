@@ -14,8 +14,8 @@ namespace sotto::audio {
 class WavSource : public IAudioSource {
    public:
     struct Config {
-        double speed = 0.0;    // 1 = real time, >1 faster, 0 = as fast as possible
-        bool monitor = false;  // also play aloud, decimated by speed
+        double speed = 0.0;             // 1 = real time, >1 faster, 0 = as fast as possible
+        bool monitor = false;           // also play aloud, decimated by speed
         std::uint64_t start_frame = 0;  // resume: skip audio already captured
     };
 
