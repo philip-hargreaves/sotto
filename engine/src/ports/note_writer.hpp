@@ -33,6 +33,12 @@ class INoteWriter {
     // Starts the background model load; idempotent
     virtual void Prepare() {}
 
+    // An in-process writer needs the transcriber off the GPU first
+    // (measured KV corruption); an out-of-process writer does not
+    virtual bool WantsTranscriberReleased() const {
+        return true;
+    }
+
     virtual void Cancel() {}
 };
 
