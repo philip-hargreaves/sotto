@@ -5,27 +5,57 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sotto.App.Core.ViewModels">
 
-    <Grid Padding="16,12" ColumnSpacing="12">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+    <!-- One control set per state; the swap slides rather than jumps -->
+    <Grid VerticalAlignment="Center">
+        <Grid.ChildrenTransitions>
+            <TransitionCollection>
+                <RepositionThemeTransition />
+            </TransitionCollection>
+        </Grid.ChildrenTransitions>
 
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="8"
+            Visibility="{x:Bind ViewModel.IdleVisible, Mode=OneWay}">
             <Button
                 Command="{x:Bind ViewModel.StartRecordingCommand}"
-                Style="{StaticResource AccentButtonStyle}"
-                Content="Start recording" />
-            <Button Command="{x:Bind ViewModel.StopRecordingCommand}" Content="Stop" />
-            <Button Command="{x:Bind ViewModel.CancelRecordingCommand}" Content="Cancel" />
-            <Button Command="{x:Bind ViewModel.NewConsultationCommand}" Content="New consultation" />
+                Style="{StaticResource RecordIdleButton}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="14" Glyph="&#xE720;" />
+                    <TextBlock Text="Start recording" />
+                </StackPanel>
+            </Button>
         </StackPanel>
 
-        <TextBlock
-            Grid.Column="1"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Center"
-            Foreground="{ThemeResource RecordingBrush}"
-            Text="{x:Bind ViewModel.State, Mode=OneWay}" />
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="12"
+            Visibility="{x:Bind ViewModel.RecordingVisible, Mode=OneWay}">
+            <Button
+                Command="{x:Bind ViewModel.StopRecordingCommand}"
+                Style="{StaticResource RecordLiveButton}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="12" Glyph="&#xE71A;" />
+                    <TextBlock Text="Stop recording" />
+                </StackPanel>
+            </Button>
+            <TextBlock Style="{StaticResource ClockText}" Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+            <Button
+                Command="{x:Bind ViewModel.CancelRecordingCommand}"
+                Content="Cancel"
+                Style="{StaticResource TrayButton}" />
+        </StackPanel>
+
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="8"
+            Visibility="{x:Bind ViewModel.ReviewVisible, Mode=OneWay}">
+            <Button Command="{x:Bind ViewModel.NewConsultationCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="14" Glyph="&#xE710;" />
+                    <TextBlock Text="New consultation" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
     </Grid>
 </UserControl>

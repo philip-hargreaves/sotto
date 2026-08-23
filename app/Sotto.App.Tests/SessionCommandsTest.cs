@@ -74,6 +74,40 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task VisibilityFollowsTheState()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+
+        Assert.True(controls.IdleVisible);
+
+        await controls.StartRecordingCommand.ExecuteAsync(null);
+        Assert.False(controls.IdleVisible);
+        Assert.True(controls.RecordingVisible);
+
+        await controls.StopRecordingCommand.ExecuteAsync(null);
+        engine.RaiseNotification("note/ready");
+        Assert.True(controls.ReviewVisible);
+        Assert.False(controls.RecordingVisible);
+    }
+
+    [Fact]
+    public async Task TheClockFormatsDeliveredAudio()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+        await session.StartRecordingAsync();
+
+        for (var i = 0; i < 754; i++)
+        {
+            engine.RaiseNotification("audio.level", System.Text.Json.JsonSerializer
+                .SerializeToElement(new { level = 0.5, clipped = false }));
+        }
+
+        Assert.Equal("01:15", controls.ElapsedLabel);
+    }
+
+    [Fact]
     public async Task ARestartedEngineResumesTheLiveSession()
     {
         var (session, engine, _) = TestSession.Create();

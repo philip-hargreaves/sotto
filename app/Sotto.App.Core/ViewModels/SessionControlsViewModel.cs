@@ -16,15 +16,33 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 or nameof(ConsultationViewModel.EngineReady))
             {
                 OnPropertyChanged(nameof(State));
+                OnPropertyChanged(nameof(IdleVisible));
+                OnPropertyChanged(nameof(RecordingVisible));
+                OnPropertyChanged(nameof(ReviewVisible));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
                 NewConsultationCommand.NotifyCanExecuteChanged();
             }
+            else if (e.PropertyName is nameof(ConsultationViewModel.AudioSeconds))
+            {
+                OnPropertyChanged(nameof(ElapsedLabel));
+            }
         };
     }
 
     public SessionState State => _session.State;
+
+    // The command bar swaps controls by state; computed here so it is testable
+    public bool IdleVisible => _session.State == SessionState.Idle;
+
+    public bool RecordingVisible => _session.State == SessionState.Recording;
+
+    public bool ReviewVisible => _session.State == SessionState.Review;
+
+    public string ElapsedLabel =>
+        TimeSpan.FromSeconds(_session.AudioSeconds).ToString(@"mm\:ss",
+            System.Globalization.CultureInfo.InvariantCulture);
 
     [RelayCommand(CanExecute = nameof(CanStartRecording))]
     private Task StartRecording() => _session.StartRecordingAsync();
