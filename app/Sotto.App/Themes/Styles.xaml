@@ -3,104 +3,70 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!--
-        Reusable control styles, one per design-system component variant.
-        Colours come from the semantic layer (ThemeResource), scalars from the
-        generated tokens; hover and pressed use WinUI lightweight styling so
-        the built-in templates and their accessibility behaviour survive.
-    -->
+    <!-- Style roles derived from WinUI's own styles and theme resources, so
+         states, themes and focus visuals come from the platform. No hexes. -->
 
-    <!-- Buttons: primary (one per view), secondary (default), ghost (inline) -->
-    <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-        <Setter Property="Background" Value="{ThemeResource AccentBrush}" />
-        <Setter Property="Foreground" Value="{ThemeResource TextOnAccentBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource AccentBrush}" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-        <Setter Property="Padding" Value="16,9" />
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text13}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+    <!-- Text roles on the Windows 11 type ramp -->
+    <Style x:Key="PaneHeaderText" TargetType="TextBlock"
+           BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-        <Setter Property="Background" Value="{ThemeResource CardSurfaceBrush}" />
-        <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource BorderSubtleBrush}" />
-        <Setter Property="BorderThickness" Value="{StaticResource BorderWidth}" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-        <Setter Property="Padding" Value="16,9" />
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text13}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-
-    <Style x:Key="GhostButtonStyle" TargetType="Button">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{ThemeResource AccentBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusXs}" />
-        <Setter Property="Padding" Value="12,6" />
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text13}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-
-    <!-- The consultation's primary control: a pill, solid accent when idle;
-         the recording state recolours at the usage site -->
-    <Style x:Key="RecordButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
-        <Setter Property="Padding" Value="22,11" />
-        <Setter Property="FontSize" Value="{StaticResource Text14}" />
-    </Style>
-
-    <!-- Cards: the pane surface the mockups seat everything on -->
-    <Style x:Key="CardStyle" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource CardSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource BorderSubtleBrush}" />
-        <Setter Property="BorderThickness" Value="{StaticResource BorderWidth}" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-        <Setter Property="Padding" Value="{StaticResource Space6}" />
-    </Style>
-
-    <!-- Type ramp -->
-    <Style x:Key="TitleTextStyle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource FontDisplay}" />
-        <Setter Property="FontSize" Value="{StaticResource Text20}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-    </Style>
-
-    <Style x:Key="CardHeadingTextStyle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text14}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-    </Style>
-
-    <Style x:Key="BodyTextStyle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text14}" />
-        <Setter Property="Foreground" Value="{ThemeResource TextBodyBrush}" />
+    <Style x:Key="BodyText" TargetType="TextBlock"
+           BasedOn="{StaticResource BodyTextBlockStyle}">
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <Style x:Key="CaptionTextStyle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource FontUi}" />
-        <Setter Property="FontSize" Value="{StaticResource Text12}" />
-        <Setter Property="Foreground" Value="{ThemeResource TextMutedBrush}" />
+    <Style x:Key="CaptionText" TargetType="TextBlock"
+           BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style x:Key="MonoTextStyle" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
-        <Setter Property="FontSize" Value="{StaticResource Text13}" />
-        <Setter Property="Foreground" Value="{ThemeResource TextBodyBrush}" />
+    <Style x:Key="MicroText" TargetType="TextBlock"
+           BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorTertiaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <!-- Status chips: soft wash, strong label, subtle border -->
-    <Style x:Key="ChipBorderStyle" TargetType="Border">
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
-        <Setter Property="Padding" Value="10,4" />
-        <Setter Property="BorderThickness" Value="{StaticResource BorderWidth}" />
+    <!-- Mica is level 1, layer fill 2, inner cards 3; lift comes from fill
+         difference, never the border -->
+    <Style x:Key="CardSurface" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+    </Style>
+
+    <Style x:Key="InnerCardSurface" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <!-- Record: accent to begin, neutral to stop - one primary action at a time -->
+    <Style x:Key="RecordIdleButton" TargetType="Button"
+           BasedOn="{StaticResource AccentButtonStyle}">
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    </Style>
+
+    <Style x:Key="RecordLiveButton" TargetType="Button"
+           BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+    </Style>
+
+    <!-- Chip base; the role's colours apply at the usage site -->
+    <Style x:Key="ChipBorder" TargetType="Border">
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="9,3" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
 </ResourceDictionary>

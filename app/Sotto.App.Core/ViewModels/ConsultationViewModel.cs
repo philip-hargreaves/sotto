@@ -232,6 +232,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             && stop.TryGetProperty("sessionId", out var sessionId))
         {
             _finalisedSessionId = sessionId.GetString();
+            // The first note of an install can sit behind a model compile
+            Status.Append("writing note - the first one may take a minute while models prepare");
             await LoadFinalTranscriptAsync(_finalisedSessionId).ConfigureAwait(true);
         }
     }

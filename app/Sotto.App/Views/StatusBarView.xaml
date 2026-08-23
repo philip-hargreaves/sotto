@@ -23,8 +23,8 @@
                     IsActive="{x:Bind ViewModel.EngineStarting, Mode=OneWay}"
                     Visibility="{x:Bind ViewModel.EngineStarting, Mode=OneWay}" />
                 <TextBlock
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CaptionText}"
                     Text="{x:Bind ViewModel.EngineStateLabel, Mode=OneWay}" />
                 <ProgressBar
                     Width="72"
@@ -38,14 +38,15 @@
 
             <TextBlock
                 Grid.Column="1"
-                Style="{ThemeResource CaptionTextBlockStyle}"
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionText}"
                 Text="{x:Bind ViewModel.LatestActivity, Mode=OneWay}" />
 
             <TextBlock
                 Grid.Column="2"
+                VerticalAlignment="Center"
                 FontFamily="Consolas"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Style="{ThemeResource CaptionTextBlockStyle}"
+                Style="{StaticResource MicroText}"
                 Text="{x:Bind ViewModel.PerformanceLine, Mode=OneWay}" />
         </Grid>
     </Border>
