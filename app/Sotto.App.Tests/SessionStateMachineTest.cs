@@ -82,8 +82,8 @@ public class SessionStateMachineTest
 
         await session.StopRecordingAsync();
 
-        Assert.Contains(status.LogEntries, line => line.Contains("timed out"));
-        Assert.Contains(status.LogEntries, line => line.Contains("stop failed"));
+        Assert.Contains(status.LogEntries, line => line.Contains("Taking longer"));
+        Assert.Contains(status.LogEntries, line => line.Contains("Stop failed"));
         Assert.Equal(SessionState.Idle, session.State);  // never wedged in Finalising
     }
 

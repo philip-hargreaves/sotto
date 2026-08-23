@@ -11,19 +11,19 @@ public class EngineStatusInShellTest
         var bar = new StatusBarViewModel();
 
         bar.SetEngineState(EngineStatus.Running, null);
-        Assert.Equal("engine: starting models...", bar.EngineStateLabel);
+        Assert.Equal("Setting up", bar.EngineStateLabel);
         Assert.True(bar.EngineStarting);
 
         bar.SetEngineReady(true);
-        Assert.Equal("engine: ready", bar.EngineStateLabel);
+        Assert.Equal("Ready", bar.EngineStateLabel);
         Assert.False(bar.EngineStarting);
 
         bar.SetEngineReady(false);
         bar.SetEngineState(EngineStatus.Restarting, null);
-        Assert.Equal("engine: restarting", bar.EngineStateLabel);
+        Assert.Equal("Recovering", bar.EngineStateLabel);
 
         bar.SetEngineState(EngineStatus.Stopped, null);
-        Assert.Equal("engine: stopped", bar.EngineStateLabel);
+        Assert.Equal("Not running", bar.EngineStateLabel);
     }
 
     [Fact]
@@ -33,16 +33,40 @@ public class EngineStatusInShellTest
 
         bar.SetEngineState(
             EngineStatus.Faulted, new EngineFault(EngineFaultKind.SessionInterrupted, -1));
-        Assert.Equal("engine: crashed mid-consultation", bar.EngineStateLabel);
-        Assert.Equal("engine: crashed mid-consultation", bar.LatestActivity);
+        Assert.Equal("A problem interrupted the consultation - recovering", bar.EngineStateLabel);
+        Assert.Equal("A problem interrupted the consultation - recovering", bar.LatestActivity);
 
         bar.SetEngineState(EngineStatus.Faulted, new EngineFault(EngineFaultKind.CrashLoop, -1));
-        Assert.Equal("engine: unavailable (crashing repeatedly)", bar.EngineStateLabel);
+        Assert.Equal("Recording is unavailable - please restart the app", bar.EngineStateLabel);
 
         bar.SetEngineState(EngineStatus.Faulted, new EngineFault(EngineFaultKind.LaunchFailed));
-        Assert.Equal("engine: unavailable (failed to start)", bar.EngineStateLabel);
+        Assert.Equal("Recording is unavailable - please restart the app", bar.EngineStateLabel);
 
         Assert.Equal(3, bar.LogEntries.Count);
+    }
+
+    [Fact]
+    public void OneStatusReplacedWithTheRingMeaningInProgress()
+    {
+        var bar = new StatusBarViewModel();
+        bar.SetEngineState(EngineStatus.Running, null);
+        bar.SetEngineReady(true);
+        Assert.Equal("Ready", bar.DisplayLabel);
+        Assert.False(bar.Busy);
+
+        bar.Append("Finalising", busy: true);
+        Assert.Equal("Finalising", bar.DisplayLabel);
+        Assert.True(bar.Busy);
+
+        bar.Append("Ready for review");
+        Assert.Equal("Ready for review", bar.DisplayLabel);
+        Assert.False(bar.Busy);
+
+        // Abnormal readiness outranks whatever activity was showing
+        bar.SetEngineReady(false);
+        bar.SetEngineState(EngineStatus.Restarting, null);
+        Assert.Equal("Recovering", bar.DisplayLabel);
+        Assert.True(bar.Busy);
     }
 
     [Fact]
