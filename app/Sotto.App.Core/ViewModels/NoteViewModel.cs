@@ -55,7 +55,7 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public string NoteStateCaption => PipelineState switch
     {
-        NotePipelineState.NoteWriting => "Writing the note...",
+        NotePipelineState.NoteWriting => "Writing the note",
         NotePipelineState.NoteFailed => "The note could not be written - see the status bar",
         _ => "",
     };
@@ -63,7 +63,7 @@ public sealed partial class NoteViewModel : ObservableObject
     public string PatientStateCaption => PipelineState switch
     {
         NotePipelineState.NoteWriting or NotePipelineState.NoteReadyPatientWriting =>
-            "The information sheet follows the note...",
+            "The information sheet follows the note",
         NotePipelineState.PatientFailed =>
             "The information sheet could not be written - see the status bar",
         _ => "",

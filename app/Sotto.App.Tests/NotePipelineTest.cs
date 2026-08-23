@@ -216,7 +216,7 @@ public class NotePipelineTest
         note.Apply(NotePipelineEvent.NoteWritingStarted);
         Assert.True(note.NotePreparing);
         Assert.True(note.PatientPreparing);
-        Assert.Equal("Writing the note...", note.NoteStateCaption);
+        Assert.Equal("Writing the note", note.NoteStateCaption);
 
         note.ClinicalNoteText = "The patient";
         Assert.False(note.NotePreparing);

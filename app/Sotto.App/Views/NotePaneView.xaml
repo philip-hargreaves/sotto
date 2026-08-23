@@ -92,7 +92,7 @@
                                 Width="14"
                                 Height="14"
                                 IsActive="{x:Bind ViewModel.TranslationRunning, Mode=OneWay}" />
-                            <TextBlock Style="{StaticResource MicroText}" Text="Translating..." />
+                            <TextBlock Style="{StaticResource MicroText}" Text="Translating" />
                         </StackPanel>
                     </Grid>
 
