@@ -12,6 +12,7 @@
                      resolves against them -->
                 <ResourceDictionary Source="ms-appx:///Themes/Tokens.g.xaml" />
                 <ResourceDictionary Source="ms-appx:///Themes/Tokens.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!-- Other app resources here -->
         </ResourceDictionary>
