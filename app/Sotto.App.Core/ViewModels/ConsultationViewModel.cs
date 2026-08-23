@@ -304,8 +304,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             && stop.TryGetProperty("sessionId", out var sessionId))
         {
             _finalisedSessionId = sessionId.GetString();
-            // The first note of an install can sit behind a model compile
-            Status.Append("Writing clinical note", busy: true);
             await LoadFinalTranscriptAsync(_finalisedSessionId).ConfigureAwait(true);
         }
     }
@@ -379,9 +377,16 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
-            // The note pane shows the note being written, then the sealed text
+            // The note pane shows the note being written, then the sealed
+            // text. The status states writing only once tokens actually
+            // stream - a thin recording writes nothing and must never claim to
             case "note/partial" when State == SessionState.Finalising
                 && parameters.ValueKind == JsonValueKind.Object:
+                if (Note.ClinicalNoteText.Length == 0)
+                {
+                    Status.Append("Writing clinical note", busy: true);
+                }
+
                 Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";
                 _metrics?.NotePartial();
                 break;
@@ -394,7 +399,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 Note.Apply(NotePipelineEvent.NoteReady);
                 State = SessionState.Review;
-                Status.Append("Writing patient note", busy: true);
                 if (_metrics is not null)
                 {
                     _ = _metrics.SessionFinishedAsync(null, Note.ClinicalNoteText.Length);
@@ -416,6 +420,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 break;
             case "patient/partial" when parameters.ValueKind == JsonValueKind.Object:
+                if (Note.PatientInfoText.Length == 0)
+                {
+                    Status.Append("Writing patient note", busy: true);
+                }
+
                 Note.PatientInfoText = parameters.GetProperty("text").GetString() ?? "";
                 break;
             case "patient/ready":
