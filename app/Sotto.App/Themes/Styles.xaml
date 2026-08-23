@@ -47,7 +47,26 @@
         <Setter Property="Padding" Value="16" />
     </Style>
 
-    <!-- Record: accent to begin, neutral to stop - one primary action at a time -->
+    <!-- Record disc: accent to begin, neutral to stop - one primary action
+         at a time, and it holds the calm centre of the screen -->
+    <Style x:Key="RecordDisc" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+        <Setter Property="Width" Value="76" />
+        <Setter Property="Height" Value="76" />
+        <Setter Property="CornerRadius" Value="38" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="StopDisc" TargetType="Button">
+        <Setter Property="Width" Value="76" />
+        <Setter Property="Height" Value="76" />
+        <Setter Property="CornerRadius" Value="38" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+    </Style>
+
+    <!-- Record pills: accent to begin, neutral to stop -->
     <Style x:Key="RecordIdleButton" TargetType="Button"
            BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="Padding" Value="16,8" />

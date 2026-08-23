@@ -19,6 +19,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
                 OnPropertyChanged(nameof(ReviewVisible));
+                OnPropertyChanged(nameof(CentreStageVisible));
+                OnPropertyChanged(nameof(PanesVisible));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
@@ -33,12 +35,19 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public SessionState State => _session.State;
 
-    // The command bar swaps controls by state; computed here so it is testable
+    // The view swaps by state; computed here so it is testable
     public bool IdleVisible => _session.State == SessionState.Idle;
 
     public bool RecordingVisible => _session.State == SessionState.Recording;
 
     public bool ReviewVisible => _session.State == SessionState.Review;
+
+    // The record control owns the calm centre until a stop; the panes then
+    // take the region for the documents
+    public bool CentreStageVisible =>
+        _session.State is SessionState.Idle or SessionState.Recording;
+
+    public bool PanesVisible => !CentreStageVisible;
 
     public string ElapsedLabel =>
         TimeSpan.FromSeconds(_session.AudioSeconds).ToString(@"mm\:ss",

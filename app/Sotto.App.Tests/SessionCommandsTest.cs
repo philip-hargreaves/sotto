@@ -80,15 +80,20 @@ public class SessionCommandsTest
         var controls = new SessionControlsViewModel(session);
 
         Assert.True(controls.IdleVisible);
+        Assert.True(controls.CentreStageVisible);
+        Assert.False(controls.PanesVisible);
 
         await controls.StartRecordingCommand.ExecuteAsync(null);
         Assert.False(controls.IdleVisible);
         Assert.True(controls.RecordingVisible);
+        Assert.True(controls.CentreStageVisible);
 
         await controls.StopRecordingCommand.ExecuteAsync(null);
+        Assert.True(controls.PanesVisible);
         engine.RaiseNotification("note/ready");
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
+        Assert.False(controls.CentreStageVisible);
     }
 
     [Fact]

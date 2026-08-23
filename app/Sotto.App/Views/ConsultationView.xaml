@@ -19,9 +19,15 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ContentControl
-                    x:Name="ControlsHost"
-                    HorizontalContentAlignment="Stretch" />
+                <StackPanel Orientation="Horizontal" Spacing="8"
+                            Visibility="{x:Bind Controls.ReviewVisible, Mode=OneWay}">
+                    <Button Command="{x:Bind Controls.NewConsultationCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE710;" />
+                            <TextBlock Text="New consultation" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button
                         VerticalAlignment="Center"
@@ -40,29 +46,35 @@
                 </StackPanel>
             </Grid>
 
-            <Grid
-                Grid.Row="1"
-                Margin="8,0"
-                ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Style="{StaticResource InnerCardSurface}" Padding="0">
-                    <ContentControl
-                        x:Name="TranscriptHost"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch" />
-                </Border>
-                <Border
-                    Grid.Column="1"
-                    Padding="0"
-                    Style="{StaticResource InnerCardSurface}">
-                    <ContentControl
-                        x:Name="NoteHost"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch" />
-                </Border>
+            <!-- One region, two occupants: the record control while idle or
+                 recording, the documents from the stop onward -->
+            <Grid Grid.Row="1" Margin="8,0">
+                <ContentControl
+                    x:Name="ControlsHost"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Visibility="{x:Bind Controls.CentreStageVisible, Mode=OneWay}" />
+                <Grid ColumnSpacing="8" Visibility="{x:Bind Controls.PanesVisible, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource InnerCardSurface}" Padding="0">
+                        <ContentControl
+                            x:Name="TranscriptHost"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+                    </Border>
+                    <Border
+                        Grid.Column="1"
+                        Padding="0"
+                        Style="{StaticResource InnerCardSurface}">
+                        <ContentControl
+                            x:Name="NoteHost"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+                    </Border>
+                </Grid>
             </Grid>
 
             <ContentControl

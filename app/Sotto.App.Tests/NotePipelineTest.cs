@@ -208,6 +208,38 @@ public class NotePipelineTest
     }
 
     [Fact]
+    public void PreparingShowsUntilTheFirstWordsStream()
+    {
+        var note = new NoteViewModel();
+        Assert.False(note.NotePreparing);
+
+        note.Apply(NotePipelineEvent.NoteWritingStarted);
+        Assert.True(note.NotePreparing);
+        Assert.True(note.PatientPreparing);
+        Assert.Equal("Writing the note...", note.NoteStateCaption);
+
+        note.ClinicalNoteText = "The patient";
+        Assert.False(note.NotePreparing);
+        Assert.True(note.PatientPreparing);
+
+        note.Apply(NotePipelineEvent.NoteReady);
+        note.PatientInfoText = "Your appointment";
+        Assert.False(note.PatientPreparing);
+    }
+
+    [Fact]
+    public void AFailedNoteCaptionPointsAtTheStatusBar()
+    {
+        var note = new NoteViewModel();
+        note.Apply(NotePipelineEvent.NoteWritingStarted);
+        note.Apply(NotePipelineEvent.NoteFailed);
+
+        Assert.False(note.NotePreparing);
+        Assert.Contains("could not be written", note.NoteStateCaption);
+        Assert.True(note.NoteCaptionVisible);
+    }
+
+    [Fact]
     public async Task NewConsultationResetsThePipeline()
     {
         var (session, engine, note) = TestSession.Create();

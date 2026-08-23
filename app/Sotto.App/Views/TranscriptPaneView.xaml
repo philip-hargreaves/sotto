@@ -17,7 +17,7 @@
         <TextBlock
             Grid.Row="1"
             Style="{StaticResource MicroText}"
-            Text="The transcript appears when the consultation ends"
+            Text="Sealing the transcript..."
             Visibility="{x:Bind EmptyVisible, Mode=OneWay}" />
 
         <!-- The stripe and label colour encode the speaker, never restyled ad hoc -->
