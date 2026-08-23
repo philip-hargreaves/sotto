@@ -262,10 +262,10 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             Transcript.Turns.Clear();
             foreach (var turn in response.GetProperty("turns").EnumerateArray())
             {
-                var speaker = turn.GetProperty("speaker").GetString();
-                var text = turn.GetProperty("text").GetString() ?? "";
-                Transcript.Turns.Add(
-                    string.IsNullOrEmpty(speaker) ? text : $"{speaker}: {text}");
+                Transcript.Add(
+                    turn.GetProperty("speaker").GetString() ?? "",
+                    turn.GetProperty("firstFrame").GetUInt64(),
+                    turn.GetProperty("text").GetString() ?? "");
             }
         }
         catch (Exception e)
