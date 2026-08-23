@@ -90,6 +90,7 @@ public class SessionCommandsTest
 
         await controls.StopRecordingCommand.ExecuteAsync(null);
         Assert.True(controls.PanesVisible);
+        Assert.False(controls.FinalisingVisible);
         engine.RaiseNotification("note/ready");
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
@@ -110,6 +111,42 @@ public class SessionCommandsTest
         }
 
         Assert.Equal("01:15", controls.ElapsedLabel);
+    }
+
+    [Fact]
+    public async Task FirstTimeSetupBlocksRecordingUntilModelsCompile()
+    {
+        var engine = new FakeEngineClient(autoNotify: false) { FirstUse = true, ModelsCompiled = false };
+        var bar = new StatusBarViewModel();
+        var session = new ConsultationViewModel(
+            engine, new InlineDispatcher(), new TranscriptViewModel(), new NoteViewModel(),
+            bar, readinessPollInterval: TimeSpan.FromMilliseconds(1));
+        var controls = new SessionControlsViewModel(session);
+        bar.SetEngineState(Sotto.App.Core.Hosting.EngineStatus.Running, null);
+        bar.SetEngineReady(true);
+
+        Assert.False(session.ModelsReady);
+        Assert.False(controls.StartRecordingCommand.CanExecute(null));
+        Assert.Contains("First-time setup", bar.DisplayLabel);
+
+        engine.ModelsCompiled = true;
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!session.ModelsReady && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(session.ModelsReady);
+        Assert.True(controls.StartRecordingCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void AWarmLaunchIsNeverGated()
+    {
+        var (session, engine, _) = TestSession.Create();
+
+        Assert.True(session.ModelsReady);
+        Assert.Equal(1, engine.Requests.Count(r => r.Method == "engine/readiness"));
     }
 
     [Fact]

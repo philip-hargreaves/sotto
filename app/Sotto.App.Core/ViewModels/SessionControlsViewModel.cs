@@ -13,7 +13,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
         _session.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ConsultationViewModel.State)
-                or nameof(ConsultationViewModel.EngineReady))
+                or nameof(ConsultationViewModel.EngineReady)
+                or nameof(ConsultationViewModel.TranscriptLoaded)
+                or nameof(ConsultationViewModel.ModelsReady))
             {
                 OnPropertyChanged(nameof(State));
                 OnPropertyChanged(nameof(IdleVisible));
@@ -21,6 +23,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(ReviewVisible));
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
+                OnPropertyChanged(nameof(FinalisingVisible));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
@@ -42,12 +45,16 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public bool ReviewVisible => _session.State == SessionState.Review;
 
-    // The record control owns the calm centre until a stop; the panes then
-    // take the region for the documents
+    // The centre holds until the sealed transcript exists: a pane with no
+    // transcript is worse than the spinner it would replace. Never coexist.
     public bool CentreStageVisible =>
-        _session.State is SessionState.Idle or SessionState.Recording;
+        _session.State is SessionState.Idle or SessionState.Recording
+        || _session.State == SessionState.Finalising && !_session.TranscriptLoaded;
 
     public bool PanesVisible => !CentreStageVisible;
+
+    public bool FinalisingVisible =>
+        _session.State == SessionState.Finalising && !_session.TranscriptLoaded;
 
     public string ElapsedLabel =>
         TimeSpan.FromSeconds(_session.AudioSeconds).ToString(@"mm\:ss",
@@ -57,7 +64,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private Task StartRecording() => _session.StartRecordingAsync();
 
     private bool CanStartRecording() =>
-        _session.State == SessionState.Idle && _session.EngineReady;
+        _session.State == SessionState.Idle && _session.EngineReady && _session.ModelsReady;
 
     [RelayCommand(CanExecute = nameof(CanStopRecording))]
     private Task StopRecording() => _session.StopRecordingAsync();

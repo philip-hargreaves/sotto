@@ -43,5 +43,26 @@
                 Content="Cancel"
                 Style="{StaticResource TrayButton}" />
         </StackPanel>
+
+        <!-- Stop pressed, transcript still sealing: the same region, one
+             caption, until there is something to show -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}">
+            <ProgressRing
+                Width="44"
+                Height="44"
+                HorizontalAlignment="Center"
+                IsActive="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource CaptionText}"
+                Text="Finalising" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource ClockText}"
+                Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+        </StackPanel>
     </Grid>
 </UserControl>
