@@ -74,7 +74,7 @@ public sealed partial class SessionsViewModel : ObservableObject
             _ = await _engine
                 .RequestAsync("session/delete", new { id = Selected.Id }, RequestTimeout)
                 .ConfigureAwait(true);
-            _status.Append("session deleted");
+            _status.Append("Session deleted");
             await RefreshAsync().ConfigureAwait(true);
         }
         catch (Exception e) when (e is not OperationCanceledException)

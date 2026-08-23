@@ -106,9 +106,23 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                      const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
                      sotto::metrics::Registry* metrics, sotto::models::OvRuntime* runtime,
                      sotto::translate::ITranslator* translator,
-                     sotto::translate::TranslateLane* translate_lane) {
+                     sotto::translate::TranslateLane* translate_lane, bool first_use) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
+    // Ready when every staged model's compile cache exists: OpenVINO writes
+    // the blob exactly when a compile completes, so no event plumbing needed
+    server.RegisterMethod("engine/readiness", [&models, first_use](const json&) {
+        const auto ready = [&models](const char* role) {
+            try {
+                const auto cache = models.Resolve(role, "default").dir / ".cache";
+                return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
+            } catch (...) {
+                return true;  // role not staged: nothing to wait for
+            }
+        };
+        return json{{"firstUse", first_use},
+                    {"ready", ready("asr") && ready("note") && ready("translation")}};
+    });
     if (metrics != nullptr) {
         // Device names are enumerated once, on the first fetch
         auto hardware = std::make_shared<std::optional<json>>();

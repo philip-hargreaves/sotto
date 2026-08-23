@@ -82,6 +82,7 @@ public partial class App : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<SessionsViewModel>();
         services.AddSingleton<DemoTrayViewModel>();
+        services.AddSingleton<CreditsViewModel>();
 
         services.AddTransient<SessionControlsView>();
         services.AddTransient<DemoTrayView>();

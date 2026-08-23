@@ -41,6 +41,22 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     [ObservableProperty]
     public partial ReplayRequest? ActiveReplay { get; private set; }
 
+    /// <summary>
+    /// True once the sealed transcript has been fetched; the panes open on
+    /// this, never on state alone - a pane with no transcript is worse than
+    /// the centred spinner it would replace.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool TranscriptLoaded { get; private set; }
+
+    /// <summary>
+    /// False only during first-time setup, while the one-off model compiles
+    /// run: recording is blocked so nobody's first impression is the slow
+    /// path. Warm launches are never gated.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ModelsReady { get; private set; } = true;
+
     public bool ConsultationActive => State != SessionState.Idle;
 
     public TranscriptViewModel Transcript { get; }
@@ -52,10 +68,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public ConsultationViewModel(
         IEngineClient engine, IUiDispatcher dispatcher,
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
-        Metrics.PerformanceCollector? metrics = null)
+        Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null)
     {
         _engine = engine;
         _metrics = metrics;
+        _readinessPollInterval = readinessPollInterval ?? TimeSpan.FromSeconds(2);
         Transcript = transcript;
         Note = note;
         Status = status;
@@ -72,11 +89,12 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             {
                 // A restarted engine will never answer the in-flight translation
                 Note.TranslationRunning = false;
-                Status.Append("engine connection lost");
+                Status.Append("Connection lost - recovering", busy: true);
             }
             else
             {
                 _ = LoadLanguagesAsync();
+                _ = CheckReadinessAsync();
                 if (State == SessionState.Recording)
                 {
                     _ = ResumeAfterRestartAsync();
@@ -86,6 +104,50 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         if (EngineReady)
         {
             _ = LoadLanguagesAsync();
+            _ = CheckReadinessAsync();
+        }
+    }
+
+    private readonly TimeSpan _readinessPollInterval;
+
+    // First launch only: poll until the one-off compiles finish, then never
+    // again. Fails open - a readiness error must not brick recording.
+    private async Task CheckReadinessAsync()
+    {
+        try
+        {
+            var response = await _engine
+                .RequestAsync("engine/readiness", null, RequestTimeout)
+                .ConfigureAwait(true);
+            if (!response.TryGetProperty("firstUse", out var f) || !f.GetBoolean())
+            {
+                ModelsReady = true;
+                return;
+            }
+
+            while (!response.GetProperty("ready").GetBoolean())
+            {
+                if (ModelsReady)
+                {
+                    ModelsReady = false;
+                    Status.Append("First-time setup - this can take a few minutes", busy: true);
+                }
+
+                await Task.Delay(_readinessPollInterval).ConfigureAwait(true);
+                response = await _engine
+                    .RequestAsync("engine/readiness", null, RequestTimeout)
+                    .ConfigureAwait(true);
+            }
+
+            if (!ModelsReady)
+            {
+                ModelsReady = true;
+                Status.Append("Ready");
+            }
+        }
+        catch (Exception)
+        {
+            ModelsReady = true;
         }
     }
 
@@ -133,22 +195,31 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             return;
         }
 
-        var replay = ActiveReplay;
-        var parameters = replay is null
-            ? (object)new { resume }
-            : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
-        var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
-        if (response is null)
+        try
         {
-            State = SessionState.Idle;
-            Status.SetMicVisible(false);
-            Status.Append("could not resume after engine restart - the session is kept");
-            return;
-        }
+            var replay = ActiveReplay;
+            var parameters = replay is null
+                ? (object)new { resume }
+                : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
+            var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
+            if (response is null)
+            {
+                State = SessionState.Idle;
+                Status.SetMicVisible(false);
+                Status.Append("Could not resume - session kept");
+                return;
+            }
 
-        _recordingSessionId = response.Value.TryGetProperty("sessionId", out var id)
-            ? id.GetString() : null;
-        Status.Append("recording resumed after engine restart");
+            _recordingSessionId = response.Value.TryGetProperty("sessionId", out var id)
+                ? id.GetString() : null;
+            Status.Append("Recording");
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The engine died again mid-resume; the next reconnect retries,
+            // and the UI must not claim a session that is not running
+            Status.Append("Recovering", busy: true);
+        }
     }
 
     public async Task StartRecordingAsync(ReplayRequest? replay = null)
@@ -171,10 +242,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             ? id.GetString() : null;
         Paused = false;
         AudioSeconds = 0;
+        TranscriptLoaded = false;
         ActiveReplay = replay;
         State = SessionState.Recording;
         Status.SetMicVisible(true);
-        Status.Append(replay is null ? "recording started" : "replay started");
+        Status.Append(replay is null ? "Recording" : "Replaying");
         _metrics?.SessionStarted(
             replay is null ? "mic" : "replay", replay?.Speed ?? 0,
             replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
@@ -214,7 +286,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         _metrics?.StopRequested();
         Status.SetMicVisible(false);
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
-        Status.Append("finalising");
+        Status.Append("Finalising", busy: true);
         var response = await RequestValueAsync("session/stop", StopTimeout).ConfigureAwait(true);
         if (response is null)
         {
@@ -222,7 +294,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             // the store either way
             State = SessionState.Idle;
             Note.Reset();
-            Status.Append("stop failed - the session is kept and can be recovered");
+            Status.Append("Stop failed - session kept");
             return;
         }
 
@@ -240,6 +312,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         if (string.IsNullOrEmpty(id))
         {
+            TranscriptLoaded = true;  // nothing to fetch; the panes still open
             return;
         }
 
@@ -251,15 +324,19 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             Transcript.Turns.Clear();
             foreach (var turn in response.GetProperty("turns").EnumerateArray())
             {
-                var speaker = turn.GetProperty("speaker").GetString();
-                var text = turn.GetProperty("text").GetString() ?? "";
-                Transcript.Turns.Add(
-                    string.IsNullOrEmpty(speaker) ? text : $"{speaker}: {text}");
+                Transcript.Add(
+                    turn.GetProperty("speaker").GetString() ?? "",
+                    turn.GetProperty("firstFrame").GetUInt64(),
+                    turn.GetProperty("text").GetString() ?? "");
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            Status.Append($"could not load the final transcript: {e.Message}");
+            Status.Append("Could not load transcript");
+        }
+        finally
+        {
+            TranscriptLoaded = true;
         }
     }
 
@@ -279,7 +356,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Paused = false;
         ActiveReplay = null;
         Status.SetMicVisible(false);
-        Status.Append("recording cancelled");
+        Status.Append("Cancelled");
     }
 
     public void StartNewConsultation()
@@ -291,17 +368,25 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
         Note.Reset();
         Transcript.Clear();
+        TranscriptLoaded = false;
         State = SessionState.Idle;
-        Status.Append("ready for a new consultation");
+        Status.Append("Ready");
     }
 
     private void HandleNotification(string method, JsonElement parameters)
     {
         switch (method)
         {
-            // The note pane shows the note being written, then the sealed text
+            // The note pane shows the note being written, then the sealed
+            // text. The status states writing only once tokens actually
+            // stream - a thin recording writes nothing and must never claim to
             case "note/partial" when State == SessionState.Finalising
                 && parameters.ValueKind == JsonValueKind.Object:
+                if (Note.ClinicalNoteText.Length == 0)
+                {
+                    Status.Append("Writing clinical note", busy: true);
+                }
+
                 Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";
                 _metrics?.NotePartial();
                 break;
@@ -314,7 +399,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 Note.Apply(NotePipelineEvent.NoteReady);
                 State = SessionState.Review;
-                Status.Append("clinical note ready");
                 if (_metrics is not null)
                 {
                     _ = _metrics.SessionFinishedAsync(null, Note.ClinicalNoteText.Length);
@@ -328,7 +412,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 var noteFailure = parameters.ValueKind == JsonValueKind.Object
                     ? parameters.GetProperty("detail").GetString() ?? "failed"
                     : "failed";
-                Status.Append($"clinical note failed: {noteFailure}");
+                Status.Append("Clinical note failed");
                 if (_metrics is not null)
                 {
                     _ = _metrics.SessionFinishedAsync(noteFailure, 0);
@@ -336,6 +420,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 break;
             case "patient/partial" when parameters.ValueKind == JsonValueKind.Object:
+                if (Note.PatientInfoText.Length == 0)
+                {
+                    Status.Append("Writing patient note", busy: true);
+                }
+
                 Note.PatientInfoText = parameters.GetProperty("text").GetString() ?? "";
                 break;
             case "patient/ready":
@@ -346,13 +435,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 }
 
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
-                Status.Append("patient information ready");
+                Status.Append("Ready for review");
                 break;
             case "patient/failed":
                 Note.Apply(NotePipelineEvent.PatientInfoFailed);
-                Status.Append(parameters.ValueKind == JsonValueKind.Object
-                    ? $"patient information failed: {parameters.GetProperty("detail").GetString()}"
-                    : "patient information failed");
+                Status.Append("Patient note failed");
                 break;
             case "translate/partial" when parameters.ValueKind == JsonValueKind.Object:
                 Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";
@@ -360,13 +447,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             case "translate/ready" when parameters.ValueKind == JsonValueKind.Object:
                 Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";
                 Note.TranslationRunning = false;
-                Status.Append($"translated to {parameters.GetProperty("language").GetString()}");
+                Status.Append($"Translated to {parameters.GetProperty("language").GetString()}");
                 break;
             case "translate/failed":
                 Note.TranslationRunning = false;
-                Status.Append(parameters.ValueKind == JsonValueKind.Object
-                    ? $"translation failed: {parameters.GetProperty("detail").GetString()}"
-                    : "translation failed");
+                Status.Append("Translation failed");
                 break;
             case "audio.level" when parameters.ValueKind == JsonValueKind.Object:
                 Status.SetMicLevel(
@@ -386,8 +471,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 Note.Reset();
                 Status.SetMicVisible(false);
                 Status.Append(parameters.ValueKind == JsonValueKind.Object
-                    ? $"session interrupted: {parameters.GetProperty("detail").GetString()}"
-                    : "session interrupted");
+                    ? $"Recording interrupted ({parameters.GetProperty("detail").GetString()}) - session kept"
+                    : "Recording interrupted - session kept");
                 break;
             default:
                 break;
@@ -408,12 +493,13 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
         catch (OperationCanceledException)
         {
-            Status.Append($"engine request {method} timed out");
+            Status.Append("Taking longer than expected", busy: true);
             return null;
         }
         catch (Exception e)
         {
-            Status.Append($"engine request {method} failed: {e.Message}");
+            Status.Append("A step failed - trying to continue");
+            Status.Log($"{method} failed: {e.Message}");
             return null;
         }
     }

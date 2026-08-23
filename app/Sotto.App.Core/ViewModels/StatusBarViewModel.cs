@@ -4,15 +4,39 @@ using Sotto.App.Core.Hosting;
 
 namespace Sotto.App.Core.ViewModels;
 
+/// <summary>One bar of the level history; mutated in place, never replaced.</summary>
+public sealed partial class LevelBar : ObservableObject
+{
+    [ObservableProperty]
+    public partial double Height { get; set; } = 2;
+}
+
 public sealed partial class StatusBarViewModel : ObservableObject
 {
     private const int MaxLogEntries = 200;
+    private const int MeterBars = 40;
 
+    /// <summary>Rolling RMS history; fixed objects so layout never thrashes.</summary>
+    public ObservableCollection<LevelBar> Meter { get; } =
+        [.. Enumerable.Range(0, MeterBars).Select(_ => new LevelBar())];
+
+    // Clinician-facing: no engine, model or process vocabulary
     [ObservableProperty]
-    public partial string EngineStateLabel { get; set; } = "engine: not connected";
+    public partial string EngineStateLabel { get; set; } = "Starting";
 
     [ObservableProperty]
     public partial string LatestActivity { get; private set; } = "";
+
+    // One status on screen, replaced as things happen: abnormal readiness
+    // outranks activity, activity outranks Ready; Busy drives the one ring
+    public string DisplayLabel =>
+        !_ready || _status != EngineStatus.Running ? EngineStateLabel
+        : LatestActivity.Length > 0 ? LatestActivity
+        : EngineStateLabel;
+
+    public bool Busy => EngineStarting || _activityBusy;
+
+    private bool _activityBusy;
 
     [ObservableProperty]
     public partial string PerformanceLine { get; set; } = "";
@@ -33,6 +57,12 @@ public sealed partial class StatusBarViewModel : ObservableObject
     {
         MicLevel = level;
         MicClipped = clipped;
+        for (var i = 0; i < Meter.Count - 1; i++)
+        {
+            Meter[i].Height = Meter[i + 1].Height;
+        }
+
+        Meter[^1].Height = 2 + Math.Clamp(level, 0, 1) * 26;
     }
 
     public void SetMicVisible(bool visible)
@@ -48,7 +78,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     private EngineFault? _fault;
     private bool _ready;
 
-    /// <summary>True while the engine process runs but has not answered yet.</summary>
+    /// <summary>True in every transient state; the status ring spins on it.</summary>
     [ObservableProperty]
     public partial bool EngineStarting { get; private set; }
 
@@ -73,23 +103,36 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
     private void Recompute()
     {
-        EngineStarting = _status == EngineStatus.Running && !_ready;
+        EngineStarting = _status == EngineStatus.Running && !_ready
+            || _status == EngineStatus.Restarting;
         EngineStateLabel = _status switch
         {
-            EngineStatus.Running when !_ready => "engine: starting models...",
-            EngineStatus.Running => "engine: ready",
-            EngineStatus.Restarting => "engine: restarting",
+            EngineStatus.Running when !_ready => "Setting up",
+            EngineStatus.Running => "Ready",
+            EngineStatus.Restarting => "Recovering",
             EngineStatus.Faulted => _fault?.Kind switch
             {
-                EngineFaultKind.SessionInterrupted => "engine: crashed mid-consultation",
-                EngineFaultKind.LaunchFailed => "engine: unavailable (failed to start)",
-                _ => "engine: unavailable (crashing repeatedly)",
+                EngineFaultKind.SessionInterrupted =>
+                    "A problem interrupted the consultation - recovering",
+                _ => "Recording is unavailable - please restart the app",
             },
-            _ => "engine: stopped",
+            _ => "Not running",
         };
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(Busy));
     }
 
-    public void Append(string line)
+    /// <summary>Log-only detail; the displayed status stays concise.</summary>
+    public void Log(string line)
+    {
+        LogEntries.Add(line);
+        while (LogEntries.Count > MaxLogEntries)
+        {
+            LogEntries.RemoveAt(0);
+        }
+    }
+
+    public void Append(string line, bool busy = false)
     {
         LogEntries.Add(line);
         while (LogEntries.Count > MaxLogEntries)
@@ -97,6 +140,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
             LogEntries.RemoveAt(0);
         }
 
+        _activityBusy = busy;
         LatestActivity = line;
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(Busy));
     }
 }

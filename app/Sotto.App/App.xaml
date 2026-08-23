@@ -8,9 +8,21 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- Generated primitives first; the semantic layer resolves against them -->
+                <ResourceDictionary Source="ms-appx:///Themes/Tokens.g.xaml" />
                 <ResourceDictionary Source="ms-appx:///Themes/Tokens.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+
+            <!-- Accent pinned, not inherited: the family (not the brushes) so
+                 WinUI still derives hover, pressed and per-theme variants -->
+            <Color x:Key="SystemAccentColor">#0067C0</Color>
+            <Color x:Key="SystemAccentColorLight1">#2183D6</Color>
+            <Color x:Key="SystemAccentColorLight2">#4F9FE0</Color>
+            <Color x:Key="SystemAccentColorLight3">#85BFEC</Color>
+            <Color x:Key="SystemAccentColorDark1">#005AA8</Color>
+            <Color x:Key="SystemAccentColorDark2">#004C8F</Color>
+            <Color x:Key="SystemAccentColorDark3">#003A6E</Color>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

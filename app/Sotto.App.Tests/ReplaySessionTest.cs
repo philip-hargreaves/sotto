@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Sotto.App.Core.Hosting;
+using Sotto.App.Core.ViewModels;
 using Sotto.Client;
 
 namespace Sotto.App.Tests;
@@ -293,6 +294,158 @@ public class ReplaySessionTest
             catch (IOException)
             {
             }
+        }
+    }
+
+    [Fact]
+    public async Task LiveCountersSurviveAKilledEngineAndResume()
+    {
+        var track = Path.Combine(
+            Path.GetDirectoryName(FindModels()) ?? "", "demo", "day2_consultation02_mixed.wav");
+        if (!File.Exists(track))
+        {
+            return;
+        }
+
+        var pipeName = $"LOCAL\\sotto-counters-{Guid.NewGuid():N}";
+        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(directory);
+        var models = FindModels();
+        using var launcher = new ProcessEngineLauncher(
+            FindEngine(),
+            $"{pipeName} \"{Path.Combine(directory, "store")}\""
+                + (models is null ? "" : $" \"{models}\""),
+            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-counters-test.log"));
+        using var host = new EngineSupervisor(
+            launcher, new FakeSession(), TimeProvider.System,
+            new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
+        await using var connection = new EngineConnection(host, async (pid, ct) =>
+            await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
+        var session = new ConsultationViewModel(
+            connection, new InlineDispatcher(), new TranscriptViewModel(), new NoteViewModel(),
+            new StatusBarViewModel());
+        try
+        {
+            host.Start();
+            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
+
+            await session.StartRecordingAsync(new ReplayRequest(track, 16.0, false));
+            Assert.Equal(SessionState.Recording, session.State);
+            await WaitUntilAsync(() => session.AudioSeconds > 3, TimeSpan.FromSeconds(20));
+
+            // Two kills in quick succession, the second mid-resume - the
+            // double-crash sequence observed in the field
+            var atKill = session.AudioSeconds;
+            var firstPid = host.EnginePid!.Value;
+            Process.GetProcessById(firstPid).Kill();
+            await WaitUntilAsync(
+                () => host.EnginePid is int pid && pid != firstPid, TimeSpan.FromSeconds(30));
+            Process.GetProcessById(host.EnginePid!.Value).Kill();
+
+            // The supervisor restarts again, the resume retries, and the
+            // counters must keep counting from where they were
+            await WaitUntilAsync(
+                () => session.AudioSeconds > atKill + 30, TimeSpan.FromSeconds(90));
+            Assert.Equal(SessionState.Recording, session.State);
+
+            await session.StopRecordingAsync();
+            Assert.True(
+                session.State is SessionState.Finalising or SessionState.Review,
+                $"stop left the session in {session.State}");
+        }
+        finally
+        {
+            host.Shutdown();
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [Fact]
+    [Trait("Requires", "CrashBattery")]
+    public async Task AcceleratedSessionStartsSurviveTheWorkerLoad()
+    {
+        var track = Path.Combine(
+            Path.GetDirectoryName(FindModels()) ?? "", "demo", "day2_consultation02_mixed.wav");
+        if (!File.Exists(track))
+        {
+            return;
+        }
+
+        // A cold compile cache is the hard case: the 9B compiles on the GPU
+        // while 16x whisper floods it, the collision seen in the field
+        var noteCache = Path.Combine(FindModels()!, "qwen3.5-9b-int4", ".cache");
+        var crashes = 0;
+        for (var round = 0; round < 6; round++)
+        {
+            if (Directory.Exists(noteCache))
+            {
+                try
+                {
+                    Directory.Delete(noteCache, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            var pipeName = $"LOCAL\\sotto-battery-{Guid.NewGuid():N}";
+            var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            Directory.CreateDirectory(directory);
+            var crashLog = Path.Combine(directory, "crashes.jsonl");
+            using var launcher = new ProcessEngineLauncher(
+                FindEngine(),
+                $"{pipeName} \"{Path.Combine(directory, "store")}\" \"{FindModels()}\"",
+                stderrPath: Path.Combine(Path.GetTempPath(), "sotto-battery-test.log"));
+            using var host = new EngineSupervisor(
+                launcher, new FakeSession(), TimeProvider.System, new FileCrashLog(crashLog));
+            await using var connection = new EngineConnection(host, async (pid, ct) =>
+                await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
+            try
+            {
+                host.Start();
+                await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
+                await connection.RequestAsync(
+                    "session/start",
+                    new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
+                await Task.Delay(TimeSpan.FromSeconds(12));
+                if (File.Exists(crashLog) && File.ReadAllLines(crashLog).Length > 0)
+                {
+                    crashes++;
+                }
+                else
+                {
+                    await connection.RequestAsync("session/cancel", null, TimeSpan.FromSeconds(30));
+                }
+            }
+            finally
+            {
+                host.Shutdown();
+                try
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        Assert.True(crashes == 0, $"{crashes}/6 accelerated session starts crashed the engine");
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan limit)
+    {
+        var deadline = DateTime.UtcNow + limit;
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "condition not reached in time");
+            await Task.Delay(100);
         }
     }
 

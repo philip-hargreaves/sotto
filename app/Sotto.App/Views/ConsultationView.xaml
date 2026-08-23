@@ -4,63 +4,92 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <!-- One card on the Mica; the backdrop stays visible around it -->
+    <Border Margin="8,0,8,8" Style="{StaticResource CardSurface}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="56" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <Grid Padding="0,0,16,0" ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+            <Grid Padding="16,0" VerticalAlignment="Center" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8"
+                            Visibility="{x:Bind Controls.ReviewVisible, Mode=OneWay}">
+                    <Button Command="{x:Bind Controls.NewConsultationCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE710;" />
+                            <TextBlock Text="New consultation" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button
+                        VerticalAlignment="Center"
+                        Command="{x:Bind Shell.ShowSessionsCommand}"
+                        Style="{StaticResource TrayButton}"
+                        ToolTipService.ToolTip="Sessions">
+                        <FontIcon FontSize="16" Glyph="&#xE81C;" />
+                    </Button>
+                    <Button
+                        VerticalAlignment="Center"
+                        Command="{x:Bind Shell.ShowSettingsCommand}"
+                        Style="{StaticResource TrayButton}"
+                        ToolTipService.ToolTip="Settings">
+                        <FontIcon FontSize="16" Glyph="&#xE713;" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- One region, two occupants: the record control while idle or
+                 recording, the documents from the stop onward -->
+            <Grid Grid.Row="1" Margin="8,0">
+                <ContentControl
+                    x:Name="ControlsHost"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Visibility="{x:Bind Controls.CentreStageVisible, Mode=OneWay}" />
+                <Grid ColumnSpacing="20" Visibility="{x:Bind Controls.PanesVisible, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.15*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.ChildrenTransitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition FromVerticalOffset="16" />
+                        </TransitionCollection>
+                    </Grid.ChildrenTransitions>
+                    <!-- No pane containers: the content items are the cards,
+                         floating on the layer the way the turns do -->
+                    <ContentControl
+                        x:Name="TranscriptHost"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
+                    <ContentControl
+                        x:Name="NoteHost"
+                        Grid.Column="1"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
+                </Grid>
+            </Grid>
+
             <ContentControl
-                x:Name="ControlsHost"
+                x:Name="DemoTrayHost"
+                Grid.Row="2"
+                Margin="8,8,8,0"
+                HorizontalContentAlignment="Stretch"
+                Visibility="Collapsed" />
+
+            <ContentControl
+                x:Name="StatusHost"
+                Grid.Row="3"
+                Margin="0,8,0,0"
                 HorizontalContentAlignment="Stretch" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <Button
-                    VerticalAlignment="Center"
-                    Command="{x:Bind Shell.ShowSessionsCommand}"
-                    ToolTipService.ToolTip="Sessions">
-                    <FontIcon FontSize="16" Glyph="&#xE81C;" />
-                </Button>
-                <Button
-                    VerticalAlignment="Center"
-                    Command="{x:Bind Shell.ShowSettingsCommand}"
-                    ToolTipService.ToolTip="Settings">
-                    <FontIcon FontSize="16" Glyph="&#xE713;" />
-                </Button>
-            </StackPanel>
         </Grid>
-
-        <Grid Grid.Row="1" ColumnSpacing="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <ContentControl
-                x:Name="TranscriptHost"
-                HorizontalContentAlignment="Stretch"
-                VerticalContentAlignment="Stretch" />
-            <ContentControl
-                x:Name="NoteHost"
-                Grid.Column="1"
-                HorizontalContentAlignment="Stretch"
-                VerticalContentAlignment="Stretch" />
-        </Grid>
-
-        <ContentControl
-            x:Name="DemoTrayHost"
-            Grid.Row="2"
-            HorizontalContentAlignment="Stretch"
-            Visibility="Collapsed" />
-
-        <ContentControl
-            x:Name="StatusHost"
-            Grid.Row="3"
-            HorizontalContentAlignment="Stretch" />
-    </Grid>
+    </Border>
 </UserControl>

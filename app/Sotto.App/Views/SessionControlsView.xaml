@@ -5,27 +5,89 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sotto.App.Core.ViewModels">
 
-    <Grid Padding="16,12" ColumnSpacing="12">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <StackPanel Orientation="Horizontal" Spacing="8">
+    <!-- The calm centre of the screen holds the one action being taken -->
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.IdleVisible, Mode=OneWay}">
             <Button
+                AutomationProperties.Name="Start recording"
                 Command="{x:Bind ViewModel.StartRecordingCommand}"
-                Style="{StaticResource AccentButtonStyle}"
-                Content="Start recording" />
-            <Button Command="{x:Bind ViewModel.StopRecordingCommand}" Content="Stop" />
-            <Button Command="{x:Bind ViewModel.CancelRecordingCommand}" Content="Cancel" />
-            <Button Command="{x:Bind ViewModel.NewConsultationCommand}" Content="New consultation" />
+                Style="{StaticResource RecordDisc}">
+                <FontIcon FontSize="28" Glyph="&#xE720;" />
+            </Button>
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource CaptionText}"
+                Text="Start recording" />
         </StackPanel>
 
-        <TextBlock
-            Grid.Column="1"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Center"
-            Foreground="{ThemeResource RecordingBrush}"
-            Text="{x:Bind ViewModel.State, Mode=OneWay}" />
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.RecordingVisible, Mode=OneWay}">
+            <Button
+                AutomationProperties.Name="Stop recording"
+                Command="{x:Bind ViewModel.StopRecordingCommand}"
+                Style="{StaticResource StopDisc}">
+                <FontIcon FontSize="24" Glyph="&#xE71A;" />
+            </Button>
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource ClockText}"
+                Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+
+            <!-- Rolling level history: the room is live, visibly -->
+            <ItemsControl HorizontalAlignment="Center" ItemsSource="{x:Bind ViewModel.Meter}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel
+                            Height="30"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LevelBar">
+                        <Rectangle
+                            Width="1.5"
+                            Height="{x:Bind Height, Mode=OneWay}"
+                            Margin="0.25,0"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                            RadiusX="0.75"
+                            RadiusY="0.75" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button
+                HorizontalAlignment="Center"
+                Command="{x:Bind ViewModel.CancelRecordingCommand}"
+                Content="Cancel"
+                Style="{StaticResource TrayButton}" />
+        </StackPanel>
+
+        <!-- Stop pressed, transcript still sealing: the same region, one
+             caption, until there is something to show -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}">
+            <ProgressRing
+                Width="44"
+                Height="44"
+                HorizontalAlignment="Center"
+                IsActive="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource CaptionText}"
+                Text="Finalising" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource ClockText}"
+                Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+        </StackPanel>
     </Grid>
 </UserControl>

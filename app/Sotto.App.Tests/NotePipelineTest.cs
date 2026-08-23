@@ -208,6 +208,76 @@ public class NotePipelineTest
     }
 
     [Fact]
+    public void PreparingShowsUntilTheFirstWordsStream()
+    {
+        var note = new NoteViewModel();
+        Assert.False(note.NotePreparing);
+
+        note.Apply(NotePipelineEvent.NoteWritingStarted);
+        Assert.True(note.NotePreparing);
+        Assert.True(note.PatientPreparing);
+        Assert.Equal("Writing the note", note.NoteStateCaption);
+
+        note.ClinicalNoteText = "The patient";
+        Assert.False(note.NotePreparing);
+        Assert.True(note.PatientPreparing);
+
+        note.Apply(NotePipelineEvent.NoteReady);
+        note.PatientInfoText = "Your appointment";
+        Assert.False(note.PatientPreparing);
+    }
+
+    [Fact]
+    public void AFailedNoteCaptionPointsAtTheStatusBar()
+    {
+        var note = new NoteViewModel();
+        note.Apply(NotePipelineEvent.NoteWritingStarted);
+        note.Apply(NotePipelineEvent.NoteFailed);
+
+        Assert.False(note.NotePreparing);
+        Assert.Contains("could not be written", note.NoteStateCaption);
+        Assert.True(note.NoteCaptionVisible);
+    }
+
+    [Fact]
+    public async Task WritingStatusesAppearOnlyWhenTokensStream()
+    {
+        var (session, engine, _) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+
+        engine.RaiseNotification("note/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The patient" }));
+        Assert.Equal("Writing clinical note", session.Status.LatestActivity);
+
+        engine.RaiseNotification("note/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The patient presents" }));
+        Assert.Equal(1, session.Status.LogEntries.Count(l => l == "Writing clinical note"));
+
+        engine.RaiseNotification("note/ready");
+        engine.RaiseNotification("patient/partial", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "Your appointment" }));
+        Assert.Equal("Writing patient note", session.Status.LatestActivity);
+    }
+
+    [Fact]
+    public async Task AThinRecordingNeverClaimsToBeWriting()
+    {
+        var (session, engine, _) = TestSession.Create();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+
+        // The engine's graceful statement arrives with no partials at all
+        engine.RaiseNotification("note/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The recording was too short." }));
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "The recording was too short." }));
+
+        Assert.DoesNotContain(session.Status.LogEntries, l => l.StartsWith("Writing", StringComparison.Ordinal));
+        Assert.Equal("Ready for review", session.Status.LatestActivity);
+    }
+
+    [Fact]
     public async Task NewConsultationResetsThePipeline()
     {
         var (session, engine, note) = TestSession.Create();

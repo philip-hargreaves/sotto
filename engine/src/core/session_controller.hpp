@@ -67,13 +67,19 @@ using SourceFactory =
 // own keeps the session open for the user's Stop or Cancel to decide.
 class SessionController {
    public:
+    // Below this the model writes from its prompt, not the consultation:
+    // measured fabrication on a 14 s recording (an in-prompt example became
+    // the diagnosis). Refusing is the only safe output.
+    static constexpr std::size_t kMinNoteWords = 25;
+
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
                       asr::ITranscriber& transcriber, IStreamingVad& vad,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
                       diar::IDiariser* diariser = nullptr,
                       std::uint64_t diar_advance_frames = 5 * kSampleRate,
                       note::INoteWriter* note_writer = nullptr,
-                      metrics::Registry* metrics = nullptr)
+                      metrics::Registry* metrics = nullptr,
+                      std::size_t min_note_words = kMinNoteWords)
         : factory_(std::move(factory)),
           events_(events),
           store_(store),
@@ -83,7 +89,8 @@ class SessionController {
           note_writer_(note_writer),
           metrics_(metrics),
           diar_advance_frames_(diar_advance_frames),
-          settle_timeout_(settle_timeout) {}
+          settle_timeout_(settle_timeout),
+          min_note_words_(min_note_words) {}
 
     ~SessionController() {
         Stop();
@@ -121,6 +128,7 @@ class SessionController {
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
             resumed_from_ = resume_from;
+            note_prepared_ = false;
             vad_.Reset();
             endpointer_.emplace(vad_);
             vad_backlog_.clear();
@@ -148,10 +156,6 @@ class SessionController {
         worker_ = std::thread([this] { GuardedRun(); });
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
-        }
-        // Warm the note weights' file cache while the session records
-        if (note_writer_ != nullptr) {
-            note_writer_->Prepare();
         }
         if (metrics_ != nullptr) {
             metrics_->BeginSession(replay.has_value(), replay.has_value() ? replay->speed : 0.0);
@@ -357,6 +361,12 @@ class SessionController {
             turns = session_turns_;
             ++diar_ticks_;
             lock.unlock();
+            // Deferred until whisper is decoding so the GPU never compiles
+            // two models at once; still minutes ahead of any real stop
+            if (!note_prepared_ && note_writer_ != nullptr) {
+                note_prepared_ = true;
+                note_writer_->Prepare();
+            }
             // The same reconcile finalise runs, so turn spans agree
             diar::ReconcileTurns(turns);
             try {
@@ -603,10 +613,48 @@ class SessionController {
         }
     }
 
+    static std::size_t TranscriptWords(const std::vector<asr::Turn>& turns) {
+        std::size_t words = 0;
+        for (const auto& turn : turns) {
+            bool in_word = false;
+            for (const char c : turn.text) {
+                const bool space = c == ' ' || c == '\t' || c == '\n';
+                if (!space && !in_word) ++words;
+                in_word = !space;
+            }
+        }
+        return words;
+    }
+
     // The note writes after the seal on its own thread; a new stop cancels
     // a note still writing
     void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
         JoinNoteThread();
+        // The model never sees a transcript this thin - it would write from
+        // its prompt, not the consultation (measured). The engine authors a
+        // plain statement instead, delivered as the note so the panes read
+        // professionally rather than erroring
+        if (TranscriptWords(transcript) < min_note_words_) {
+            const std::string note =
+                "The recording was too short or did not contain enough clinical "
+                "information to generate an accurate note.";
+            try {
+                store_.SaveNote(id, note);
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+            events_.OnNoteReady(note);
+            if (note_writer_->WritesPatient()) {
+                const std::string patient =
+                    "The recording was too short or did not contain enough clinical "
+                    "information to generate a patient information sheet.";
+                try {
+                    store_.SavePatient(id, patient);
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+                events_.OnPatientReady(patient);
+            }
+            return;
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
             // An in-process note model needs whisper off the GPU first
@@ -674,6 +722,7 @@ class SessionController {
     metrics::Registry* metrics_;
     std::uint64_t diar_advance_frames_;
     std::chrono::milliseconds settle_timeout_;
+    std::size_t min_note_words_;
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
     std::thread diar_thread_;
@@ -693,6 +742,7 @@ class SessionController {
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
     store::SessionId resumed_from_;
+    bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined

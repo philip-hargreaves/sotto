@@ -1,0 +1,348 @@
+<!--
+    GENERATED FILE - DO NOT EDIT.
+
+    Produced by design-system/tools/tokens_to_xaml.py from:
+      design-system/design-project-staging/tokens/colors.css
+      design-system/design-project-staging/tokens/spacing.css
+      design-system/design-project-staging/tokens/typography.css
+
+    Change a value in the CSS token file and re-run the generator.
+    Editing this file by hand reintroduces the drift it exists to prevent.
+
+    Not generated (no single-resource XAML equivalent - map these by hand
+    on the control that needs them):
+      btn-ghost-bg  (@kind other)
+      dur-base  (@kind other)
+      dur-fast  (@kind other)
+      dur-slow  (@kind other)
+      ease-emphasized  (@kind other)
+      ease-standard  (@kind other)
+      elevation-0  (@kind other)
+      elevation-1  (unhandled value: 0 1px 2px rgba(0, 0, 0, .08))
+      elevation-2  (unhandled value: 0 4px 12px rgba(0, 0, 0, .10))
+      elevation-3  (unhandled value: 0 12px 32px rgba(0, 0, 0, .14))
+      shadow-focus  (unhandled value: 0 0 0 2px #eef5fc, 0 0 0 3px #0067c0)
+      shadow-lg  (unhandled value: 0 12px 32px rgba(0, 0, 0, .14))
+      shadow-md  (unhandled value: 0 4px 12px rgba(0, 0, 0, .10))
+      shadow-sm  (unhandled value: 0 1px 2px rgba(0, 0, 0, .08))
+      surface-mica  (@kind other)
+      type-body  (composite font shorthand)
+      type-caption  (composite font shorthand)
+      type-card-heading  (composite font shorthand)
+      type-display  (composite font shorthand)
+      type-heading  (composite font shorthand)
+      type-mono  (composite font shorthand)
+      type-title  (composite font shorthand)
+      type-ui  (composite font shorthand)
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============ Colors ============ -->
+    <Color x:Key="Blue800">#FF003F78</Color>
+    <Color x:Key="Blue700">#FF004E95</Color>
+    <Color x:Key="Blue600">#FF0067C0</Color>
+    <Color x:Key="Blue500">#FF2280D6</Color>
+    <Color x:Key="Blue100">#FFD4E6F7</Color>
+    <Color x:Key="Blue050">#FFEEF5FC</Color>
+    <Color x:Key="Doctor600">#FF0067C0</Color>
+    <Color x:Key="Patient600">#FF7A4DDB</Color>
+    <Color x:Key="Patient050">#FFF4EEFC</Color>
+    <Color x:Key="Ink900">#FF1B1B1B</Color>
+    <Color x:Key="Ink700">#FF2A2A2A</Color>
+    <Color x:Key="Ink500">#FF616161</Color>
+    <Color x:Key="Ink300">#FF9A9A9A</Color>
+    <Color x:Key="White">#FFFFFFFF</Color>
+    <Color x:Key="Surface">#FFFFFFFF</Color>
+    <Color x:Key="Surface2">#FFFAFAFA</Color>
+    <Color x:Key="Canvas">#FFF3F3F3</Color>
+    <Color x:Key="Chrome">#FFFBFBFB</Color>
+    <Color x:Key="GreyHover">#FFF5F5F5</Color>
+    <Color x:Key="GreyPressed">#FFEDEDED</Color>
+    <Color x:Key="TrackOff">#FFDFE7EF</Color>
+    <Color x:Key="Line">#FFE6E6E6</Color>
+    <Color x:Key="LineStrong">#FFD4D4D4</Color>
+    <Color x:Key="ConsoleBg">#FF1F2430</Color>
+    <Color x:Key="ConsoleFg">#FFCBD5E1</Color>
+    <Color x:Key="ConsoleKey">#FF7DD3FC</Color>
+    <Color x:Key="BrandIntel">#FF0068B5</Color>
+    <Color x:Key="BrandUcl">#FF500778</Color>
+    <Color x:Key="BrandNhs">#FF005EB8</Color>
+    <Color x:Key="BrandIntelSoft">#FFF1F8FE</Color>
+    <Color x:Key="BrandIntelBorder">#FFCFE3F4</Color>
+    <Color x:Key="Mica1">#FFEEF1F6</Color>
+    <Color x:Key="Mica2">#FFE7EBF2</Color>
+    <Color x:Key="MicaDesktop">#FFD9DEE7</Color>
+    <Color x:Key="Layer">#FFFBFCFE</Color>
+    <Color x:Key="Cta600">#FF007F3B</Color>
+    <Color x:Key="Cta700">#FF00662F</Color>
+    <Color x:Key="Cta900">#FF00401E</Color>
+    <Color x:Key="Ok600">#FF0F7B3F</Color>
+    <Color x:Key="Ok050">#FFE8F4EC</Color>
+    <Color x:Key="Ok100">#FFCFE6D8</Color>
+    <Color x:Key="Warn700">#FFB54708</Color>
+    <Color x:Key="Warn050">#FFFDF1E7</Color>
+    <Color x:Key="Warn100">#FFF3DCC4</Color>
+    <Color x:Key="Rec600">#FFE23B2E</Color>
+    <Color x:Key="Rec700">#FFC4271C</Color>
+    <Color x:Key="Rec100">#FFF3C9C5</Color>
+    <Color x:Key="Rec050">#FFFDECEC</Color>
+    <Color x:Key="Rec025">#FFFBDEDB</Color>
+    <Color x:Key="RecRing">#80E23B2E</Color>
+    <Color x:Key="ColorAccent">#FF0067C0</Color>
+    <Color x:Key="ColorAccentHover">#FF004E95</Color>
+    <Color x:Key="ColorAccentPressed">#FF003F78</Color>
+    <Color x:Key="ColorAccentSoft">#FFEEF5FC</Color>
+    <Color x:Key="ColorAccentBorder">#FFD4E6F7</Color>
+    <Color x:Key="TextPrimary">#FF1B1B1B</Color>
+    <Color x:Key="TextBody">#FF2A2A2A</Color>
+    <Color x:Key="TextMuted">#FF616161</Color>
+    <Color x:Key="TextDisabled">#FF9A9A9A</Color>
+    <Color x:Key="TextOnAccent">#FFFFFFFF</Color>
+    <Color x:Key="TextLink">#FF0067C0</Color>
+    <Color x:Key="SurfaceApp">#FFF3F3F3</Color>
+    <Color x:Key="SurfaceLayer">#FFFBFCFE</Color>
+    <Color x:Key="SurfaceCard">#FFFFFFFF</Color>
+    <Color x:Key="SurfaceSunken">#FFFAFAFA</Color>
+    <Color x:Key="SurfaceChrome">#FFFBFBFB</Color>
+    <Color x:Key="SurfaceConsole">#FF1F2430</Color>
+    <Color x:Key="BorderSubtle">#FFE6E6E6</Color>
+    <Color x:Key="BorderStrong">#FFD4D4D4</Color>
+    <Color x:Key="SpeakerDoctor">#FF0067C0</Color>
+    <Color x:Key="SpeakerPatient">#FF7A4DDB</Color>
+    <Color x:Key="StatusSecure">#FF0F7B3F</Color>
+    <Color x:Key="StatusSecureSoft">#FFE8F4EC</Color>
+    <Color x:Key="StatusSecureBorder">#FFCFE6D8</Color>
+    <Color x:Key="StatusCaution">#FFB54708</Color>
+    <Color x:Key="StatusCautionSoft">#FFFDF1E7</Color>
+    <Color x:Key="StatusCautionBorder">#FFF3DCC4</Color>
+    <Color x:Key="StatusRecording">#FFE23B2E</Color>
+    <Color x:Key="StatusRecordingSoft">#FFFDECEC</Color>
+    <Color x:Key="StatusRecordingBorder">#FFF3C9C5</Color>
+    <Color x:Key="StatusRecordingRing">#80E23B2E</Color>
+    <Color x:Key="BtnPrimaryBg">#FF0067C0</Color>
+    <Color x:Key="BtnPrimaryBgHover">#FF004E95</Color>
+    <Color x:Key="BtnPrimaryBgPressed">#FF003F78</Color>
+    <Color x:Key="BtnPrimaryFg">#FFFFFFFF</Color>
+    <Color x:Key="BtnPrimaryBorder">#FF0067C0</Color>
+    <Color x:Key="BtnPrimaryBorderHover">#FF004E95</Color>
+    <Color x:Key="BtnSecondaryBg">#FFFFFFFF</Color>
+    <Color x:Key="BtnSecondaryBgHover">#FFF5F5F5</Color>
+    <Color x:Key="BtnSecondaryBgPressed">#FFEDEDED</Color>
+    <Color x:Key="BtnSecondaryFg">#FF1B1B1B</Color>
+    <Color x:Key="BtnSecondaryBorder">#FFE6E6E6</Color>
+    <Color x:Key="BtnSecondaryBorderHover">#FFD4D4D4</Color>
+    <Color x:Key="BtnGhostBgHover">#FFEEF5FC</Color>
+    <Color x:Key="BtnGhostBgPressed">#FFD4E6F7</Color>
+    <Color x:Key="BtnGhostFg">#FF0067C0</Color>
+    <Color x:Key="BtnCtaBg">#FF007F3B</Color>
+    <Color x:Key="BtnCtaBgHover">#FF00662F</Color>
+    <Color x:Key="BtnCtaBgPressed">#FF00401E</Color>
+    <Color x:Key="BtnCtaFg">#FFFFFFFF</Color>
+    <Color x:Key="DisabledBg">#FFF3F3F3</Color>
+    <Color x:Key="DisabledFg">#FF9A9A9A</Color>
+    <Color x:Key="DisabledBorder">#FFE6E6E6</Color>
+    <Color x:Key="RecordIdleBg">#FF0067C0</Color>
+    <Color x:Key="RecordIdleBgHover">#FF004E95</Color>
+    <Color x:Key="RecordIdleFg">#FFFFFFFF</Color>
+    <Color x:Key="RecordLiveBg">#FFFDECEC</Color>
+    <Color x:Key="RecordLiveBgHover">#FFFBDEDB</Color>
+    <Color x:Key="RecordLiveFg">#FFC4271C</Color>
+    <Color x:Key="RecordLiveBorder">#FFF3C9C5</Color>
+    <Color x:Key="TabFg">#FF616161</Color>
+    <Color x:Key="TabFgHover">#FF1B1B1B</Color>
+    <Color x:Key="TabBgHover">#FFF5F5F5</Color>
+    <Color x:Key="TabSelectedFg">#FF0067C0</Color>
+    <Color x:Key="TabSelectedBg">#FFFFFFFF</Color>
+    <Color x:Key="TrackFilled">#FF0067C0</Color>
+    <Color x:Key="TrackUnfilled">#FFDFE7EF</Color>
+    <Color x:Key="ThumbBg">#FFFFFFFF</Color>
+    <Color x:Key="ThumbBorder">#FF0067C0</Color>
+    <Color x:Key="SwitchOffBg">#FF9A9A9A</Color>
+    <Color x:Key="SwitchOnBg">#FF0067C0</Color>
+    <Color x:Key="SwitchKnob">#FFFFFFFF</Color>
+
+    <!-- One brush per colour. Bind to these, never to a literal. -->
+    <SolidColorBrush x:Key="Blue800Brush" Color="{StaticResource Blue800}" />
+    <SolidColorBrush x:Key="Blue700Brush" Color="{StaticResource Blue700}" />
+    <SolidColorBrush x:Key="Blue600Brush" Color="{StaticResource Blue600}" />
+    <SolidColorBrush x:Key="Blue500Brush" Color="{StaticResource Blue500}" />
+    <SolidColorBrush x:Key="Blue100Brush" Color="{StaticResource Blue100}" />
+    <SolidColorBrush x:Key="Blue050Brush" Color="{StaticResource Blue050}" />
+    <SolidColorBrush x:Key="Doctor600Brush" Color="{StaticResource Doctor600}" />
+    <SolidColorBrush x:Key="Patient600Brush" Color="{StaticResource Patient600}" />
+    <SolidColorBrush x:Key="Patient050Brush" Color="{StaticResource Patient050}" />
+    <SolidColorBrush x:Key="Ink900Brush" Color="{StaticResource Ink900}" />
+    <SolidColorBrush x:Key="Ink700Brush" Color="{StaticResource Ink700}" />
+    <SolidColorBrush x:Key="Ink500Brush" Color="{StaticResource Ink500}" />
+    <SolidColorBrush x:Key="Ink300Brush" Color="{StaticResource Ink300}" />
+    <SolidColorBrush x:Key="WhiteBrush" Color="{StaticResource White}" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource Surface}" />
+    <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2}" />
+    <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource Canvas}" />
+    <SolidColorBrush x:Key="ChromeBrush" Color="{StaticResource Chrome}" />
+    <SolidColorBrush x:Key="GreyHoverBrush" Color="{StaticResource GreyHover}" />
+    <SolidColorBrush x:Key="GreyPressedBrush" Color="{StaticResource GreyPressed}" />
+    <SolidColorBrush x:Key="TrackOffBrush" Color="{StaticResource TrackOff}" />
+    <SolidColorBrush x:Key="LineBrush" Color="{StaticResource Line}" />
+    <SolidColorBrush x:Key="LineStrongBrush" Color="{StaticResource LineStrong}" />
+    <SolidColorBrush x:Key="ConsoleBgBrush" Color="{StaticResource ConsoleBg}" />
+    <SolidColorBrush x:Key="ConsoleFgBrush" Color="{StaticResource ConsoleFg}" />
+    <SolidColorBrush x:Key="ConsoleKeyBrush" Color="{StaticResource ConsoleKey}" />
+    <SolidColorBrush x:Key="BrandIntelBrush" Color="{StaticResource BrandIntel}" />
+    <SolidColorBrush x:Key="BrandUclBrush" Color="{StaticResource BrandUcl}" />
+    <SolidColorBrush x:Key="BrandNhsBrush" Color="{StaticResource BrandNhs}" />
+    <SolidColorBrush x:Key="BrandIntelSoftBrush" Color="{StaticResource BrandIntelSoft}" />
+    <SolidColorBrush x:Key="BrandIntelBorderBrush" Color="{StaticResource BrandIntelBorder}" />
+    <SolidColorBrush x:Key="Mica1Brush" Color="{StaticResource Mica1}" />
+    <SolidColorBrush x:Key="Mica2Brush" Color="{StaticResource Mica2}" />
+    <SolidColorBrush x:Key="MicaDesktopBrush" Color="{StaticResource MicaDesktop}" />
+    <SolidColorBrush x:Key="LayerBrush" Color="{StaticResource Layer}" />
+    <SolidColorBrush x:Key="Cta600Brush" Color="{StaticResource Cta600}" />
+    <SolidColorBrush x:Key="Cta700Brush" Color="{StaticResource Cta700}" />
+    <SolidColorBrush x:Key="Cta900Brush" Color="{StaticResource Cta900}" />
+    <SolidColorBrush x:Key="Ok600Brush" Color="{StaticResource Ok600}" />
+    <SolidColorBrush x:Key="Ok050Brush" Color="{StaticResource Ok050}" />
+    <SolidColorBrush x:Key="Ok100Brush" Color="{StaticResource Ok100}" />
+    <SolidColorBrush x:Key="Warn700Brush" Color="{StaticResource Warn700}" />
+    <SolidColorBrush x:Key="Warn050Brush" Color="{StaticResource Warn050}" />
+    <SolidColorBrush x:Key="Warn100Brush" Color="{StaticResource Warn100}" />
+    <SolidColorBrush x:Key="Rec600Brush" Color="{StaticResource Rec600}" />
+    <SolidColorBrush x:Key="Rec700Brush" Color="{StaticResource Rec700}" />
+    <SolidColorBrush x:Key="Rec100Brush" Color="{StaticResource Rec100}" />
+    <SolidColorBrush x:Key="Rec050Brush" Color="{StaticResource Rec050}" />
+    <SolidColorBrush x:Key="Rec025Brush" Color="{StaticResource Rec025}" />
+    <SolidColorBrush x:Key="RecRingBrush" Color="{StaticResource RecRing}" />
+    <SolidColorBrush x:Key="ColorAccentBrush" Color="{StaticResource ColorAccent}" />
+    <SolidColorBrush x:Key="ColorAccentHoverBrush" Color="{StaticResource ColorAccentHover}" />
+    <SolidColorBrush x:Key="ColorAccentPressedBrush" Color="{StaticResource ColorAccentPressed}" />
+    <SolidColorBrush x:Key="ColorAccentSoftBrush" Color="{StaticResource ColorAccentSoft}" />
+    <SolidColorBrush x:Key="ColorAccentBorderBrush" Color="{StaticResource ColorAccentBorder}" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
+    <SolidColorBrush x:Key="TextBodyBrush" Color="{StaticResource TextBody}" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}" />
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="{StaticResource TextDisabled}" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccent}" />
+    <SolidColorBrush x:Key="TextLinkBrush" Color="{StaticResource TextLink}" />
+    <SolidColorBrush x:Key="SurfaceAppBrush" Color="{StaticResource SurfaceApp}" />
+    <SolidColorBrush x:Key="SurfaceLayerBrush" Color="{StaticResource SurfaceLayer}" />
+    <SolidColorBrush x:Key="SurfaceCardBrush" Color="{StaticResource SurfaceCard}" />
+    <SolidColorBrush x:Key="SurfaceSunkenBrush" Color="{StaticResource SurfaceSunken}" />
+    <SolidColorBrush x:Key="SurfaceChromeBrush" Color="{StaticResource SurfaceChrome}" />
+    <SolidColorBrush x:Key="SurfaceConsoleBrush" Color="{StaticResource SurfaceConsole}" />
+    <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrong}" />
+    <SolidColorBrush x:Key="SpeakerDoctorBrush" Color="{StaticResource SpeakerDoctor}" />
+    <SolidColorBrush x:Key="SpeakerPatientBrush" Color="{StaticResource SpeakerPatient}" />
+    <SolidColorBrush x:Key="StatusSecureBrush" Color="{StaticResource StatusSecure}" />
+    <SolidColorBrush x:Key="StatusSecureSoftBrush" Color="{StaticResource StatusSecureSoft}" />
+    <SolidColorBrush x:Key="StatusSecureBorderBrush" Color="{StaticResource StatusSecureBorder}" />
+    <SolidColorBrush x:Key="StatusCautionBrush" Color="{StaticResource StatusCaution}" />
+    <SolidColorBrush x:Key="StatusCautionSoftBrush" Color="{StaticResource StatusCautionSoft}" />
+    <SolidColorBrush x:Key="StatusCautionBorderBrush" Color="{StaticResource StatusCautionBorder}" />
+    <SolidColorBrush x:Key="StatusRecordingBrush" Color="{StaticResource StatusRecording}" />
+    <SolidColorBrush x:Key="StatusRecordingSoftBrush" Color="{StaticResource StatusRecordingSoft}" />
+    <SolidColorBrush x:Key="StatusRecordingBorderBrush" Color="{StaticResource StatusRecordingBorder}" />
+    <SolidColorBrush x:Key="StatusRecordingRingBrush" Color="{StaticResource StatusRecordingRing}" />
+    <SolidColorBrush x:Key="BtnPrimaryBgBrush" Color="{StaticResource BtnPrimaryBg}" />
+    <SolidColorBrush x:Key="BtnPrimaryBgHoverBrush" Color="{StaticResource BtnPrimaryBgHover}" />
+    <SolidColorBrush x:Key="BtnPrimaryBgPressedBrush" Color="{StaticResource BtnPrimaryBgPressed}" />
+    <SolidColorBrush x:Key="BtnPrimaryFgBrush" Color="{StaticResource BtnPrimaryFg}" />
+    <SolidColorBrush x:Key="BtnPrimaryBorderBrush" Color="{StaticResource BtnPrimaryBorder}" />
+    <SolidColorBrush x:Key="BtnPrimaryBorderHoverBrush" Color="{StaticResource BtnPrimaryBorderHover}" />
+    <SolidColorBrush x:Key="BtnSecondaryBgBrush" Color="{StaticResource BtnSecondaryBg}" />
+    <SolidColorBrush x:Key="BtnSecondaryBgHoverBrush" Color="{StaticResource BtnSecondaryBgHover}" />
+    <SolidColorBrush x:Key="BtnSecondaryBgPressedBrush" Color="{StaticResource BtnSecondaryBgPressed}" />
+    <SolidColorBrush x:Key="BtnSecondaryFgBrush" Color="{StaticResource BtnSecondaryFg}" />
+    <SolidColorBrush x:Key="BtnSecondaryBorderBrush" Color="{StaticResource BtnSecondaryBorder}" />
+    <SolidColorBrush x:Key="BtnSecondaryBorderHoverBrush" Color="{StaticResource BtnSecondaryBorderHover}" />
+    <SolidColorBrush x:Key="BtnGhostBgHoverBrush" Color="{StaticResource BtnGhostBgHover}" />
+    <SolidColorBrush x:Key="BtnGhostBgPressedBrush" Color="{StaticResource BtnGhostBgPressed}" />
+    <SolidColorBrush x:Key="BtnGhostFgBrush" Color="{StaticResource BtnGhostFg}" />
+    <SolidColorBrush x:Key="BtnCtaBgBrush" Color="{StaticResource BtnCtaBg}" />
+    <SolidColorBrush x:Key="BtnCtaBgHoverBrush" Color="{StaticResource BtnCtaBgHover}" />
+    <SolidColorBrush x:Key="BtnCtaBgPressedBrush" Color="{StaticResource BtnCtaBgPressed}" />
+    <SolidColorBrush x:Key="BtnCtaFgBrush" Color="{StaticResource BtnCtaFg}" />
+    <SolidColorBrush x:Key="DisabledBgBrush" Color="{StaticResource DisabledBg}" />
+    <SolidColorBrush x:Key="DisabledFgBrush" Color="{StaticResource DisabledFg}" />
+    <SolidColorBrush x:Key="DisabledBorderBrush" Color="{StaticResource DisabledBorder}" />
+    <SolidColorBrush x:Key="RecordIdleBgBrush" Color="{StaticResource RecordIdleBg}" />
+    <SolidColorBrush x:Key="RecordIdleBgHoverBrush" Color="{StaticResource RecordIdleBgHover}" />
+    <SolidColorBrush x:Key="RecordIdleFgBrush" Color="{StaticResource RecordIdleFg}" />
+    <SolidColorBrush x:Key="RecordLiveBgBrush" Color="{StaticResource RecordLiveBg}" />
+    <SolidColorBrush x:Key="RecordLiveBgHoverBrush" Color="{StaticResource RecordLiveBgHover}" />
+    <SolidColorBrush x:Key="RecordLiveFgBrush" Color="{StaticResource RecordLiveFg}" />
+    <SolidColorBrush x:Key="RecordLiveBorderBrush" Color="{StaticResource RecordLiveBorder}" />
+    <SolidColorBrush x:Key="TabFgBrush" Color="{StaticResource TabFg}" />
+    <SolidColorBrush x:Key="TabFgHoverBrush" Color="{StaticResource TabFgHover}" />
+    <SolidColorBrush x:Key="TabBgHoverBrush" Color="{StaticResource TabBgHover}" />
+    <SolidColorBrush x:Key="TabSelectedFgBrush" Color="{StaticResource TabSelectedFg}" />
+    <SolidColorBrush x:Key="TabSelectedBgBrush" Color="{StaticResource TabSelectedBg}" />
+    <SolidColorBrush x:Key="TrackFilledBrush" Color="{StaticResource TrackFilled}" />
+    <SolidColorBrush x:Key="TrackUnfilledBrush" Color="{StaticResource TrackUnfilled}" />
+    <SolidColorBrush x:Key="ThumbBgBrush" Color="{StaticResource ThumbBg}" />
+    <SolidColorBrush x:Key="ThumbBorderBrush" Color="{StaticResource ThumbBorder}" />
+    <SolidColorBrush x:Key="SwitchOffBgBrush" Color="{StaticResource SwitchOffBg}" />
+    <SolidColorBrush x:Key="SwitchOnBgBrush" Color="{StaticResource SwitchOnBg}" />
+    <SolidColorBrush x:Key="SwitchKnobBrush" Color="{StaticResource SwitchKnob}" />
+
+    <!-- ============ Dark theme variants ============
+         Suffixed siblings rather than ThemeDictionaries, because the
+         consumer is C#: a XAML {ThemeResource} resolves against the
+         element's ActualTheme, but Application.Resources[key] in code
+         resolves against the APPLICATION theme, which does not change
+         when a theme is forced on the root element. Explicit keys are
+         unambiguous from either side. Add ThemeDictionaries here the
+         day a XAML binding needs one. -->
+    <Color x:Key="SpeakerDoctorDark">#FF4CA6E8</Color>
+    <Color x:Key="SpeakerPatientDark">#FFA98BE6</Color>
+    <Color x:Key="TextMutedDark">#FF9A9A9A</Color>
+    <Color x:Key="StatusCautionDark">#FFF0A868</Color>
+    <SolidColorBrush x:Key="SpeakerDoctorDarkBrush" Color="{StaticResource SpeakerDoctorDark}" />
+    <SolidColorBrush x:Key="SpeakerPatientDarkBrush" Color="{StaticResource SpeakerPatientDark}" />
+    <SolidColorBrush x:Key="TextMutedDarkBrush" Color="{StaticResource TextMutedDark}" />
+    <SolidColorBrush x:Key="StatusCautionDarkBrush" Color="{StaticResource StatusCautionDark}" />
+
+    <!-- ============ Scalars ============ -->
+    <x:Double x:Key="Space1">4</x:Double>
+    <x:Double x:Key="Space2">6</x:Double>
+    <x:Double x:Key="Space3">8</x:Double>
+    <x:Double x:Key="Space4">10</x:Double>
+    <x:Double x:Key="Space5">14</x:Double>
+    <x:Double x:Key="Space6">18</x:Double>
+    <x:Double x:Key="Space7">24</x:Double>
+    <x:Double x:Key="Space8">32</x:Double>
+    <x:Double x:Key="Space9">48</x:Double>
+    <CornerRadius x:Key="RadiusXxs">4</CornerRadius>
+    <CornerRadius x:Key="RadiusXs">6</CornerRadius>
+    <CornerRadius x:Key="RadiusSm">7</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">8</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <CornerRadius x:Key="RadiusXl">12</CornerRadius>
+    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+    <Thickness x:Key="BorderWidth">1</Thickness>
+    <Thickness x:Key="BorderAccentWidth">3</Thickness>
+    <FontFamily x:Key="FontUi">Segoe UI Variable Text</FontFamily>  <!-- first of: "Segoe UI Variable Text", "Segoe UI", "Public Sans", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif -->
+    <FontFamily x:Key="FontDisplay">Segoe UI Variable Display</FontFamily>  <!-- first of: "Segoe UI Variable Display", "Segoe UI", "Public Sans", -apple-system, system-ui, sans-serif -->
+    <FontFamily x:Key="FontMono">Cascadia Code</FontFamily>  <!-- first of: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace -->
+    <x:Double x:Key="WeightRegular">400</x:Double>
+    <x:Double x:Key="WeightMedium">500</x:Double>
+    <x:Double x:Key="WeightSemibold">600</x:Double>
+    <x:Double x:Key="WeightBold">700</x:Double>
+    <x:Double x:Key="Text11">11</x:Double>
+    <x:Double x:Key="Text12">12</x:Double>
+    <x:Double x:Key="Text13">13</x:Double>
+    <x:Double x:Key="Text14">14</x:Double>
+    <x:Double x:Key="Text16">16</x:Double>
+    <x:Double x:Key="Text20">20</x:Double>
+    <x:Double x:Key="Text28">28</x:Double>
+    <x:Double x:Key="Text40">40</x:Double>
+    <x:Double x:Key="LeadingTight">1.2</x:Double>
+    <x:Double x:Key="LeadingSnug">1.4</x:Double>
+    <x:Double x:Key="LeadingNormal">1.55</x:Double>
+    <x:Double x:Key="LeadingRelaxed">1.65</x:Double>
+    <x:Double x:Key="TrackingLabel">20</x:Double>  <!-- 1/1000 em -->
+    <x:Double x:Key="TrackingNormal">0</x:Double>
+
+</ResourceDictionary>

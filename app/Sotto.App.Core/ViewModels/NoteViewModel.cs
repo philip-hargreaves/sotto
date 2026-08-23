@@ -44,8 +44,64 @@ public sealed partial class NoteViewModel : ObservableObject
     private bool CanTranslate() => SelectedLanguage is not null && TranslateRequested is not null
         && PipelineState == NotePipelineState.AllReady && !TranslationRunning;
 
-    partial void OnPipelineStateChanged(NotePipelineState value) =>
+    // The panes show a quiet affordance while a document is being prepared
+    // and nothing has streamed yet; computed here so it is testable
+    public bool NotePreparing =>
+        PipelineState == NotePipelineState.NoteWriting && ClinicalNoteText.Length == 0;
+
+    public bool PatientPreparing =>
+        PipelineState is NotePipelineState.NoteWriting or NotePipelineState.NoteReadyPatientWriting
+        && PatientInfoText.Length == 0;
+
+    public string NoteStateCaption => PipelineState switch
+    {
+        NotePipelineState.NoteWriting => "Writing the note",
+        NotePipelineState.NoteFailed => "The note could not be written - see the status bar",
+        _ => "",
+    };
+
+    public string PatientStateCaption => PipelineState switch
+    {
+        NotePipelineState.NoteWriting or NotePipelineState.NoteReadyPatientWriting =>
+            "The information sheet follows the note",
+        NotePipelineState.PatientFailed =>
+            "The information sheet could not be written - see the status bar",
+        _ => "",
+    };
+
+    public bool NoteCaptionVisible => NoteStateCaption.Length > 0;
+
+    public bool PatientCaptionVisible => PatientStateCaption.Length > 0;
+
+    // Translation appears only when it has a purpose: the row once the sheet
+    // is stored, the output only while translating or holding a result
+    public bool TranslateRowVisible => PipelineState == NotePipelineState.AllReady;
+
+    public bool TranslationVisible => TranslationRunning || TranslationText.Length > 0;
+
+    partial void OnPipelineStateChanged(NotePipelineState value)
+    {
         TranslateCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(NotePreparing));
+        OnPropertyChanged(nameof(PatientPreparing));
+        OnPropertyChanged(nameof(NoteStateCaption));
+        OnPropertyChanged(nameof(PatientStateCaption));
+        OnPropertyChanged(nameof(NoteCaptionVisible));
+        OnPropertyChanged(nameof(PatientCaptionVisible));
+        OnPropertyChanged(nameof(TranslateRowVisible));
+    }
+
+    partial void OnTranslationRunningChanged(bool value) =>
+        OnPropertyChanged(nameof(TranslationVisible));
+
+    partial void OnTranslationTextChanged(string value) =>
+        OnPropertyChanged(nameof(TranslationVisible));
+
+    partial void OnClinicalNoteTextChanged(string value) =>
+        OnPropertyChanged(nameof(NotePreparing));
+
+    partial void OnPatientInfoTextChanged(string value) =>
+        OnPropertyChanged(nameof(PatientPreparing));
 
     /// <summary>Applies an engine-reported event; out-of-order events are refused.</summary>
     public bool Apply(NotePipelineEvent pipelineEvent)

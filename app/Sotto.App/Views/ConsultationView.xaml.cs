@@ -11,6 +11,7 @@ public sealed partial class ConsultationView : UserControl
         NotePaneView note, StatusBarView status, DemoTrayView demoTray, SettingsViewModel settings)
     {
         Shell = shell;
+        Controls = controls.ViewModel;
         InitializeComponent();
 
         ControlsHost.Content = controls;
@@ -33,4 +34,6 @@ public sealed partial class ConsultationView : UserControl
     }
 
     public ShellViewModel Shell { get; }
+
+    public SessionControlsViewModel Controls { get; }
 }

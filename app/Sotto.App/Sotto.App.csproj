@@ -30,6 +30,8 @@
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(EngineBinary)')">
     <Content Include="$(EngineBinary)" Link="sotto_engine.exe" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The note worker; without it the engine writes notes in-process -->
+    <Content Include="..\..\build\$(EnginePreset)\engine\sotto_note_host.exe" Link="sotto_note_host.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\build\$(EnginePreset)\engine\sotto_note_host.exe')" />
     <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build -->
     <Content Include="..\..\build\$(EnginePreset)\engine\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\build\$(EnginePreset)\engine\cache.json" Link="cache.json" CopyToOutputDirectory="PreserveNewest" />
@@ -67,6 +69,8 @@
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\AppIcon.ico" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <!-- Partner marks; the json decides what shows, per showcase -->
+    <Content Include="Assets\logos\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

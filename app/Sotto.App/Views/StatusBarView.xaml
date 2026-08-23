@@ -14,39 +14,39 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
+            <!-- One status, replaced as things happen; the ring means "in progress" -->
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <ProgressRing
                     Width="14"
                     Height="14"
-                    IsActive="{x:Bind ViewModel.EngineStarting, Mode=OneWay}"
-                    Visibility="{x:Bind ViewModel.EngineStarting, Mode=OneWay}" />
+                    IsActive="{x:Bind ViewModel.Busy, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.Busy, Mode=OneWay}" />
                 <TextBlock
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{ThemeResource CaptionTextBlockStyle}"
-                    Text="{x:Bind ViewModel.EngineStateLabel, Mode=OneWay}" />
-                <ProgressBar
-                    Width="72"
                     VerticalAlignment="Center"
-                    Foreground="{ThemeResource RecordingBrush}"
-                    Maximum="1"
-                    Minimum="0"
-                    Value="{x:Bind ViewModel.MicLevel, Mode=OneWay}"
-                    Visibility="{x:Bind ViewModel.MicVisible, Mode=OneWay}" />
+                    Style="{StaticResource CaptionText}"
+                    Text="{x:Bind ViewModel.DisplayLabel, Mode=OneWay}" />
             </StackPanel>
 
-            <TextBlock
-                Grid.Column="1"
-                Style="{ThemeResource CaptionTextBlockStyle}"
-                Text="{x:Bind ViewModel.LatestActivity, Mode=OneWay}" />
+            <Border Grid.Column="1" />
 
             <TextBlock
                 Grid.Column="2"
+                VerticalAlignment="Center"
                 FontFamily="Consolas"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Style="{ThemeResource CaptionTextBlockStyle}"
+                Style="{StaticResource MicroText}"
                 Text="{x:Bind ViewModel.PerformanceLine, Mode=OneWay}" />
+
+            <!-- Partner marks from Assets/logos/credits.json; edit the file
+                 per showcase, never the code -->
+            <StackPanel
+                x:Name="CreditsRow"
+                Grid.Column="3"
+                Margin="8,0,0,0"
+                Orientation="Horizontal"
+                Spacing="12" />
         </Grid>
     </Border>
 </UserControl>

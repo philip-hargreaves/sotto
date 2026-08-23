@@ -4,12 +4,22 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        Only the semantic colours the product owns live here; chrome uses the
-        built-in Fluent theme resources. Consumers bind with ThemeResource so a
-        theme switch re-evaluates. The dark palette is keyed "Default": WinUI
-        looks up the dark theme under that name, not "Dark".
+        Only colours WinUI does not supply: speakers and status, light values
+        from Tokens.g.xaml, dark chosen by hand (the light ones fail WCAG AA
+        on dark). Dark is keyed "Default" - that is where WinUI looks it up.
     -->
     <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="DoctorBrush" Color="{StaticResource SpeakerDoctor}" />
+            <SolidColorBrush x:Key="PatientBrush" Color="{StaticResource SpeakerPatient}" />
+            <SolidColorBrush x:Key="RecordingBrush" Color="{StaticResource StatusRecording}" />
+            <SolidColorBrush x:Key="OnDeviceBrush" Color="{StaticResource StatusSecure}" />
+            <SolidColorBrush x:Key="CautionBrush" Color="{StaticResource StatusCaution}" />
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{StaticResource StatusRecordingSoft}" />
+            <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{StaticResource StatusSecureSoft}" />
+            <SolidColorBrush x:Key="CautionSoftBrush" Color="{StaticResource StatusCautionSoft}" />
+        </ResourceDictionary>
 
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="DoctorBrush" Color="#4CA0E0" />
@@ -17,14 +27,9 @@
             <SolidColorBrush x:Key="RecordingBrush" Color="#F0584C" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="#3FB56B" />
             <SolidColorBrush x:Key="CautionBrush" Color="#E0913A" />
-        </ResourceDictionary>
-
-        <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="DoctorBrush" Color="#0067C0" />
-            <SolidColorBrush x:Key="PatientBrush" Color="#7A4DDB" />
-            <SolidColorBrush x:Key="RecordingBrush" Color="#E23B2E" />
-            <SolidColorBrush x:Key="OnDeviceBrush" Color="#0F7B3F" />
-            <SolidColorBrush x:Key="CautionBrush" Color="#B54708" />
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="#4A2320" />
+            <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="#1E3A2A" />
+            <SolidColorBrush x:Key="CautionSoftBrush" Color="#43301C" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
@@ -33,6 +38,9 @@
             <SolidColorBrush x:Key="RecordingBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="CautionBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CautionSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>
