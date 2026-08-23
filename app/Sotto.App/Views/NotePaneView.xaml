@@ -5,11 +5,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sotto.App.Core.ViewModels">
 
-    <TabView Padding="16,8" IsAddTabButtonVisible="False">
+    <TabView
+        Padding="16,8"
+        CanDragTabs="False"
+        CanReorderTabs="False"
+        IsAddTabButtonVisible="False"
+        TabWidthMode="SizeToContent">
         <TabView.TabItems>
 
             <TabViewItem Header="Clinical note" IsClosable="False">
-                <Grid Padding="0,8,0,0" RowSpacing="8">
+                <Grid Padding="0,10,0,8" RowSpacing="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -27,24 +32,21 @@
                             Text="{x:Bind ViewModel.NoteStateCaption, Mode=OneWay}" />
                     </StackPanel>
 
-                    <!-- Editable on purpose: the note is the clinician's document -->
+                    <!-- The clinician's document; editable in place -->
                     <TextBox
                         Grid.Row="1"
-                        AcceptsReturn="True"
-                        FontSize="14"
-                        IsSpellCheckEnabled="False"
-                        Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}"
-                        TextWrapping="Wrap" />
+                        Style="{StaticResource DocumentTextBox}"
+                        Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}" />
                 </Grid>
             </TabViewItem>
 
             <TabViewItem Header="Patient information" IsClosable="False">
-                <Grid Padding="0,8,0,0" RowSpacing="8">
+                <Grid Padding="0,10,0,8" RowSpacing="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <StackPanel Orientation="Horizontal" Spacing="8"
@@ -61,13 +63,15 @@
 
                     <TextBox
                         Grid.Row="1"
-                        AcceptsReturn="True"
-                        FontSize="14"
-                        IsSpellCheckEnabled="False"
-                        Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}"
-                        TextWrapping="Wrap" />
+                        Style="{StaticResource DocumentTextBox}"
+                        Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}" />
 
-                    <Grid Grid.Row="2" ColumnSpacing="8">
+                    <!-- Only once there is a sheet to translate -->
+                    <Grid
+                        Grid.Row="2"
+                        Margin="0,2,0,0"
+                        ColumnSpacing="8"
+                        Visibility="{x:Bind ViewModel.TranslateRowVisible, Mode=OneWay}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -98,12 +102,11 @@
 
                     <TextBox
                         Grid.Row="3"
-                        AcceptsReturn="True"
-                        FontSize="14"
+                        MaxHeight="260"
                         IsReadOnly="True"
-                        IsSpellCheckEnabled="False"
+                        Style="{StaticResource DocumentTextBox}"
                         Text="{x:Bind ViewModel.TranslationText, Mode=OneWay}"
-                        TextWrapping="Wrap" />
+                        Visibility="{x:Bind ViewModel.TranslationVisible, Mode=OneWay}" />
                 </Grid>
             </TabViewItem>
 

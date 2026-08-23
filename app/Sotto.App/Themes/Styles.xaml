@@ -112,6 +112,21 @@
         <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
     </Style>
 
+    <!-- A document that accepts a caret: card chrome, no box chrome. The
+         focus states keep the platform's underline via the template. -->
+    <Style x:Key="DocumentTextBox" TargetType="TextBox">
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="Padding" Value="16,14" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="AcceptsReturn" Value="True" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="IsSpellCheckEnabled" Value="False" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
     <!-- Chip base; the role's colours apply at the usage site -->
     <Style x:Key="ChipBorder" TargetType="Border">
         <Setter Property="CornerRadius" Value="10" />

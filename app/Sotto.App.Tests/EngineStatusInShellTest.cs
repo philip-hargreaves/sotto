@@ -70,6 +70,21 @@ public class EngineStatusInShellTest
     }
 
     [Fact]
+    public void TheMeterRollsHistoryThroughFixedBars()
+    {
+        var bar = new StatusBarViewModel();
+        var first = bar.Meter[0];
+
+        bar.SetMicLevel(1.0, clipped: false);
+        Assert.Equal(28, bar.Meter[^1].Height);
+
+        bar.SetMicLevel(0, clipped: false);
+        Assert.Equal(28, bar.Meter[^2].Height);
+        Assert.Equal(2, bar.Meter[^1].Height);
+        Assert.Same(first, bar.Meter[0]);
+    }
+
+    [Fact]
     public void SilentTransitionsStayOutOfTheActivityLog()
     {
         var bar = new StatusBarViewModel();

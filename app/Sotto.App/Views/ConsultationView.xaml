@@ -54,26 +54,27 @@
                     HorizontalContentAlignment="Center"
                     VerticalContentAlignment="Center"
                     Visibility="{x:Bind Controls.CentreStageVisible, Mode=OneWay}" />
-                <Grid ColumnSpacing="8" Visibility="{x:Bind Controls.PanesVisible, Mode=OneWay}">
+                <Grid ColumnSpacing="20" Visibility="{x:Bind Controls.PanesVisible, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="1.15*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource InnerCardSurface}" Padding="0">
-                        <ContentControl
-                            x:Name="TranscriptHost"
-                            HorizontalContentAlignment="Stretch"
-                            VerticalContentAlignment="Stretch" />
-                    </Border>
-                    <Border
+                    <Grid.ChildrenTransitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition FromVerticalOffset="16" />
+                        </TransitionCollection>
+                    </Grid.ChildrenTransitions>
+                    <!-- No pane containers: the content items are the cards,
+                         floating on the layer the way the turns do -->
+                    <ContentControl
+                        x:Name="TranscriptHost"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
+                    <ContentControl
+                        x:Name="NoteHost"
                         Grid.Column="1"
-                        Padding="0"
-                        Style="{StaticResource InnerCardSurface}">
-                        <ContentControl
-                            x:Name="NoteHost"
-                            HorizontalContentAlignment="Stretch"
-                            VerticalContentAlignment="Stretch" />
-                    </Border>
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
                 </Grid>
             </Grid>
 

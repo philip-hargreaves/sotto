@@ -28,14 +28,6 @@
                     VerticalAlignment="Center"
                     Style="{StaticResource CaptionText}"
                     Text="{x:Bind ViewModel.DisplayLabel, Mode=OneWay}" />
-                <ProgressBar
-                    Width="72"
-                    VerticalAlignment="Center"
-                    Foreground="{ThemeResource RecordingBrush}"
-                    Maximum="1"
-                    Minimum="0"
-                    Value="{x:Bind ViewModel.MicLevel, Mode=OneWay}"
-                    Visibility="{x:Bind ViewModel.MicVisible, Mode=OneWay}" />
             </StackPanel>
 
             <Border Grid.Column="1" />

@@ -73,6 +73,12 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public bool PatientCaptionVisible => PatientStateCaption.Length > 0;
 
+    // Translation appears only when it has a purpose: the row once the sheet
+    // is stored, the output only while translating or holding a result
+    public bool TranslateRowVisible => PipelineState == NotePipelineState.AllReady;
+
+    public bool TranslationVisible => TranslationRunning || TranslationText.Length > 0;
+
     partial void OnPipelineStateChanged(NotePipelineState value)
     {
         TranslateCommand.NotifyCanExecuteChanged();
@@ -82,7 +88,14 @@ public sealed partial class NoteViewModel : ObservableObject
         OnPropertyChanged(nameof(PatientStateCaption));
         OnPropertyChanged(nameof(NoteCaptionVisible));
         OnPropertyChanged(nameof(PatientCaptionVisible));
+        OnPropertyChanged(nameof(TranslateRowVisible));
     }
+
+    partial void OnTranslationRunningChanged(bool value) =>
+        OnPropertyChanged(nameof(TranslationVisible));
+
+    partial void OnTranslationTextChanged(string value) =>
+        OnPropertyChanged(nameof(TranslationVisible));
 
     partial void OnClinicalNoteTextChanged(string value) =>
         OnPropertyChanged(nameof(NotePreparing));

@@ -37,6 +37,31 @@
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+
+            <!-- Rolling level history: the room is live, visibly -->
+            <ItemsControl HorizontalAlignment="Center" ItemsSource="{x:Bind ViewModel.Meter}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel
+                            Height="30"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LevelBar">
+                        <Rectangle
+                            Width="1.5"
+                            Height="{x:Bind Height, Mode=OneWay}"
+                            Margin="0.25,0"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                            RadiusX="0.75"
+                            RadiusY="0.75" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <Button
                 HorizontalAlignment="Center"
                 Command="{x:Bind ViewModel.CancelRecordingCommand}"

@@ -56,6 +56,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     public bool FinalisingVisible =>
         _session.State == SessionState.Finalising && !_session.TranscriptLoaded;
 
+    /// <summary>The status bar owns the level data; the centre stage shows it.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<LevelBar> Meter =>
+        _session.Status.Meter;
+
     public string ElapsedLabel =>
         TimeSpan.FromSeconds(_session.AudioSeconds).ToString(@"mm\:ss",
             System.Globalization.CultureInfo.InvariantCulture);
