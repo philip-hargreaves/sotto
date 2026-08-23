@@ -120,7 +120,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 return true;  // role not staged: nothing to wait for
             }
         };
-        return json{{"firstUse", first_use}, {"ready", ready("asr") && ready("note")}};
+        return json{{"firstUse", first_use},
+                    {"ready", ready("asr") && ready("note") && ready("translation")}};
     });
     if (metrics != nullptr) {
         // Device names are enumerated once, on the first fetch

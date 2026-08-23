@@ -298,6 +298,14 @@ int main(int argc, char* argv[]) {
                     }
                 });
             events.SetTranslator(translator.get());
+            // First use: the CPU compile joins the one-off warm-up, so the
+            // first translation is as fast as every other
+            const auto translation_dir = model_store.Resolve("translation", "default").dir;
+            if (!std::filesystem::exists(translation_dir / ".cache")) {
+                first_use = true;
+                std::fprintf(stderr, "sotto-engine: first use, compiling the translator\n");
+                translator->Prepare();
+            }
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no translation (%s)\n", e.what());
         }
