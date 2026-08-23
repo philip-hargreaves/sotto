@@ -10,6 +10,9 @@ CMakeUserPresets.json
 *.user
 *.suo
 
+# JetBrains
+.idea/
+
 # .NET
 bin/
 obj/

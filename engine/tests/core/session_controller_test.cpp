@@ -531,7 +531,7 @@ TEST(SessionController, TheNoteFollowsTheSeal) {
     FakeNoteWriter writer;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -557,7 +557,7 @@ TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {
     FakeNoteWriter writer;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -575,7 +575,7 @@ TEST(SessionController, PatientInformationFollowsTheNote) {
     writer.patient = true;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -598,7 +598,7 @@ TEST(SessionController, AFailedPatientLeavesTheNoteIntact) {
     writer.fail_patient = true;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -619,7 +619,7 @@ TEST(SessionController, ANoteOnlyWriterSkipsThePatientLane) {
     FakeNoteWriter writer;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -638,7 +638,7 @@ TEST(SessionController, AFailedNoteAnnouncesAndStoresNothing) {
     writer.fail = true;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Stop();
@@ -659,7 +659,7 @@ TEST(SessionController, DestructionCancelsANoteStillWriting) {
     {
         SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio),
                                      events, store, transcriber, vad, kTestSettle, nullptr,
-                                     5 * kSampleRate, &writer);
+                                     5 * kSampleRate, &writer, nullptr, 0);
         ASSERT_TRUE(controller.Start());
         controller.Stop();
     }
@@ -676,7 +676,7 @@ TEST(SessionController, CancelWritesNoNote) {
     FakeNoteWriter writer;
     SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
-                                 &writer);
+                                 &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
     controller.Cancel();
@@ -1243,6 +1243,29 @@ TEST(SessionController, StopBeforeStartIsANoOp) {
 
     EXPECT_FALSE(controller.Running());
     EXPECT_TRUE(store.Calls().empty());
+}
+
+TEST(SessionController, AThinTranscriptWritesAPlainStatementInsteadOfFabricating) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;  // one 5-word turn, far below the floor
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.patient = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_TRUE(writer.calls.empty()) << "the model must never see a transcript this thin";
+    EXPECT_NE(events.note_ready.find("too short or did not contain enough clinical"),
+              std::string::npos);
+    EXPECT_NE(events.patient_ready.find("patient information sheet"), std::string::npos);
+    EXPECT_TRUE(events.note_failed.empty()) << "a thin recording is not an error state";
+    EXPECT_EQ(store.note, events.note_ready) << "the statement is the session's record";
 }
 
 TEST(SessionController, AResumedSessionReplaysStoredAudioThenSupersedesTheOld) {

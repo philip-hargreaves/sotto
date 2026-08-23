@@ -27,7 +27,6 @@
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
-#include "adapters/note/qwen_note_writer.hpp"
 #include "adapters/note/worker_note_writer.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
@@ -261,9 +260,11 @@ int main(int argc, char* argv[]) {
                 note_writer =
                     std::make_unique<sotto::note::WorkerNoteWriter>(host, models_root, prompt);
             } else {
-                std::fprintf(stderr, "sotto-engine: note host missing, writing in-process\n");
-                note_writer = std::make_unique<sotto::note::QwenNoteWriter>(model_store, ov_runtime,
-                                                                            prompt, &metrics);
+                // Never write in-process: that is the exact configuration
+                // the driver fault corrupts. No notes is loud; a lost note
+                // in clinic is not
+                std::fprintf(stderr, "sotto-engine: note DISABLED, %s is missing\n",
+                             host.string().c_str());
             }
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
