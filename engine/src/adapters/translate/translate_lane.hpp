@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <cstdio>
 #include <functional>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -38,8 +40,17 @@ class TranslateLane {
         running_ = true;
         worker_ = std::thread([this, text = std::move(text), language = std::move(language)] {
             try {
-                const std::string translated =
-                    translator_.Translate(text, language, [this](const std::string& partial) {
+                const auto t0 = std::chrono::steady_clock::now();
+                bool first = true;
+                const std::string translated = translator_.Translate(
+                    text, language, [this, &t0, &first](const std::string& partial) {
+                        if (first) {
+                            first = false;
+                            std::fprintf(
+                                stderr, "sotto-engine: first translated word in %.1f s\n",
+                                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+                                    .count());
+                        }
                         emit_("translate/partial", {{"text", partial}});
                     });
                 emit_("translate/ready", {{"text", translated}, {"language", language}});

@@ -194,9 +194,11 @@ NllbTranslator::~NllbTranslator() {
     }
 }
 
-// The load costs ~12 s of CPU; started while the patient sheet writes, it
-// finishes before the translate button enables. A failed warm is retried
-// by the first Translate.
+// Started while the patient sheet writes; done before the translate button
+// enables. The warm must INFER, not merely load: the CPU plugin pays a
+// large one-time specialisation on the first inference (measured ~12 s),
+// so one throwaway sentence runs through all four models here. A failed
+// warm is retried by the first Translate.
 void NllbTranslator::Prepare() {
     std::lock_guard<std::mutex> lock(impl_->prepare_mutex);
     if (impl_->loaded || impl_->loader.joinable()) {
@@ -207,6 +209,9 @@ void NllbTranslator::Prepare() {
         try {
             std::lock_guard<std::mutex> lock(impl->mutex);
             impl->Load();
+            const auto& languages = impl->languages.at("languages");
+            const auto target = languages.begin().value().at("id").get<std::int64_t>();
+            impl->TranslateSentences("Ready.", target);
             std::fprintf(
                 stderr, "sotto-engine: translator warmed in %.1f s\n",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
