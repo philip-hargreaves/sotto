@@ -4,71 +4,32 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        The semantic layer: every role the product styles by name, per theme.
-        Views bind these with ThemeResource, never a raw hex and never a
-        primitive from Tokens.g.xaml directly - the generated file carries the
-        design system's light values, this file decides what they mean and
-        what dark and high contrast do (the design system is light-first, so
-        the dark palette is chosen here by hand).
+        Only colours WinUI does not supply: speakers and status, light values
+        from Tokens.g.xaml, dark chosen by hand (the light ones fail WCAG AA
+        on dark). Dark is keyed "Default" - that is where WinUI looks it up.
     -->
     <ResourceDictionary.ThemeDictionaries>
 
         <ResourceDictionary x:Key="Light">
-            <!-- Speakers and status (pre-existing keys) -->
             <SolidColorBrush x:Key="DoctorBrush" Color="{StaticResource SpeakerDoctor}" />
             <SolidColorBrush x:Key="PatientBrush" Color="{StaticResource SpeakerPatient}" />
             <SolidColorBrush x:Key="RecordingBrush" Color="{StaticResource StatusRecording}" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="{StaticResource StatusSecure}" />
             <SolidColorBrush x:Key="CautionBrush" Color="{StaticResource StatusCaution}" />
-            <!-- Surfaces -->
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="{StaticResource SurfaceApp}" />
-            <SolidColorBrush x:Key="CardSurfaceBrush" Color="{StaticResource SurfaceCard}" />
-            <SolidColorBrush x:Key="LayerSurfaceBrush" Color="{StaticResource SurfaceLayer}" />
-            <SolidColorBrush x:Key="SunkenSurfaceBrush" Color="{StaticResource SurfaceSunken}" />
-            <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="{StaticResource SurfaceChrome}" />
-            <!-- Text -->
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
-            <SolidColorBrush x:Key="TextBodyBrush" Color="{StaticResource TextBody}" />
-            <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}" />
-            <SolidColorBrush x:Key="TextDisabledBrush" Color="{StaticResource TextDisabled}" />
-            <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccent}" />
-            <!-- Borders and accent -->
-            <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}" />
-            <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrong}" />
-            <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource ColorAccent}" />
-            <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource ColorAccentSoft}" />
-            <SolidColorBrush x:Key="AccentBorderBrush" Color="{StaticResource ColorAccentBorder}" />
-            <!-- Status softs -->
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{StaticResource StatusRecordingSoft}" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{StaticResource StatusSecureSoft}" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="{StaticResource StatusCautionSoft}" />
-            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{StaticResource StatusRecordingSoft}" />
         </ResourceDictionary>
 
-        <!-- WinUI resolves dark under "Default" -->
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="DoctorBrush" Color="#4CA0E0" />
             <SolidColorBrush x:Key="PatientBrush" Color="#A98BEA" />
             <SolidColorBrush x:Key="RecordingBrush" Color="#F0584C" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="#3FB56B" />
             <SolidColorBrush x:Key="CautionBrush" Color="#E0913A" />
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#1F1F1F" />
-            <SolidColorBrush x:Key="CardSurfaceBrush" Color="#2B2B2B" />
-            <SolidColorBrush x:Key="LayerSurfaceBrush" Color="#262A31" />
-            <SolidColorBrush x:Key="SunkenSurfaceBrush" Color="#232323" />
-            <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="#202020" />
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="TextBodyBrush" Color="#E8E8E8" />
-            <SolidColorBrush x:Key="TextMutedBrush" Color="#9A9A9A" />
-            <SolidColorBrush x:Key="TextDisabledBrush" Color="#6B6B6B" />
-            <SolidColorBrush x:Key="TextOnAccentBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="BorderSubtleBrush" Color="#3A3A3A" />
-            <SolidColorBrush x:Key="BorderStrongBrush" Color="#4A4A4A" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#4CA6E8" />
-            <SolidColorBrush x:Key="AccentSoftBrush" Color="#1E3A52" />
-            <SolidColorBrush x:Key="AccentBorderBrush" Color="#2E4A62" />
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="#4A2320" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="#1E3A2A" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="#43301C" />
-            <SolidColorBrush x:Key="RecordingSoftBrush" Color="#4A2320" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
@@ -77,24 +38,9 @@
             <SolidColorBrush x:Key="RecordingBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="CautionBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="CardSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="LayerSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="SunkenSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="TextBodyBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="TextMutedBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="TextDisabledBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
-            <SolidColorBrush x:Key="TextOnAccentBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
-            <SolidColorBrush x:Key="BorderSubtleBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="BorderStrongBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
-            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
-            <SolidColorBrush x:Key="AccentSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="AccentBorderBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="RecordingSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>
