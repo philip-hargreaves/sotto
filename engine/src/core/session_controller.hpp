@@ -128,6 +128,7 @@ class SessionController {
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
             resumed_from_ = resume_from;
+            note_prepared_ = false;
             vad_.Reset();
             endpointer_.emplace(vad_);
             vad_backlog_.clear();
@@ -155,10 +156,6 @@ class SessionController {
         worker_ = std::thread([this] { GuardedRun(); });
         if (diariser_ != nullptr) {
             diar_thread_ = std::thread([this] { DiarLoop(); });
-        }
-        // Warm the note weights' file cache while the session records
-        if (note_writer_ != nullptr) {
-            note_writer_->Prepare();
         }
         if (metrics_ != nullptr) {
             metrics_->BeginSession(replay.has_value(), replay.has_value() ? replay->speed : 0.0);
@@ -364,6 +361,12 @@ class SessionController {
             turns = session_turns_;
             ++diar_ticks_;
             lock.unlock();
+            // Deferred until whisper is decoding so the GPU never compiles
+            // two models at once; still minutes ahead of any real stop
+            if (!note_prepared_ && note_writer_ != nullptr) {
+                note_prepared_ = true;
+                note_writer_->Prepare();
+            }
             // The same reconcile finalise runs, so turn spans agree
             diar::ReconcileTurns(turns);
             try {
@@ -739,6 +742,7 @@ class SessionController {
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
     store::SessionId resumed_from_;
+    bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined
