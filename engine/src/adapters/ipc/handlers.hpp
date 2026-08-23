@@ -35,12 +35,14 @@ std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& s
 std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessions,
                                               const json& params);
 
-// Every method the engine serves
+// Every method the engine serves. first_use: model caches were cold at
+// launch, so the one-off compiles are running and readiness reports them.
 void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
                      const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
                      sotto::metrics::Registry* metrics = nullptr,
                      sotto::models::OvRuntime* runtime = nullptr,
                      sotto::translate::ITranslator* translator = nullptr,
-                     sotto::translate::TranslateLane* translate_lane = nullptr);
+                     sotto::translate::TranslateLane* translate_lane = nullptr,
+                     bool first_use = false);
 
 }  // namespace sotto::ipc

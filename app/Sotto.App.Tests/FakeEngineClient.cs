@@ -56,6 +56,12 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
             return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
         }
 
+        if (method == "engine/readiness")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(
+                new { firstUse = FirstUse, ready = ModelsCompiled }));
+        }
+
         if (method == "translate/languages")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
@@ -83,6 +89,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
     /// <summary>Turns served by session/transcript after a stop.</summary>
     public List<(string Speaker, string Text)> Transcript { get; } = [];
+
+    /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
+    public bool FirstUse { get; set; }
+
+    public bool ModelsCompiled { get; set; } = true;
 
     public void RaiseNotification(string method, JsonElement parameters = default) =>
         NotificationReceived?.Invoke(method, parameters);

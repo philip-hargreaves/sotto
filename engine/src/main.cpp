@@ -200,9 +200,12 @@ int main(int argc, char* argv[]) {
         // and queued windows decode once the model is ready
         sotto::models::OvRuntime ov_runtime;
         sotto::metrics::Registry metrics;
+        bool first_use = false;
         std::unique_ptr<sotto::asr::ITranscriber> transcriber;
         try {
             model_store.Resolve("asr", "default");
+            first_use =
+                !std::filesystem::exists(model_store.Resolve("asr", "default").dir / ".cache");
             transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime,
                                                                            asr_device, &metrics);
         } catch (const std::exception& e) {
@@ -259,6 +262,15 @@ int main(int argc, char* argv[]) {
             if (std::filesystem::exists(host)) {
                 note_writer =
                     std::make_unique<sotto::note::WorkerNoteWriter>(host, models_root, prompt);
+                // First use only: the one-off model compile runs now, on an
+                // idle GPU, so it can never land inside a recording. Warm
+                // starts skip this and load at the first diarisation tick.
+                const auto note_dir = model_store.Resolve("note", "default").dir;
+                if (!std::filesystem::exists(note_dir / ".cache")) {
+                    first_use = true;
+                    std::fprintf(stderr, "sotto-engine: first use, compiling the note model\n");
+                    note_writer->Prepare();
+                }
             } else {
                 // Never write in-process: that is the exact configuration
                 // the driver fault corrupts. No notes is loud; a lost note
@@ -294,7 +306,7 @@ int main(int argc, char* argv[]) {
             diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
-                                    &ov_runtime, translator.get(), translate_lane.get());
+                                    &ov_runtime, translator.get(), translate_lane.get(), first_use);
         server.ServeOneClient();
         controller.Stop();
         return 0;
