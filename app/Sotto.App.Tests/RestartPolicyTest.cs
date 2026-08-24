@@ -10,12 +10,12 @@ public class RestartPolicyTest
         [.. agos.Select(ago => Now - ago)];
 
     [Fact]
-    public void MidConsultationAlwaysSurfaces()
+    public void MidConsultationRestartsSoTheSessionCanResume()
     {
         var storm = CrashesAt(Enumerable.Repeat(TimeSpan.Zero, 10).ToArray());
 
-        Assert.Equal(RecoveryAction.Surface, RestartPolicy.Decide(true, [], Now));
-        Assert.Equal(RecoveryAction.Surface, RestartPolicy.Decide(true, storm, Now));
+        Assert.Equal(RecoveryAction.Restart, RestartPolicy.Decide(true, [], Now));
+        Assert.Equal(RecoveryAction.GiveUp, RestartPolicy.Decide(true, storm, Now));
     }
 
     [Fact]
