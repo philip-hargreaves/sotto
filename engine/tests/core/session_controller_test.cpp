@@ -295,8 +295,10 @@ struct FakeSessionStore : store::ISessionStore {
 
     std::string patient;
 
-    std::vector<asr::Turn> ReadTurns(const store::SessionId&) override {
-        return {};
+    std::vector<asr::Turn> ReadTurns(const store::SessionId& id) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        calls.push_back("readTurns " + id);
+        return turns;
     }
 
     std::vector<float> ReadAudio(const store::SessionId& id) override {
@@ -358,6 +360,7 @@ struct FakeNoteWriter : note::INoteWriter {
 
     std::string Write(const std::vector<asr::Turn>& transcript, const note::NoteOptions& options,
                       const Progress& progress) override {
+        cancelled = false;  // per generation, like the real writer
         {
             const std::lock_guard<std::mutex> lock(mutex);
             calls.push_back(transcript);
@@ -665,6 +668,16 @@ TEST(SessionController, DestructionCancelsANoteStillWriting) {
                                      5 * kSampleRate, &writer, nullptr, 0);
         ASSERT_TRUE(controller.Start());
         controller.Stop();
+        // Destruction must catch the write in flight, not before it starts
+        for (int i = 0; i < 400; ++i) {
+            {
+                const std::lock_guard<std::mutex> lock(events.mutex);
+                if (!events.note_partials.empty()) {
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
     }
 
     EXPECT_TRUE(writer.cancelled.load());
@@ -1265,6 +1278,50 @@ TEST(SessionController, NoteOptionsReachTheWriter) {
     ASSERT_TRUE(events.WaitForNote());
     EXPECT_EQ(writer.last_options.style, "soap");
     EXPECT_EQ(writer.last_options.detail, "concise");
+}
+
+TEST(SessionController, RegenerateRewritesTheLastNoteWithNewOptions) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+    ASSERT_TRUE(events.WaitForNote());
+    {
+        const std::lock_guard<std::mutex> lock(events.mutex);
+        events.note_done = false;
+    }
+
+    ASSERT_TRUE(controller.RegenerateNote({"soap", "concise"}));
+    ASSERT_TRUE(events.WaitForNote());
+
+    ASSERT_EQ(writer.calls.size(), 2u);
+    EXPECT_EQ(writer.last_options.style, "soap");
+    EXPECT_EQ(writer.last_options.detail, "concise");
+    EXPECT_EQ(store.note, "the clinical note") << "the regenerated note is re-saved";
+}
+
+TEST(SessionController, RegenerateRefusedWhileRecordingOrWithNothingFinalised) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    EXPECT_FALSE(controller.RegenerateNote({})) << "nothing finalised yet";
+
+    ASSERT_TRUE(controller.Start());
+    EXPECT_FALSE(controller.RegenerateNote({})) << "a live session refuses";
+    controller.Stop();
 }
 
 TEST(SessionController, AThinTranscriptWritesAPlainStatementInsteadOfFabricating) {
