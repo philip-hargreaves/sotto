@@ -15,9 +15,9 @@ CRITICAL RULES - follow exactly:
 
 Style: formal, objective, third person, chronological (start at onset). Use British English spelling. Correct minor grammar but keep every medical fact exact. Ignore non-medical conversation.
 
-STRICT LENGTH LIMIT: the note must not exceed 250 words. Be selective - include every clinically significant stated fact once, and omit conversational detail, incidental narration, and repetition. Never pad.
-
 Group all the stated details of one complaint into a single sentence - its onset, timing, character, location, and severity together - rather than a separate sentence for each detail. Do not add any detail that was not stated.
+
+A length instruction follows the transcript; obey it exactly.
 
 Output ONLY the final note text - no preamble, no commentary.
 

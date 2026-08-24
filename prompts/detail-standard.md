@@ -1,0 +1,1 @@
+STRICT LENGTH LIMIT: the note must not exceed 150 words. Be selective - include every clinically significant stated fact once, and omit conversational detail, incidental narration, and repetition. Never pad.

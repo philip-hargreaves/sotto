@@ -221,6 +221,20 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
             }
             return json{{"sessionId", controller.CurrentSession()}};
         });
+    // Structure and length of the next note; invalid values are refused
+    server.RegisterMethod(
+        "note/options", [&controller](const json& params) -> std::variant<json, Error> {
+            const std::string style = params.value("style", "prose");
+            const std::string detail = params.value("detail", "standard");
+            if (style != "prose" && style != "soap") {
+                return Error{kInvalidParams, "Invalid params", json("unknown style: " + style)};
+            }
+            if (detail != "concise" && detail != "standard" && detail != "detailed") {
+                return Error{kInvalidParams, "Invalid params", json("unknown detail: " + detail)};
+            }
+            controller.SetNoteOptions({style, detail});
+            return json::object();
+        });
     server.RegisterMethod("session/pause", [&controller](const json& params) {
         controller.SetPaused(params.value("paused", true));
         return json::object();

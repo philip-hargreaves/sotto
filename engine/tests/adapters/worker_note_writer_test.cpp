@@ -22,7 +22,7 @@ std::filesystem::path HostExe() {
 }
 
 std::filesystem::path PromptPath() {
-    return kModels.parent_path() / "prompts" / "note-narrative.md";
+    return kModels.parent_path() / "prompts";
 }
 
 std::vector<asr::Turn> ElbowTranscript() {
@@ -55,7 +55,7 @@ TEST(WorkerNoteWriter, WritesNoteAndSheetThroughTheWorkerProcess) {
 
     int partials = 0;
     const std::string note =
-        writer.Write(ElbowTranscript(), [&partials](const std::string&) { partials++; });
+        writer.Write(ElbowTranscript(), {}, [&partials](const std::string&) { partials++; });
     ASSERT_FALSE(note.empty());
     EXPECT_GT(partials, 3) << "the note must stream through the pipe";
     EXPECT_EQ(note.find("doctor"), std::string::npos);
@@ -83,13 +83,14 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
     writer.Prepare();
 
     std::atomic<bool> killed{false};
-    const std::string note = writer.Write(ElbowTranscript(), [&killed](const std::string& partial) {
-        // The first streamed words prove generation is mid-flight; then
-        // the worker dies under it
-        if (partial.size() > 20 && !killed.exchange(true)) {
-            std::system("taskkill /IM sotto_note_host.exe /F >nul 2>&1");
-        }
-    });
+    const std::string note =
+        writer.Write(ElbowTranscript(), {}, [&killed](const std::string& partial) {
+            // The first streamed words prove generation is mid-flight; then
+            // the worker dies under it
+            if (partial.size() > 20 && !killed.exchange(true)) {
+                std::system("taskkill /IM sotto_note_host.exe /F >nul 2>&1");
+            }
+        });
 
     EXPECT_TRUE(killed.load());
     ASSERT_FALSE(note.empty());
@@ -98,12 +99,12 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
 
 TEST(WorkerNoteWriter, AMissingHostFailsLoudly) {
     WorkerNoteWriter writer("C:/nowhere/sotto_note_host.exe", kModels, PromptPath());
-    EXPECT_THROW(writer.Write(ElbowTranscript(), nullptr), std::runtime_error);
+    EXPECT_THROW(writer.Write(ElbowTranscript(), {}, nullptr), std::runtime_error);
 }
 
 TEST(WorkerNoteWriter, AnEmptyTranscriptRefusesToWrite) {
     WorkerNoteWriter writer(HostExe(), kModels, PromptPath());
-    EXPECT_THROW(writer.Write({}, nullptr), std::runtime_error);
+    EXPECT_THROW(writer.Write({}, {}, nullptr), std::runtime_error);
 }
 
 }  // namespace

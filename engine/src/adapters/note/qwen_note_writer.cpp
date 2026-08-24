@@ -30,7 +30,7 @@ std::string Trimmed(const std::string& text) {
 struct QwenNoteWriter::Impl {
     const models::ModelStore& store;
     models::OvRuntime& runtime;
-    std::filesystem::path prompt_path;
+    std::filesystem::path prompt_dir;
     metrics::Registry* metrics;
     std::mutex swap_mutex;   // guards pipeline
     std::mutex state_mutex;  // guards loader, load_error, loading
@@ -72,7 +72,8 @@ struct QwenNoteWriter::Impl {
             config.max_new_tokens = 1;
             config.do_sample = false;
             config.apply_chat_template = false;
-            built.generate("<|im_start|>user\n" + LoadPrompt(prompt_path), config);
+            built.generate("<|im_start|>user\n" + LoadPrompt(prompt_dir / "note-narrative.md"),
+                           config);
             std::fprintf(
                 stderr, "sotto-engine: note prefix warmed in %.1f s\n",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
@@ -99,8 +100,8 @@ struct QwenNoteWriter::Impl {
 };
 
 QwenNoteWriter::QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                               std::filesystem::path prompt_path, metrics::Registry* metrics)
-    : impl_(new Impl{store, runtime, std::move(prompt_path), metrics}) {}
+                               std::filesystem::path prompt_dir, metrics::Registry* metrics)
+    : impl_(new Impl{store, runtime, std::move(prompt_dir), metrics}) {}
 
 QwenNoteWriter::~QwenNoteWriter() {
     impl_->JoinLoader();
@@ -134,19 +135,21 @@ void QwenNoteWriter::Prepare() {
 }
 
 std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
-                                  const Progress& progress) {
+                                  const NoteOptions& options, const Progress& progress) {
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
-    return Generate(LoadPrompt(impl_->prompt_path) + TranscriptBlock(transcript), progress);
+    const auto style = options.style == "soap" ? "note-soap.md" : "note-narrative.md";
+    return Generate(LoadPrompt(impl_->prompt_dir / style) + TranscriptBlock(transcript) + "\n" +
+                        LoadPrompt(impl_->prompt_dir / ("detail-" + options.detail + ".md")),
+                    progress);
 }
 
 std::string QwenNoteWriter::WritePatient(const std::string& note, const Progress& progress) {
     if (note.empty()) {
         throw std::runtime_error("nothing to write: the note is empty");
     }
-    const auto prompt_path = impl_->prompt_path.parent_path() / "patient-info.md";
-    return Generate(LoadPrompt(prompt_path) + note + "\n", progress);
+    return Generate(LoadPrompt(impl_->prompt_dir / "patient-info.md") + note + "\n", progress);
 }
 
 std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& progress) {

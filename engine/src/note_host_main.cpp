@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         if (argc < 4) {
-            std::fprintf(stderr, "usage: sotto_note_host <pipe> <models> <prompt>\n");
+            std::fprintf(stderr, "usage: sotto_note_host <pipe> <models> <prompts-dir>\n");
             return 2;
         }
         const std::wstring pipe_name = std::filesystem::path(argv[1]).wstring();
@@ -121,8 +121,11 @@ int main(int argc, char* argv[]) {
         server.RegisterMethod(
             "write", [&writer, &lane](const json& params) -> std::variant<json, Error> {
                 auto turns = TurnsFrom(params);
-                if (!lane.Run([&writer, turns = std::move(turns)](const auto& progress) {
-                        return writer.Write(turns, progress);
+                sotto::note::NoteOptions options{params.value("style", "prose"),
+                                                 params.value("detail", "standard")};
+                if (!lane.Run([&writer, turns = std::move(turns),
+                               options = std::move(options)](const auto& progress) {
+                        return writer.Write(turns, options, progress);
                     })) {
                     return Error{kSessionError, "Session error", json("a generation is running")};
                 }

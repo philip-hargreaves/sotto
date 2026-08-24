@@ -253,7 +253,7 @@ void WorkerNoteWriter::Prepare() {
 }
 
 std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
-                                    const Progress& progress) {
+                                    const NoteOptions& options, const Progress& progress) {
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
@@ -264,7 +264,10 @@ std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
                          {"speaker", turn.speaker},
                          {"text", turn.text}});
     }
-    return impl_->Run("write", {{"turns", std::move(turns)}}, progress);
+    return impl_->Run(
+        "write",
+        {{"turns", std::move(turns)}, {"style", options.style}, {"detail", options.detail}},
+        progress);
 }
 
 std::string WorkerNoteWriter::WritePatient(const std::string& note, const Progress& progress) {

@@ -255,7 +255,7 @@ int main(int argc, char* argv[]) {
         std::unique_ptr<sotto::note::INoteWriter> note_writer;
         try {
             model_store.Resolve("note", "default");
-            const auto prompt = models_root.parent_path() / "prompts" / "note-narrative.md";
+            const auto prompt = models_root.parent_path() / "prompts";
             wchar_t exe_path[MAX_PATH]{};
             GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
             const auto host = std::filesystem::path(exe_path).parent_path() / "sotto_note_host.exe";

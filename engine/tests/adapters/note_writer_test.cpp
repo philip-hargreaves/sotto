@@ -30,11 +30,11 @@ TEST(QwenNoteWriter, WritesAStreamedNoteFromTheTranscript) {
     }
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
 
     std::vector<std::string> partials;
     const std::string text =
-        writer.Write(ElbowTranscript(),
+        writer.Write(ElbowTranscript(), {},
                      [&partials](const std::string& partial) { partials.push_back(partial); });
 
     ASSERT_FALSE(text.empty());
@@ -43,18 +43,46 @@ TEST(QwenNoteWriter, WritesAStreamedNoteFromTheTranscript) {
     EXPECT_EQ(text.find("doctor"), std::string::npos) << "the register bans the word";
 }
 
+TEST(QwenNoteWriter, WritesASoapNoteWithinTheConciseLimit) {
+    if (!std::filesystem::exists(kModels / "qwen3.5-9b-int4")) {
+        GTEST_SKIP() << "note model not staged";
+    }
+    models::ModelStore store(kModels);
+    models::OvRuntime runtime;
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
+
+    const std::string text = writer.Write(ElbowTranscript(), {"soap", "concise"}, nullptr);
+
+    ASSERT_FALSE(text.empty());
+    EXPECT_NE(text.find("Subjective:"), std::string::npos);
+    EXPECT_NE(text.find("Objective:"), std::string::npos);
+    EXPECT_NE(text.find("Assessment:"), std::string::npos);
+    EXPECT_NE(text.find("Plan:"), std::string::npos);
+    EXPECT_EQ(text.find("doctor"), std::string::npos);
+    // The 80-word cap with slack; strict adherence is the quality commit
+    std::size_t words = 0;
+    bool in_word = false;
+    for (const char c : text) {
+        const bool space = c == ' ' || c == '\n' || c == '\t';
+        if (!space && !in_word) ++words;
+        in_word = !space;
+    }
+    EXPECT_LE(words, 140u);
+}
+
 TEST(QwenNoteWriter, CancelInterruptsAGeneration) {
     if (!std::filesystem::exists(kModels / "qwen3.5-9b-int4")) {
         GTEST_SKIP() << "note model not staged";
     }
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
 
     int seen = 0;
-    const std::string text = writer.Write(ElbowTranscript(), [&writer, &seen](const std::string&) {
-        if (++seen == 3) writer.Cancel();
-    });
+    const std::string text =
+        writer.Write(ElbowTranscript(), {}, [&writer, &seen](const std::string&) {
+            if (++seen == 3) writer.Cancel();
+        });
 
     EXPECT_GE(seen, 3);
     EXPECT_LT(seen, 40) << "cancel must stop generation promptly";
@@ -66,7 +94,7 @@ TEST(QwenNoteWriter, WritesThePatientSheetFromANote) {
     }
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
 
     int partials = 0;
     const std::string sheet = writer.WritePatient(
@@ -99,9 +127,9 @@ TEST(QwenNoteWriter, ThePatientSheetFollowsTheNoteOnTheSamePipeline) {
     }
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
 
-    const std::string note = writer.Write(ElbowTranscript(), nullptr);
+    const std::string note = writer.Write(ElbowTranscript(), {}, nullptr);
     ASSERT_FALSE(note.empty());
     const std::string sheet = writer.WritePatient(note, nullptr);
     ASSERT_FALSE(sheet.empty());
@@ -111,8 +139,8 @@ TEST(QwenNoteWriter, ThePatientSheetFollowsTheNoteOnTheSamePipeline) {
 TEST(QwenNoteWriter, AnEmptyTranscriptRefusesToWrite) {
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts" / "note-narrative.md");
-    EXPECT_THROW(writer.Write({}, nullptr), std::runtime_error);
+    QwenNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
+    EXPECT_THROW(writer.Write({}, {}, nullptr), std::runtime_error);
 }
 
 }  // namespace

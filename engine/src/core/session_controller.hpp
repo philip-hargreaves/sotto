@@ -233,6 +233,17 @@ class SessionController {
         return session_id_;
     }
 
+    // Applied to the next note; the shell sets these ahead of the stop
+    void SetNoteOptions(note::NoteOptions options) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        note_options_ = std::move(options);
+    }
+
+    note::NoteOptions CurrentNoteOptions() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return note_options_;
+    }
+
     bool HasNoteWriter() const {
         return note_writer_ != nullptr;
     }
@@ -655,8 +666,10 @@ class SessionController {
             }
             return;
         }
+        auto options = CurrentNoteOptions();  // before the lock: same mutex
         std::lock_guard<std::mutex> lock(mutex_);
-        note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
+        note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript),
+                                    options = std::move(options)] {
             // An in-process note model needs whisper off the GPU first
             // (measured: KV-cache corruption); a worker-process model does not
             if (note_writer_->WantsTranscriberReleased()) {
@@ -664,8 +677,9 @@ class SessionController {
             }
             std::string note;
             try {
-                note = note_writer_->Write(
-                    turns, [this](const std::string& partial) { events_.OnNotePartial(partial); });
+                note = note_writer_->Write(turns, options, [this](const std::string& partial) {
+                    events_.OnNotePartial(partial);
+                });
                 try {
                     store_.SaveNote(id, note);
                 } catch (...) {  // NOLINT(bugprone-empty-catch)
@@ -742,6 +756,7 @@ class SessionController {
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
     store::SessionId resumed_from_;
+    note::NoteOptions note_options_;
     bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
     // Appended under mutex_ (the diarisation thread snapshots it); finalise

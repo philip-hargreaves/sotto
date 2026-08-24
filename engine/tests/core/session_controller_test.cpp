@@ -333,6 +333,7 @@ struct FakeNoteWriter : note::INoteWriter {
     std::atomic<int> prepares{0};
     std::mutex mutex;
     std::vector<std::vector<asr::Turn>> calls;
+    note::NoteOptions last_options;
     std::string patient_input;
 
     void Prepare() override {
@@ -355,10 +356,12 @@ struct FakeNoteWriter : note::INoteWriter {
         return "the patient sheet";
     }
 
-    std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override {
+    std::string Write(const std::vector<asr::Turn>& transcript, const note::NoteOptions& options,
+                      const Progress& progress) override {
         {
             const std::lock_guard<std::mutex> lock(mutex);
             calls.push_back(transcript);
+            last_options = options;
         }
         progress("The patient");
         progress("The patient presents");
@@ -1243,6 +1246,25 @@ TEST(SessionController, StopBeforeStartIsANoOp) {
 
     EXPECT_FALSE(controller.Running());
     EXPECT_TRUE(store.Calls().empty());
+}
+
+TEST(SessionController, NoteOptionsReachTheWriter) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    controller.SetNoteOptions({"soap", "concise"});
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(writer.last_options.style, "soap");
+    EXPECT_EQ(writer.last_options.detail, "concise");
 }
 
 TEST(SessionController, AThinTranscriptWritesAPlainStatementInsteadOfFabricating) {

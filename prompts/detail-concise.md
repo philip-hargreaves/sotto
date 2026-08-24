@@ -1,0 +1,1 @@
+STRICT LENGTH LIMIT: the note must not exceed 80 words. Keep only the clinically material facts - presenting complaint, key findings, diagnosis and plan - each stated once. Omit conversational detail, incidental narration, and repetition. Never pad, and never drop a stated diagnosis, medication or safety-netting instruction.
