@@ -201,7 +201,10 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             var parameters = replay is null
                 ? (object)new { resume }
                 : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
-            var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
+            // A post-crash resume decrypts the stored audio on a recovering
+            // machine; the default timeout is far too tight for it
+            var response = await RequestValueAsync(
+                "session/start", TimeSpan.FromSeconds(60), parameters).ConfigureAwait(true);
             if (response is null)
             {
                 State = SessionState.Idle;
