@@ -72,6 +72,12 @@ TEST(Messages, SessionInterruptedNotificationMatchesFixture) {
     EXPECT_EQ(built, LoadFixture("session-interrupted.json"));
 }
 
+TEST(Messages, SessionProgressNotificationMatchesFixture) {
+    const auto built = MakeNotification("session/progress", {{"stage", "speakers"}});
+
+    EXPECT_EQ(built, LoadFixture("session-progress.json"));
+}
+
 TEST(Messages, ErrorResponseMatchesFixture) {
     const json built = MakeError(std::int64_t{7}, Error{kMethodNotFound, "Method not found"});
     EXPECT_EQ(built, LoadFixture("error-method-not-found.json"));

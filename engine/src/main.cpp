@@ -63,6 +63,10 @@ class WireEvents : public sotto::audio::ISessionEvents {
                                  {{"reason", ReasonName(reason)}, {"detail", detail}});
     }
 
+    void OnProgress(const std::string& stage) override {
+        server_.PushNotification("session/progress", {{"stage", stage}});
+    }
+
     // Partials are cumulative, so intermediates can drop freely: a ~12 Hz
     // cap keeps the pipe and the shell's bindings calm at token cadence
     void PushPartial(const std::string& method, nlohmann::json params) {

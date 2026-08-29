@@ -150,6 +150,48 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task FinaliseStagesNameTheCentreSpinner()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+        var labels = new List<string>();
+        controls.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SessionControlsViewModel.FinalisingLabel))
+            {
+                labels.Add(controls.FinalisingLabel);
+            }
+        };
+
+        await session.StartRecordingAsync();
+        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+        Assert.Equal("Finalising", controls.FinalisingLabel);  // not finalising yet: ignored
+
+        await session.StopRecordingAsync();
+        Assert.Equal("Finalising", controls.FinalisingLabel);
+        engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
+        Assert.Equal("Writing transcript", controls.FinalisingLabel);
+        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+        Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+        engine.RaiseNotification("session/progress", Params(new { stage = "unknown" }));
+        Assert.Equal("Labelling speakers", controls.FinalisingLabel);  // unknown stages keep the last
+        Assert.Collection(labels,
+            l => Assert.Equal("Writing transcript", l),
+            l => Assert.Equal("Labelling speakers", l));
+
+        // The next stop starts from the plain caption again
+        engine.RaiseNotification("note/ready", Params(new { text = "note" }));
+        engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
+        session.StartNewConsultation();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        Assert.Equal("Finalising", controls.FinalisingLabel);
+    }
+
+    private static System.Text.Json.JsonElement Params(object value) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(value);
+
+    [Fact]
     public async Task ARestartedEngineResumesTheLiveSession()
     {
         var (session, engine, _) = TestSession.Create();

@@ -50,6 +50,10 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     [ObservableProperty]
     public partial bool TranscriptLoaded { get; private set; }
 
+    /// <summary>Centre-stage caption while sealing: follows the engine's finalise stages.</summary>
+    [ObservableProperty]
+    public partial string FinalisingLabel { get; private set; } = "Finalising";
+
     /// <summary>
     /// False only during first-time setup, while the one-off model compiles
     /// run: recording is blocked so nobody's first impression is the slow
@@ -379,6 +383,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
 
         State = SessionState.Finalising;
+        FinalisingLabel = "Finalising";
         Paused = false;
         ActiveReplay = null;
         _metrics?.StopRequested();
@@ -476,6 +481,17 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
+            // Finalise stages name the centre spinner; the status bar keeps
+            // its one "Finalising". Stages the engine skips never show
+            case "session/progress" when State == SessionState.Finalising
+                && parameters.ValueKind == JsonValueKind.Object:
+                FinalisingLabel = parameters.GetProperty("stage").GetString() switch
+                {
+                    "transcript" => "Writing transcript",
+                    "speakers" => "Labelling speakers",
+                    _ => FinalisingLabel,
+                };
+                break;
             // The note pane shows the note being written, then the sealed
             // text. The status states writing only once tokens actually
             // stream - a thin recording writes nothing and must never claim

@@ -33,8 +33,15 @@ public sealed partial class SessionControlsViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ElapsedLabel));
             }
+            else if (e.PropertyName is nameof(ConsultationViewModel.FinalisingLabel))
+            {
+                OnPropertyChanged(nameof(FinalisingLabel));
+            }
         };
     }
+
+    /// <summary>"Finalising", then the engine's stage as it starts.</summary>
+    public string FinalisingLabel => _session.FinalisingLabel;
 
     public SessionState State => _session.State;
 

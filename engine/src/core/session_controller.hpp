@@ -40,6 +40,10 @@ class ISessionEvents {
     // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
 
+    // Finalise stages as they start ("transcript", "speakers"), on the
+    // stopping thread; fired only for work that actually runs
+    virtual void OnProgress(const std::string&) {}
+
     // The note lane, delivered on its own thread after finalise
     virtual void OnNotePartial(const std::string&) {}
     virtual void OnNoteReady(const std::string&) {}
@@ -500,6 +504,9 @@ class SessionController {
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
+        if (outcome == Outcome::kFinalise) {
+            events_.OnProgress("transcript");
+        }
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
             DrainVadBacklog();  // a stop can land before the VAD does
             if (const auto tail = endpointer_->Flush()) {
@@ -548,6 +555,7 @@ class SessionController {
                     boundaries.push_back(turn.first_frame);
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
+                events_.OnProgress("speakers");
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
                 stage("diarised");
                 // Each merged turn gets the text of its own audio; the

@@ -122,6 +122,13 @@ struct RecordingEvents : ISessionEvents {
         last_detail = detail;
     }
 
+    void OnProgress(const std::string& stage) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        progress.push_back(stage);
+    }
+
+    std::vector<std::string> progress;
+
     void OnNotePartial(const std::string& text) override {
         const std::lock_guard<std::mutex> lock(mutex);
         note_partials.push_back(text);
@@ -1126,6 +1133,38 @@ TEST(SessionController, CancelNeverDiarises) {
     controller.Cancel();
 
     EXPECT_EQ(diariser.calls, 0);
+    EXPECT_TRUE(events.progress.empty()) << "a cancel finalises nothing to report";
+}
+
+TEST(SessionController, StopReportsEachFinaliseStageAsItStarts) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
+    controller.Stop();
+
+    EXPECT_EQ(events.progress, (std::vector<std::string>{"transcript", "speakers"}));
+}
+
+TEST(SessionController, StopWithoutADiariserReportsOnlyTheTranscriptStage) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+
+    EXPECT_EQ(events.progress, (std::vector<std::string>{"transcript"}))
+        << "a stage that never runs is never announced";
 }
 
 TEST(SessionController, CancelErasesTheSession) {

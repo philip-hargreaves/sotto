@@ -74,6 +74,15 @@ public class FixtureTest
     }
 
     [Fact]
+    public void SessionProgressFixtureCarriesStage()
+    {
+        var root = LoadFixture("session-progress.json").RootElement;
+
+        Assert.Equal("session/progress", root.GetProperty("method").GetString());
+        Assert.Equal("speakers", root.GetProperty("params").GetProperty("stage").GetString());
+    }
+
+    [Fact]
     public void ErrorFixtureCarriesReservedCode()
     {
         var error = LoadFixture("error-method-not-found.json").RootElement.GetProperty("error");
