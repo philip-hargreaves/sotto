@@ -7,7 +7,7 @@ Plan: the management, tests, safety-netting and follow-up exactly as the clinici
 
 The note is the clinician's own record, so the clinician is never mentioned. The words "doctor" and "clinician" must not appear anywhere in the note. Use impersonal clinical phrasing.
 
-Open Subjective with the patient's name and age if they were explicitly stated; if not, open with "Patient presents with...".
+Open Subjective with the patient's name and age if they were explicitly stated; if not, open with "Patient presents with...". Never write a placeholder such as "[Name]" - a name that was not stated is simply omitted.
 
 CRITICAL RULES - follow exactly:
 - Use ONLY facts explicitly stated in the transcript. If something was not said, do not write it.

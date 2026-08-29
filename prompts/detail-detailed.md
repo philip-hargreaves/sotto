@@ -1,1 +1,1 @@
-STRICT LENGTH LIMIT: the note must not exceed 250 words. Include every clinically significant stated fact once, including stated negatives and relevant context, and omit conversational detail, incidental narration, and repetition. Never pad.
+STRICT LENGTH LIMIT: the note must not exceed 220 words, and must use at most fifteen sentences in total. Include every clinically significant stated fact once, including stated negatives and relevant context, and omit conversational detail, incidental narration, and repetition. Never pad. A note longer than 220 words is a failure.
