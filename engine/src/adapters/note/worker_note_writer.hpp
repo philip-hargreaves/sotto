@@ -29,7 +29,8 @@ class WorkerNoteWriter : public INoteWriter {
         return false;
     }
 
-    std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override;
+    std::string Write(const std::vector<asr::Turn>& transcript, const NoteOptions& options,
+                      const Progress& progress) override;
 
     std::string WritePatient(const std::string& note, const Progress& progress) override;
 

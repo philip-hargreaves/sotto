@@ -8,6 +8,13 @@
 
 namespace sotto::note {
 
+// How the note is written: structure and length, each a prompt file so a
+// change needs no rebuild. Values are validated at the RPC boundary.
+struct NoteOptions {
+    std::string style = "prose";      // prose | soap
+    std::string detail = "standard";  // concise | standard | detailed
+};
+
 // Writes the clinical note from the sealed transcript. Write streams
 // partial text through progress and returns the full note; it throws on
 // failure. Cancel interrupts an in-flight Write from another thread.
@@ -17,7 +24,7 @@ class INoteWriter {
 
     virtual ~INoteWriter() = default;
 
-    virtual std::string Write(const std::vector<asr::Turn>& transcript,
+    virtual std::string Write(const std::vector<asr::Turn>& transcript, const NoteOptions& options,
                               const Progress& progress) = 0;
 
     // Patient information from the finished note, on the same model; a

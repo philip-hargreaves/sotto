@@ -221,6 +221,66 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
             }
             return json{{"sessionId", controller.CurrentSession()}};
         });
+    // Structure and length of the next note; invalid values are refused
+    server.RegisterMethod(
+        "note/options", [&controller](const json& params) -> std::variant<json, Error> {
+            const std::string style = params.value("style", "prose");
+            const std::string detail = params.value("detail", "standard");
+            if (style != "prose" && style != "soap") {
+                return Error{kInvalidParams, "Invalid params", json("unknown style: " + style)};
+            }
+            if (detail != "concise" && detail != "standard" && detail != "detailed") {
+                return Error{kInvalidParams, "Invalid params", json("unknown detail: " + detail)};
+            }
+            controller.SetNoteOptions({style, detail});
+            return json::object();
+        });
+    // Rewrite the finalised note with new options; results stream as usual
+    server.RegisterMethod(
+        "note/regenerate", [&controller](const json& params) -> std::variant<json, Error> {
+            const std::string style = params.value("style", "prose");
+            const std::string detail = params.value("detail", "standard");
+            if (style != "prose" && style != "soap") {
+                return Error{kInvalidParams, "Invalid params", json("unknown style: " + style)};
+            }
+            if (detail != "concise" && detail != "standard" && detail != "detailed") {
+                return Error{kInvalidParams, "Invalid params", json("unknown detail: " + detail)};
+            }
+            if (!controller.RegenerateNote({style, detail})) {
+                return Error{kSessionError, "Session error",
+                             json("no finalised session, or a note is already being written")};
+            }
+            return json::object();
+        });
+    // The clinician''s edits become the record
+    server.RegisterMethod(
+        "note/update", [&sessions](const json& params) -> std::variant<json, Error> {
+            const auto id = IdFrom(params);
+            if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            if (!params.contains("text") || !params["text"].is_string()) {
+                return Error{kInvalidParams, "Invalid params", json("text must be a string")};
+            }
+            try {
+                sessions.SaveNote(std::get<std::string>(id), params["text"].get<std::string>());
+                return json::object();
+            } catch (const std::exception& e) {
+                return Error{kSessionError, "Session error", json(e.what())};
+            }
+        });
+    server.RegisterMethod(
+        "patient/update", [&sessions](const json& params) -> std::variant<json, Error> {
+            const auto id = IdFrom(params);
+            if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            if (!params.contains("text") || !params["text"].is_string()) {
+                return Error{kInvalidParams, "Invalid params", json("text must be a string")};
+            }
+            try {
+                sessions.SavePatient(std::get<std::string>(id), params["text"].get<std::string>());
+                return json::object();
+            } catch (const std::exception& e) {
+                return Error{kSessionError, "Session error", json(e.what())};
+            }
+        });
     server.RegisterMethod("session/pause", [&controller](const json& params) {
         controller.SetPaused(params.value("paused", true));
         return json::object();

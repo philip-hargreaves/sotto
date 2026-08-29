@@ -8,9 +8,9 @@ public enum RecoveryAction
 }
 
 /// <summary>
-/// The decision on an engine death. Mid-consultation a silent restart would
-/// hide a possible transcript gap, so the death is surfaced instead. While
-/// idle the engine restarts silently, bounded by a crash-storm cutoff.
+/// The decision on an engine death: restart, bounded by a crash-storm cutoff.
+/// Mid-consultation the shell resumes the stored session on the new engine,
+/// so a restart saves the consult where surfacing the death used to abandon it.
 /// </summary>
 public static class RestartPolicy
 {
@@ -22,11 +22,10 @@ public static class RestartPolicy
     public static RecoveryAction Decide(
         bool consultationActive, IReadOnlyList<DateTimeOffset> crashes, DateTimeOffset now)
     {
-        if (consultationActive)
-        {
-            return RecoveryAction.Surface;
-        }
-
+        // A crash mid-consultation restarts like any other: the audio is
+        // stored as it captures and the shell resumes the session, so a
+        // restart saves the consult where surfacing used to abandon it.
+        // The storm limit still wins - resume cannot fix a crash loop.
         var recent = crashes.Count(crash => now - crash <= StormWindow);
         return recent >= StormLimit ? RecoveryAction.GiveUp : RecoveryAction.Restart;
     }

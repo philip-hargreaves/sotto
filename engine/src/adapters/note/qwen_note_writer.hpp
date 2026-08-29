@@ -19,14 +19,17 @@ class Registry;
 namespace sotto::note {
 
 // Qwen behind the note port. Prepare starts one background load and the
-// pipeline stays resident; the prompt file is re-read per note.
+// pipeline stays resident. Prompts live together in one directory and are
+// re-read per note: the style picks the base file, the detail appends its
+// length clause after the transcript, where the model actually obeys it.
 class QwenNoteWriter : public INoteWriter {
    public:
     QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                   std::filesystem::path prompt_path, metrics::Registry* metrics = nullptr);
+                   std::filesystem::path prompt_dir, metrics::Registry* metrics = nullptr);
     ~QwenNoteWriter() override;
 
-    std::string Write(const std::vector<asr::Turn>& transcript, const Progress& progress) override;
+    std::string Write(const std::vector<asr::Turn>& transcript, const NoteOptions& options,
+                      const Progress& progress) override;
 
     bool WritesPatient() const override {
         return true;

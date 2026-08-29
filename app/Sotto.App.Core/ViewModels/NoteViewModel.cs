@@ -18,6 +18,14 @@ public sealed partial class NoteViewModel : ObservableObject
     [ObservableProperty]
     public partial string TranslationText { get; set; } = "";
 
+    /// <summary>Note options as the engine names them: "prose" or "soap".</summary>
+    [ObservableProperty]
+    public partial string Style { get; set; } = "prose";
+
+    /// <summary>"concise", "standard" or "detailed".</summary>
+    [ObservableProperty]
+    public partial string Detail { get; set; } = "standard";
+
     public ObservableCollection<string> Languages { get; } = [];
 
     [ObservableProperty]
@@ -26,6 +34,15 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>Set by the consultation view model, which owns the engine.</summary>
     public Func<string, Task>? TranslateRequested { get; set; }
+
+    public Func<Task>? RegenerateRequested { get; set; }
+
+    public Func<Task>? SaveNoteRequested { get; set; }
+
+    public Func<Task>? SavePatientRequested { get; set; }
+
+    /// <summary>Raised when style or detail changes, for persistence.</summary>
+    public Action? OptionsChanged { get; set; }
 
     /// <summary>True from the request until translate/ready or translate/failed.</summary>
     [ObservableProperty]
@@ -43,6 +60,45 @@ public sealed partial class NoteViewModel : ObservableObject
     // pipeline reports it ready - text alone streams in earlier
     private bool CanTranslate() => SelectedLanguage is not null && TranslateRequested is not null
         && PipelineState == NotePipelineState.AllReady && !TranslationRunning;
+
+    [RelayCommand(CanExecute = nameof(CanRegenerate))]
+    private Task Regenerate() => RegenerateRequested!();
+
+    // Any settled review state can regenerate, including a failed note -
+    // regenerating IS the recovery. The engine refuses what it cannot do.
+    private bool CanRegenerate() => RegenerateRequested is not null && PipelineState
+        is NotePipelineState.AllReady or NotePipelineState.PatientFailed
+        or NotePipelineState.NoteFailed;
+
+    [RelayCommand(CanExecute = nameof(CanSaveNote))]
+    private Task SaveNote() => SaveNoteRequested!();
+
+    private bool CanSaveNote() => SaveNoteRequested is not null && NoteDocumentReady;
+
+    [RelayCommand(CanExecute = nameof(CanSavePatient))]
+    private Task SavePatient() => SavePatientRequested!();
+
+    private bool CanSavePatient() => SavePatientRequested is not null && PatientDocumentReady;
+
+    /// <summary>True once the document is sealed; gates save and copy.</summary>
+    public bool NoteDocumentReady =>
+        PipelineState is NotePipelineState.AllReady or NotePipelineState.PatientFailed;
+
+    public bool PatientDocumentReady => PipelineState == NotePipelineState.AllReady;
+
+    /// <summary>The pane returns to its writing look for a rewrite.</summary>
+    public void BeginRegenerate()
+    {
+        PipelineState = NotePipelineState.NoteWriting;
+        ClinicalNoteText = "";
+        PatientInfoText = "";
+        TranslationText = "";
+        TranslationRunning = false;
+    }
+
+    partial void OnStyleChanged(string value) => OptionsChanged?.Invoke();
+
+    partial void OnDetailChanged(string value) => OptionsChanged?.Invoke();
 
     // The panes show a quiet affordance while a document is being prepared
     // and nothing has streamed yet; computed here so it is testable
@@ -82,6 +138,11 @@ public sealed partial class NoteViewModel : ObservableObject
     partial void OnPipelineStateChanged(NotePipelineState value)
     {
         TranslateCommand.NotifyCanExecuteChanged();
+        RegenerateCommand.NotifyCanExecuteChanged();
+        SaveNoteCommand.NotifyCanExecuteChanged();
+        SavePatientCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(NoteDocumentReady));
+        OnPropertyChanged(nameof(PatientDocumentReady));
         OnPropertyChanged(nameof(NotePreparing));
         OnPropertyChanged(nameof(PatientPreparing));
         OnPropertyChanged(nameof(NoteStateCaption));

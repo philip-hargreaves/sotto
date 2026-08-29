@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -123,6 +124,9 @@ class SessionController {
         try {
             if (!resume_from.empty()) {
                 resumed_audio = store_.ReadAudio(resume_from);
+                std::fprintf(stderr, "sotto-engine: resuming %s with %.1f s of stored audio\n",
+                             resume_from.c_str(),
+                             static_cast<double>(resumed_audio.size()) / kSampleRate);
             }
             const store::SessionId id = store_.Begin({kSampleRate, "", ""});
             std::lock_guard<std::mutex> lock(mutex_);
@@ -136,6 +140,7 @@ class SessionController {
             session_turns_.clear();
             transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
+            std::fprintf(stderr, "sotto-engine: session start failed: %s\n", e.what());
             std::lock_guard<std::mutex> lock(mutex_);
             running_ = false;
             end_ = {SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
@@ -231,6 +236,40 @@ class SessionController {
     store::SessionId CurrentSession() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return session_id_;
+    }
+
+    // Applied to the next note; the shell sets these ahead of the stop
+    void SetNoteOptions(note::NoteOptions options) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        note_options_ = std::move(options);
+    }
+
+    // Rewrites the last finalised session's note from its stored transcript
+    // with the given options, streaming and re-saving like the first write.
+    // False when nothing is finalised, a session is live, or a note is
+    // already being written - the RPC thread must never block on the lane.
+    bool RegenerateNote(note::NoteOptions options) {
+        if (Running() || note_busy_.load()) {
+            return false;
+        }
+        store::SessionId id = LastFinalised();
+        if (id.empty()) {
+            return false;
+        }
+        std::vector<asr::Turn> turns;
+        try {
+            turns = store_.ReadTurns(id);
+        } catch (...) {
+            return false;
+        }
+        SetNoteOptions(std::move(options));
+        StartNoteLane(std::move(id), std::move(turns));
+        return true;
+    }
+
+    note::NoteOptions CurrentNoteOptions() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return note_options_;
     }
 
     bool HasNoteWriter() const {
@@ -655,8 +694,22 @@ class SessionController {
             }
             return;
         }
+        auto options = CurrentNoteOptions();  // before the lock: same mutex
         std::lock_guard<std::mutex> lock(mutex_);
-        note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript)] {
+        note_busy_ = true;
+        note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript),
+                                    options = std::move(options)] {
+            struct BusyGuard {
+                std::atomic<bool>& flag;
+                ~BusyGuard() {
+                    flag = false;
+                }
+            } busy_guard{note_busy_};
+            // A join racing this thread's start must win: the writer's
+            // per-generation cancel reset would otherwise erase the cancel
+            if (note_abort_.load()) {
+                return;
+            }
             // An in-process note model needs whisper off the GPU first
             // (measured: KV-cache corruption); a worker-process model does not
             if (note_writer_->WantsTranscriberReleased()) {
@@ -664,8 +717,9 @@ class SessionController {
             }
             std::string note;
             try {
-                note = note_writer_->Write(
-                    turns, [this](const std::string& partial) { events_.OnNotePartial(partial); });
+                note = note_writer_->Write(turns, options, [this](const std::string& partial) {
+                    events_.OnNotePartial(partial);
+                });
                 try {
                     store_.SaveNote(id, note);
                 } catch (...) {  // NOLINT(bugprone-empty-catch)
@@ -707,8 +761,10 @@ class SessionController {
             note = std::move(note_thread_);
         }
         if (note.joinable()) {
+            note_abort_ = true;
             if (note_writer_ != nullptr) note_writer_->Cancel();
             note.join();
+            note_abort_ = false;
         }
     }
 
@@ -742,6 +798,9 @@ class SessionController {
     std::uint64_t lost_frames_ = 0;
     store::SessionId session_id_;
     store::SessionId resumed_from_;
+    note::NoteOptions note_options_;
+    std::atomic<bool> note_busy_{false};
+    std::atomic<bool> note_abort_{false};
     bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
     // Appended under mutex_ (the diarisation thread snapshots it); finalise

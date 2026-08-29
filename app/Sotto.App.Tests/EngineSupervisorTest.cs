@@ -131,7 +131,7 @@ public class EngineSupervisorTest
     }
 
     [Fact]
-    public void MidConsultationCrashIsSurfacedNotRestarted()
+    public void MidConsultationCrashRestartsForResume()
     {
         var h = new Harness();
         h.Host.Start();
@@ -139,9 +139,9 @@ public class EngineSupervisorTest
 
         h.Current.Crash(5);
 
-        Assert.Equal(EngineStatus.Faulted, h.Host.Status);
-        Assert.Equal(new EngineFault(EngineFaultKind.SessionInterrupted, 5), h.Host.Fault);
-        Assert.Single(h.Launcher.Launched);
+        Assert.Equal(EngineStatus.Running, h.Host.Status);  // relaunched already
+        Assert.Null(h.Host.Fault);
+        Assert.Equal(2, h.Launcher.Launched.Count);
     }
 
     [Fact]
