@@ -34,13 +34,13 @@ internal sealed class RecordingNavigationService : INavigationService
 internal static class TestSession
 {
     public static (ConsultationViewModel Session, FakeEngineClient Engine, NoteViewModel Note)
-        Create()
+        Create(AppPreferences? preferences = null)
     {
         var engine = new FakeEngineClient(autoNotify: false);
         var note = new NoteViewModel();
         var session = new ConsultationViewModel(
             engine, new InlineDispatcher(), new TranscriptViewModel(), note,
-            new StatusBarViewModel());
+            new StatusBarViewModel(), preferences: preferences);
         return (session, engine, note);
     }
 }

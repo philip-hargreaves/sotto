@@ -18,6 +18,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <StackPanel Orientation="Horizontal" Spacing="8"
@@ -37,6 +38,57 @@
                         Grid.Row="1"
                         Style="{StaticResource DocumentTextBox}"
                         Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}" />
+
+                    <!-- Style and detail sit with Regenerate because they ARE a
+                         regenerate - changing one rewrites the note, it does
+                         not reformat the text in place -->
+                    <Grid Grid.Row="2" Margin="0,2,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Command="{x:Bind ViewModel.RegenerateCommand}"
+                                    ToolTipService.ToolTip="Rewrite the note with the chosen style and detail">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                                    <TextBlock Text="Regenerate" />
+                                </StackPanel>
+                            </Button>
+                            <Button Click="OnCopyNote"
+                                    IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                                    <TextBlock Text="Copy" />
+                                </StackPanel>
+                            </Button>
+                            <ComboBox
+                                x:Name="StyleBox"
+                                MinWidth="104"
+                                AutomationProperties.Name="Note style"
+                                IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}"
+                                SelectionChanged="OnStyleChanged">
+                                <ComboBoxItem Content="Prose" Tag="prose" />
+                                <ComboBoxItem Content="SOAP" Tag="soap" />
+                            </ComboBox>
+                            <ComboBox
+                                x:Name="DetailBox"
+                                MinWidth="118"
+                                AutomationProperties.Name="Note detail"
+                                IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}"
+                                SelectionChanged="OnDetailChanged">
+                                <ComboBoxItem Content="Concise" Tag="concise" />
+                                <ComboBoxItem Content="Standard" Tag="standard" />
+                                <ComboBoxItem Content="Detailed" Tag="detailed" />
+                            </ComboBox>
+                        </StackPanel>
+                        <!-- The committing action takes the system accent -->
+                        <Button
+                            HorizontalAlignment="Right"
+                            Command="{x:Bind ViewModel.SaveNoteCommand}"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                                <TextBlock Text="Save note" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
                 </Grid>
             </TabViewItem>
 
@@ -66,38 +118,48 @@
                         Style="{StaticResource DocumentTextBox}"
                         Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}" />
 
-                    <!-- Only once there is a sheet to translate -->
-                    <Grid
-                        Grid.Row="2"
-                        Margin="0,2,0,0"
-                        ColumnSpacing="8"
-                        Visibility="{x:Bind ViewModel.TranslateRowVisible, Mode=OneWay}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <ComboBox
-                            MinWidth="160"
-                            ItemsSource="{x:Bind ViewModel.Languages, Mode=OneWay}"
-                            PlaceholderText="Language"
-                            SelectedItem="{x:Bind ViewModel.SelectedLanguage, Mode=TwoWay}" />
-                        <Button
-                            Grid.Column="1"
-                            Command="{x:Bind ViewModel.TranslateCommand}"
-                            Content="Translate"
-                            Style="{StaticResource AccentButtonStyle}" />
-                        <StackPanel
-                            Grid.Column="2"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Visibility="{x:Bind ViewModel.TranslationRunning, Mode=OneWay}">
-                            <ProgressRing
-                                Width="14"
-                                Height="14"
-                                IsActive="{x:Bind ViewModel.TranslationRunning, Mode=OneWay}" />
-                            <TextBlock Style="{StaticResource MicroText}" Text="Translating" />
+                    <Grid Grid.Row="2" Margin="0,2,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="OnCopyPatient"
+                                    IsEnabled="{x:Bind ViewModel.PatientDocumentReady, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                                    <TextBlock Text="Copy" />
+                                </StackPanel>
+                            </Button>
+                            <!-- Only the sheet is translated - the note is the
+                                 clinical record and stays in English -->
+                            <ComboBox
+                                MinWidth="160"
+                                AutomationProperties.Name="Sheet language"
+                                IsEnabled="{x:Bind ViewModel.PatientDocumentReady, Mode=OneWay}"
+                                ItemsSource="{x:Bind ViewModel.Languages, Mode=OneWay}"
+                                PlaceholderText="Language"
+                                SelectedItem="{x:Bind ViewModel.SelectedLanguage, Mode=TwoWay}" />
+                            <Button
+                                Command="{x:Bind ViewModel.TranslateCommand}"
+                                Content="Translate" />
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.TranslationRunning, Mode=OneWay}">
+                                <ProgressRing
+                                    Width="14"
+                                    Height="14"
+                                    IsActive="{x:Bind ViewModel.TranslationRunning, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource MicroText}" Text="Translating" />
+                            </StackPanel>
                         </StackPanel>
+                        <Button
+                            HorizontalAlignment="Right"
+                            Command="{x:Bind ViewModel.SavePatientCommand}"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                                <TextBlock Text="Save" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
 
                     <TextBox
