@@ -21,6 +21,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     private readonly IEngineClient _engine;
     private readonly Metrics.PerformanceCollector? _metrics;
+    private readonly AppPreferences? _preferences;
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
@@ -68,16 +69,30 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public ConsultationViewModel(
         IEngineClient engine, IUiDispatcher dispatcher,
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
-        Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null)
+        Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
+        AppPreferences? preferences = null)
     {
         _engine = engine;
         _metrics = metrics;
+        _preferences = preferences;
         _readinessPollInterval = readinessPollInterval ?? TimeSpan.FromSeconds(2);
         Transcript = transcript;
         Note = note;
         Status = status;
         EngineReady = engine.Connected;
         Note.TranslateRequested = TranslateAsync;
+        Note.RegenerateRequested = RegenerateNoteAsync;
+        Note.SaveNoteRequested = SaveNoteAsync;
+        Note.SavePatientRequested = SavePatientAsync;
+        // Persisted options applied before the change callback is wired,
+        // so restoring them is not itself a change
+        if (preferences is not null)
+        {
+            Note.Style = preferences.NoteStyle;
+            Note.Detail = preferences.NoteDetail;
+        }
+
+        Note.OptionsChanged = OnNoteOptionsChanged;
         _engine.NotificationReceived +=
             (method, parameters) => dispatcher.Post(() => HandleNotification(method, parameters));
         // The status-bar label carries readiness; only the loss is log-worthy
@@ -95,6 +110,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             {
                 _ = LoadLanguagesAsync();
                 _ = CheckReadinessAsync();
+                _ = PushNoteOptionsAsync();
                 if (State == SessionState.Recording)
                 {
                     _ = ResumeAfterRestartAsync();
@@ -105,6 +121,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         {
             _ = LoadLanguagesAsync();
             _ = CheckReadinessAsync();
+            _ = PushNoteOptionsAsync();
         }
     }
 
@@ -185,6 +202,81 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     private string? _finalisedSessionId;
     private string? _recordingSessionId;
 
+    // True from a regenerate request until its pipeline settles; keeps the
+    // rewrite out of the per-session metrics
+    private bool _regenerating;
+
+    private void OnNoteOptionsChanged()
+    {
+        if (_preferences is not null)
+        {
+            _preferences.NoteStyle = Note.Style;
+            _preferences.NoteDetail = Note.Detail;
+            _preferences.Save();
+        }
+
+        _ = PushNoteOptionsAsync();
+    }
+
+    // The engine holds options per process; a restart loses them
+    private async Task PushNoteOptionsAsync()
+    {
+        if (_engine.Connected)
+        {
+            await RequestAsync("note/options", new { style = Note.Style, detail = Note.Detail })
+                .ConfigureAwait(true);
+        }
+    }
+
+    public async Task RegenerateNoteAsync()
+    {
+        if (State != SessionState.Review)
+        {
+            return;
+        }
+
+        var accepted = await RequestAsync(
+            "note/regenerate", new { style = Note.Style, detail = Note.Detail })
+            .ConfigureAwait(true);
+        if (accepted)
+        {
+            _regenerating = true;
+            Note.BeginRegenerate();
+        }
+    }
+
+    public async Task SaveNoteAsync()
+    {
+        if (_finalisedSessionId is null)
+        {
+            return;
+        }
+
+        var saved = await RequestAsync(
+            "note/update", new { id = _finalisedSessionId, text = Note.ClinicalNoteText })
+            .ConfigureAwait(true);
+        if (saved)
+        {
+            Status.Append("Note saved");
+        }
+    }
+
+    public async Task SavePatientAsync()
+    {
+        if (_finalisedSessionId is null)
+        {
+            return;
+        }
+
+        var saved = await RequestAsync(
+            "patient/update", new { id = _finalisedSessionId, text = Note.PatientInfoText })
+            .ConfigureAwait(true);
+        if (saved)
+        {
+            Status.Append("Patient note saved");
+        }
+    }
+
     // A restarted engine lost the live session, but its audio is stored:
     // resume replays it into a fresh session and recording carries on
     private async Task ResumeAfterRestartAsync()
@@ -202,25 +294,28 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 ? (object)new { resume }
                 : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
             // A post-crash resume decrypts the stored audio on a recovering
-            // machine; the default timeout is far too tight for it
-            var response = await RequestValueAsync(
-                "session/start", TimeSpan.FromSeconds(60), parameters).ConfigureAwait(true);
-            if (response is null)
-            {
-                State = SessionState.Idle;
-                Status.SetMicVisible(false);
-                Status.Append("Could not resume - session kept");
-                return;
-            }
-
-            _recordingSessionId = response.Value.TryGetProperty("sessionId", out var id)
+            // machine; the default timeout is far too tight for it. The raw
+            // request is used so that a lost engine is told apart from an
+            // engine that answered - the swallowing wrapper cannot
+            var response = await _engine.RequestAsync(
+                "session/start", parameters, TimeSpan.FromSeconds(60)).ConfigureAwait(true);
+            _recordingSessionId = response.TryGetProperty("sessionId", out var id)
                 ? id.GetString() : null;
             Status.Append("Recording");
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (Exception e) when (e is EngineErrorException or OperationCanceledException)
         {
-            // The engine died again mid-resume; the next reconnect retries,
-            // and the UI must not claim a session that is not running
+            // The engine is up and cannot resume, or never answered
+            State = SessionState.Idle;
+            Status.SetMicVisible(false);
+            Status.Append("Could not resume - session kept");
+            Status.Log($"session/start failed: {e.Message}");
+        }
+        catch (Exception)
+        {
+            // The engine died again mid-resume; the session stays Recording so
+            // the next reconnect retries, and the UI must not claim a session
+            // that is not running
             Status.Append("Recovering", busy: true);
         }
     }
@@ -372,6 +467,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Note.Reset();
         Transcript.Clear();
         TranscriptLoaded = false;
+        _regenerating = false;
         State = SessionState.Idle;
         Status.Append("Ready");
     }
@@ -382,8 +478,9 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         {
             // The note pane shows the note being written, then the sealed
             // text. The status states writing only once tokens actually
-            // stream - a thin recording writes nothing and must never claim to
-            case "note/partial" when State == SessionState.Finalising
+            // stream - a thin recording writes nothing and must never claim
+            // to. Review is included because a regenerate streams there.
+            case "note/partial" when State is SessionState.Finalising or SessionState.Review
                 && parameters.ValueKind == JsonValueKind.Object:
                 if (Note.ClinicalNoteText.Length == 0)
                 {
@@ -391,9 +488,13 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 }
 
                 Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";
-                _metrics?.NotePartial();
+                if (!_regenerating)
+                {
+                    _metrics?.NotePartial();
+                }
+
                 break;
-            case "note/ready" when State == SessionState.Finalising:
+            case "note/ready" when State is SessionState.Finalising or SessionState.Review:
                 if (parameters.ValueKind == JsonValueKind.Object
                     && parameters.TryGetProperty("text", out var noteText))
                 {
@@ -402,25 +503,26 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 Note.Apply(NotePipelineEvent.NoteReady);
                 State = SessionState.Review;
-                if (_metrics is not null)
+                if (_metrics is not null && !_regenerating)
                 {
                     _ = _metrics.SessionFinishedAsync(null, Note.ClinicalNoteText.Length);
                 }
 
                 break;
             // The transcript is still usable, so review proceeds without a note
-            case "note/failed" when State == SessionState.Finalising:
+            case "note/failed" when State is SessionState.Finalising or SessionState.Review:
                 Note.Apply(NotePipelineEvent.NoteFailed);
                 State = SessionState.Review;
                 var noteFailure = parameters.ValueKind == JsonValueKind.Object
                     ? parameters.GetProperty("detail").GetString() ?? "failed"
                     : "failed";
                 Status.Append("Clinical note failed");
-                if (_metrics is not null)
+                if (_metrics is not null && !_regenerating)
                 {
                     _ = _metrics.SessionFinishedAsync(noteFailure, 0);
                 }
 
+                _regenerating = false;
                 break;
             case "patient/partial" when parameters.ValueKind == JsonValueKind.Object:
                 if (Note.PatientInfoText.Length == 0)
@@ -439,10 +541,12 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
                 Status.Append("Ready for review");
+                _regenerating = false;
                 break;
             case "patient/failed":
                 Note.Apply(NotePipelineEvent.PatientInfoFailed);
                 Status.Append("Patient note failed");
+                _regenerating = false;
                 break;
             case "translate/partial" when parameters.ValueKind == JsonValueKind.Object:
                 Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";

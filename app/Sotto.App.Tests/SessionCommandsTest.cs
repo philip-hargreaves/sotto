@@ -166,6 +166,44 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task AResumeThatLosesTheEngineStaysRecordingForTheNextReconnect()
+    {
+        var (session, engine, _) = TestSession.Create();
+        await session.StartRecordingAsync();
+
+        // The double crash seen in the field: the engine dies again while
+        // the resume is in flight, and the next reconnect must retry it
+        engine.FailNext = method => method == "session/start"
+            ? new IOException("pipe transport is closed") : null;
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+        Assert.Equal(SessionState.Recording, session.State);
+        Assert.Equal("Recovering", session.Status.LatestActivity);
+
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        Assert.Equal(3, engine.Requests.Count(r => r.Method == "session/start"));
+        Assert.Equal(SessionState.Recording, session.State);
+        Assert.Equal("Recording", session.Status.LatestActivity);
+    }
+
+    [Fact]
+    public async Task AResumeTheEngineRefusesKeepsTheSessionAndStopsRecording()
+    {
+        var (session, engine, _) = TestSession.Create();
+        await session.StartRecordingAsync();
+
+        engine.FailNext = method => method == "session/start"
+            ? new Sotto.Client.EngineErrorException(-32000, "no stored audio", null) : null;
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Equal("Could not resume - session kept", session.Status.LatestActivity);
+    }
+
+    [Fact]
     public async Task ARestartWhileIdleDoesNotResume()
     {
         var (session, engine, _) = TestSession.Create();

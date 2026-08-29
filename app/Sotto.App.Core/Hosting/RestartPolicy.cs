@@ -8,9 +8,9 @@ public enum RecoveryAction
 }
 
 /// <summary>
-/// The decision on an engine death. Mid-consultation a silent restart would
-/// hide a possible transcript gap, so the death is surfaced instead. While
-/// idle the engine restarts silently, bounded by a crash-storm cutoff.
+/// The decision on an engine death: restart, bounded by a crash-storm cutoff.
+/// Mid-consultation the shell resumes the stored session on the new engine,
+/// so a restart saves the consult where surfacing the death used to abandon it.
 /// </summary>
 public static class RestartPolicy
 {

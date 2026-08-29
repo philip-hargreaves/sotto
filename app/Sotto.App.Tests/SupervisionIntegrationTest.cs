@@ -127,20 +127,26 @@ public class SupervisionIntegrationTest
     }
 
     [Fact]
-    public async Task MidConsultationKillIsSurfacedNotRestarted()
+    public async Task MidConsultationKillRestartsForResume()
     {
         using var rig = new Rig();
         rig.Host.Start();
         rig.Session.ConsultationActive = true;
+        var firstPid = rig.Pid(0);
 
-        var faulted = WhenStatusAsync(rig.Host, EngineStatus.Faulted);
-        Process.GetProcessById(rig.Pid(0)).Kill();
-        await faulted.WaitAsync(Wait);
+        var restarted = WhenStatusAsync(rig.Host, EngineStatus.Running);
+        Process.GetProcessById(firstPid).Kill();
+        await restarted.WaitAsync(Wait);
 
-        Assert.Equal(EngineFaultKind.SessionInterrupted, rig.Host.Fault!.Kind);
-        Assert.NotNull(rig.Host.Fault.ExitCode);
-        Assert.Single(rig.Launcher.Launched);
+        // The stored audio makes a restart recoverable, so the death is
+        // never surfaced as a fault mid-consultation
+        Assert.Null(rig.Host.Fault);
+        Assert.Equal(2, rig.Launcher.Launched.Count);
+        Assert.NotEqual(firstPid, rig.Pid(1));
         Assert.Single(File.ReadAllLines(rig.CrashPath));
+
+        rig.Host.Shutdown();
+        await WaitUntilGoneAsync(rig.Pid(1));
     }
 
     [Fact]

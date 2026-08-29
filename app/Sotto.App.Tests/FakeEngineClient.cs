@@ -28,11 +28,20 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
     /// <summary>Every request, as (method, serialised params).</summary>
     public List<(string Method, string Params)> Requests { get; } = [];
 
+    /// <summary>Thrown by the next matching request, once; null answers normally.</summary>
+    public Func<string, Exception?>? FailNext { get; set; }
+
     public Task<JsonElement> RequestAsync(
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
         Requests.Add((method, parameters is null ? "" : JsonSerializer.Serialize(parameters)));
+
+        if (FailNext?.Invoke(method) is { } failure)
+        {
+            FailNext = null;
+            return Task.FromException<JsonElement>(failure);
+        }
 
         if (method == "engine/hello")
         {
