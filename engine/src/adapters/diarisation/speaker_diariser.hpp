@@ -28,6 +28,12 @@ class SpeakerDiariser : public IDiariser {
     DiariseResult Diarise(std::span<const float> audio,
                           std::span<const std::uint64_t> turn_boundaries = {}) override;
 
+    std::vector<double> AnchorSimilarities(std::span<const float> audio,
+                                           const std::vector<LabelledSlice>& slices,
+                                           int cluster_count) override;
+
+    // Reuses the voiceprint AnchorSimilarities computed for the cluster;
+    // embeds only when there is none
     void AccrueDoctor(std::span<const float> audio, const std::vector<LabelledSlice>& slices,
                       int doctor_cluster) override;
 
@@ -44,6 +50,7 @@ class SpeakerDiariser : public IDiariser {
     void DiscardCapture() override {
         (void)worker_.Take();
         texts_.clear();
+        voiceprints_.clear();
     }
 
     SpeakerEmbedder& Embedder() {
@@ -57,6 +64,7 @@ class SpeakerDiariser : public IDiariser {
     AnchorStore anchors_;
     DiarWorker worker_;
     TurnTexts texts_;
+    std::vector<std::vector<float>> voiceprints_;  // per cluster, from AnchorSimilarities
 };
 
 }  // namespace sotto::diar

@@ -23,6 +23,7 @@
 #include "adapters/audio/wav_source.hpp"
 #include "adapters/diarisation/deferred_diariser.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
+#include "adapters/host/power_throttling.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
@@ -61,6 +62,10 @@ class WireEvents : public sotto::audio::ISessionEvents {
     void OnInterrupted(sotto::audio::SourceEndReason reason, const std::string& detail) override {
         server_.PushNotification("session/interrupted",
                                  {{"reason", ReasonName(reason)}, {"detail", detail}});
+    }
+
+    void OnProgress(const std::string& stage) override {
+        server_.PushNotification("session/progress", {{"stage", stage}});
     }
 
     // Partials are cumulative, so intermediates can drop freely: a ~12 Hz
@@ -139,6 +144,8 @@ int main(int argc, char* argv[]) {
         // app nor its stores
         std::vector<std::string> args(argv + 1, argv + argc);
         const std::string asr_device = sotto::TakeFlag(args, "--asr-device");
+        std::fprintf(stderr, "sotto-engine: power throttling %s\n",
+                     sotto::host::Describe(sotto::host::DisableThrottlingOnSelf()).c_str());
 
         std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\sotto-engine";
         if (args.size() > 0) {

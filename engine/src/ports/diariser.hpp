@@ -24,10 +24,20 @@ struct LabelledSlice {
     int cluster = 0;
 };
 
+// Where a finalise-time Diarise spent its time; measurement only
+struct DiariseTiming {
+    double finish_s = 0;  // VAD tail + segmenting the un-segmented remainder
+    double embed_s = 0;   // per-slice embeddings not served by the capture cache
+    int embed_hits = 0;
+    int embed_misses = 0;
+    double cluster_s = 0;
+    double overlap_s = 0;  // second-opinion embeds for overlap spans
+};
+
 struct DiariseResult {
     std::vector<LabelledSlice> slices;  // time-sorted
     int cluster_count = 0;
-    std::vector<double> anchor_similarity;  // one per cluster; empty: no anchor yet
+    DiariseTiming timing;
 };
 
 // Who-spoke-when: speech slices with anonymous cluster labels, plus each
@@ -41,6 +51,16 @@ class IDiariser {
 
     virtual DiariseResult Diarise(std::span<const float> audio,
                                   std::span<const std::uint64_t> turn_boundaries = {}) = 0;
+
+    // Each cluster's similarity to the accrued clinician anchor, one per
+    // cluster; empty when no anchor exists yet. Separate from Diarise so the
+    // caller can overlap the voiceprint embeds with other work; the
+    // voiceprints are kept for AccrueDoctor so the doctor's is embedded once
+    // Pure on purpose: a wrapper that forgot to forward it would silently
+    // name roles without the anchor
+    virtual std::vector<double> AnchorSimilarities(std::span<const float> audio,
+                                                   const std::vector<LabelledSlice>& slices,
+                                                   int cluster_count) = 0;
 
     virtual void AccrueDoctor(std::span<const float> audio,
                               const std::vector<LabelledSlice>& slices, int doctor_cluster) = 0;

@@ -112,6 +112,30 @@ public static class ReportBuilder
             Row(html, "OpenVINO", openvino);
         }
 
+        // Power mode and throttling decide the finalise floor; the last
+        // session's state stands for the report
+        var power = sessions.Select(s => Find(s, "power"))
+            .LastOrDefault(p => p is { ValueKind: JsonValueKind.Object });
+        var throttling = sessions.Select(s => Text(s, "engine", "powerThrottling"))
+            .LastOrDefault(v => v is not null);
+        if (power is not null || throttling is not null)
+        {
+            var parts = new List<string>();
+            if (power is not null)
+            {
+                parts.Add($"{Text(power.Value, "mode") ?? "?"} mode");
+                parts.Add(power.Value.TryGetProperty("onMains", out var mains) && mains.GetBoolean()
+                    ? "mains" : "battery");
+            }
+
+            if (throttling is not null)
+            {
+                parts.Add($"engine throttling {throttling}");
+            }
+
+            Row(html, "Power", string.Join(" · ", parts));
+        }
+
         html.Append("</table>");
     }
 

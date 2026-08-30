@@ -94,6 +94,8 @@ public sealed class PerformanceCollector(
                 chars = noteChars,
                 failed = noteFailure,
             },
+            // The power situation at stop: it decides the finalise floor
+            power = PowerState.Read(),
             memory = new
             {
                 availableAtStartMb = _availableAtStartMb,

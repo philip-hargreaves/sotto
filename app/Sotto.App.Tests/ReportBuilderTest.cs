@@ -44,6 +44,43 @@ public class ReportBuilderTest
     }
 
     [Fact]
+    public void RendersPowerModeAndEngineThrottling()
+    {
+        var session = JsonSerializer.Serialize(new
+        {
+            start = "2026-08-29T13:40:17Z",
+            source = "replay",
+            replaySpeed = 1.0,
+            track = "Elbow swelling",
+            engine = new { devices = new { asr = "GPU.0" }, powerThrottling = "off" },
+            power = new { mode = "performance", onMains = true },
+            note = new { chars = 500 },
+            memory = new { },
+        });
+
+        var html = ReportBuilder.Build(Machine, [session], DateTimeOffset.UtcNow);
+
+        // The separator is HTML-encoded; assert the three facts
+        var machine = html.Split("<h2>Machine</h2>")[1].Split("</table>")[0];
+        Assert.Contains("performance mode", machine);
+        Assert.Contains("mains", machine);
+        Assert.Contains("engine throttling off", machine);
+    }
+
+    [Fact]
+    public void PowerModeNamesTheSliderOverlays()
+    {
+        Assert.Equal("efficiency", PowerState.ModeName("961CC777-2547-4F9D-8174-7D86181B8A7A"));
+        Assert.Equal("performance", PowerState.ModeName("ded574b5-45a0-4f42-8737-46345c09c238"));
+        Assert.Equal("balanced", PowerState.ModeName(""));
+        Assert.Equal("balanced", PowerState.ModeName("00000000-0000-0000-0000-000000000000"));
+        Assert.Equal("unknown", PowerState.ModeName("not-a-guid"));
+        Assert.True(new PowerState("efficiency", true).SavingPower);
+        Assert.True(new PowerState("performance", false).SavingPower);
+        Assert.False(new PowerState("performance", true).SavingPower);
+    }
+
+    [Fact]
     public void ComparesDevicesOnlyWhenTwoHaveComparableSessions()
     {
         var gpuOnly = ReportBuilder.Build(Machine,

@@ -7,6 +7,7 @@
 #include <set>
 #include <vector>
 
+#include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 
 namespace sotto::diar {
@@ -54,9 +55,54 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
     }
     EXPECT_EQ(clusters.size(), 2u) << "doctor and patient, no phantom third voice";
     EXPECT_EQ(result.cluster_count, 2);
-    EXPECT_TRUE(result.anchor_similarity.empty()) << "no anchor has accrued in a fresh root";
+    EXPECT_TRUE(diariser.AnchorSimilarities(audio, slices, result.cluster_count).empty())
+        << "no anchor has accrued in a fresh root";
     std::printf("diarised %zu slices, %zu clusters in %.1f s\n", slices.size(), clusters.size(),
                 took.count());
+    std::error_code ec;
+    std::filesystem::remove_all(anchor_root, ec);
+}
+
+// The voiceprints moved off the Diarise path (they now overlap the GPU turn
+// decode) and AccrueDoctor reuses them: the numbers must be the ones the
+// reference method produces, and the reuse must actually skip the embed
+TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReusesThem) {
+    const auto audio = LoadWav(kWav);
+    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    models::OvRuntime runtime;
+    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-anchor-test";
+    std::filesystem::remove_all(anchor_root);
+    std::filesystem::create_directories(anchor_root);
+    SpeakerDiariser diariser(store, runtime, anchor_root);
+
+    // Session one teaches the anchor from cluster 0
+    const auto first = diariser.Diarise(audio);
+    ASSERT_EQ(first.cluster_count, 2);
+    diariser.AccrueDoctor(audio, first.slices, 0);
+
+    // Session two: similarities equal the reference voiceprint against the anchor
+    const auto second = diariser.Diarise(audio);
+    const auto similarity = diariser.AnchorSimilarities(audio, second.slices, second.cluster_count);
+    ASSERT_EQ(similarity.size(), 2u);
+    AnchorStore anchors(anchor_root);
+    const auto anchor = anchors.Anchor();
+    ASSERT_TRUE(anchor.has_value());
+    for (int c = 0; c < 2; ++c) {
+        const auto voiceprint = ClusterVoiceprint(diariser.Embedder(), audio, second.slices, c);
+        ASSERT_FALSE(voiceprint.empty());
+        double dot = 0.0;
+        for (std::size_t d = 0; d < voiceprint.size(); ++d) {
+            dot += static_cast<double>(voiceprint[d]) * (*anchor)[d];
+        }
+        EXPECT_DOUBLE_EQ(similarity[static_cast<std::size_t>(c)], dot);
+    }
+    EXPECT_GT(similarity[0], similarity[1]) << "the taught cluster ranks nearer";
+
+    // Accrue reuses the voiceprint just computed: no second embed of the cluster
+    const auto start = std::chrono::steady_clock::now();
+    diariser.AccrueDoctor(audio, second.slices, 0);
+    const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
+    EXPECT_LT(took.count(), 0.05) << "a re-embed of the cluster takes hundreds of ms";
     std::error_code ec;
     std::filesystem::remove_all(anchor_root, ec);
 }

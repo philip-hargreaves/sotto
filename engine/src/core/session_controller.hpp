@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -39,6 +40,10 @@ class ISessionEvents {
 
     // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
+
+    // Finalise stages as they start ("transcript", "speakers"), on the
+    // stopping thread; fired only for work that actually runs
+    virtual void OnProgress(const std::string&) {}
 
     // The note lane, delivered on its own thread after finalise
     virtual void OnNotePartial(const std::string&) {}
@@ -500,6 +505,9 @@ class SessionController {
         // The transcript completes before the session seals: the tail window
         // is transcribed unless the recording is being discarded, and every
         // turn is stored before the outcome below runs
+        if (outcome == Outcome::kFinalise) {
+            events_.OnProgress("transcript");
+        }
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
             DrainVadBacklog();  // a stop can land before the VAD does
             if (const auto tail = endpointer_->Flush()) {
@@ -548,8 +556,39 @@ class SessionController {
                     boundaries.push_back(turn.first_frame);
                     boundaries.push_back(turn.first_frame + turn.frame_count);
                 }
+                events_.OnProgress("speakers");
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
                 stage("diarised");
+                {
+                    const auto& t = result.timing;
+                    std::fprintf(stderr,
+                                 "sotto-engine: diarise finish %.2f s, embed %.2f s (%d hits, %d "
+                                 "misses), cluster %.2f s, overlap %.2f s\n",
+                                 t.finish_s, t.embed_s, t.embed_hits, t.embed_misses, t.cluster_s,
+                                 t.overlap_s);
+                    if (metrics_ != nullptr) {
+                        metrics_->RecordStage("diarise finish", t.finish_s);
+                        metrics_->RecordStage("diarise embed", t.embed_s);
+                        metrics_->RecordStage("diarise embed misses", t.embed_misses);
+                        metrics_->RecordStage("diarise cluster", t.cluster_s);
+                        metrics_->RecordStage("diarise overlap", t.overlap_s);
+                    }
+                }
+                // The anchor voiceprints only feed role naming, which follows
+                // the GPU turn decode: embed them on the CPU meanwhile. The
+                // future's destructor waits, so an exception below cannot leave
+                // the task running over freed state
+                auto voiceprint_seconds = 0.0;
+                auto anchor_similarity =
+                    std::async(std::launch::async, [this, &result, &voiceprint_seconds] {
+                        const auto started = std::chrono::steady_clock::now();
+                        auto similarity = diariser_->AnchorSimilarities(
+                            session_audio_, result.slices, result.cluster_count);
+                        voiceprint_seconds = std::chrono::duration<double>(
+                                                 std::chrono::steady_clock::now() - started)
+                                                 .count();
+                        return similarity;
+                    });
                 // Each merged turn gets the text of its own audio; the
                 // speculation cache means this mostly decodes only the tail
                 const auto turns = diar::MergeByCluster(result.slices);
@@ -561,6 +600,11 @@ class SessionController {
                     },
                     &cache);
                 stage("turns decoded");
+                const auto similarity = anchor_similarity.get();
+                stage("voiceprints joined");
+                if (metrics_ != nullptr) {
+                    metrics_->RecordStage("diarise voiceprints", voiceprint_seconds);
+                }
                 {
                     std::size_t with_text = 0;
                     std::uint64_t longest = 0;
@@ -584,8 +628,7 @@ class SessionController {
                                           turns[i].end_frame - turns[i].first_frame,
                                           turn_texts[i]});
                 }
-                const auto roles =
-                    diar::NameRoles(role_turns, result.cluster_count, result.anchor_similarity);
+                const auto roles = diar::NameRoles(role_turns, result.cluster_count, similarity);
                 std::vector<asr::Turn> attributed;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
                     if (turn_texts[i].empty()) continue;
@@ -606,6 +649,7 @@ class SessionController {
                 if (roles.doctor_cluster >= 0) {
                     diariser_->AccrueDoctor(session_audio_, result.slices, roles.doctor_cluster);
                 }
+                stage("anchor accrued");
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
@@ -634,6 +678,7 @@ class SessionController {
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
+        stage("stored");
         // The resumed-from session is superseded: everything it held flowed
         // into this one before any outcome could be reached
         std::string resumed;
@@ -648,6 +693,7 @@ class SessionController {
             }
         }
         if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {
+            stage("note lane started");
             StartNoteLane(id, std::move(note_input));
         }
     }

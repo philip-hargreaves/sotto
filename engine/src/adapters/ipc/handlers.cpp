@@ -4,6 +4,7 @@
 #include <openvino/core/version.hpp>
 #include <optional>
 
+#include "adapters/host/power_throttling.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/translate/translate_lane.hpp"
 #include "core/version.hpp"
@@ -145,7 +146,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 {"replay", s.replay},
                 {"replaySpeed", s.replay_speed},
                 {"hardware", **hardware},
-                {"openvino", std::string(ov::get_openvino_version().buildNumber)}};
+                {"openvino", std::string(ov::get_openvino_version().buildNumber)},
+                {"powerThrottling", host::Describe(host::ReadThrottling(GetCurrentProcess()))}};
         });
     }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });

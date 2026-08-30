@@ -44,6 +44,7 @@ add_executable(engine_tests
     adapters/note_prompt_test.cpp
     adapters/ov_smoke_test.cpp
     adapters/pipe_security_test.cpp
+    adapters/power_throttling_test.cpp
     adapters/scripted_transcriber_test.cpp
     adapters/session_store_test.cpp
     adapters/speaker_clustering_test.cpp

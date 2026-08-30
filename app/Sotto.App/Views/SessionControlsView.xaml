@@ -83,7 +83,7 @@
             <TextBlock
                 HorizontalAlignment="Center"
                 Style="{StaticResource CaptionText}"
-                Text="Finalising" />
+                Text="{x:Bind ViewModel.FinalisingLabel, Mode=OneWay}" />
             <TextBlock
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"

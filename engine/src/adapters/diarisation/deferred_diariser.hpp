@@ -27,6 +27,12 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().AccrueDoctor(audio, slices, doctor_cluster);
     }
 
+    std::vector<double> AnchorSimilarities(std::span<const float> audio,
+                                           const std::vector<LabelledSlice>& slices,
+                                           int cluster_count) override {
+        return inner_.Get().AnchorSimilarities(audio, slices, cluster_count);
+    }
+
     void Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
                  const DecodeClipFn& decode) override {
         inner_.Get().Advance(audio, turns, decode);

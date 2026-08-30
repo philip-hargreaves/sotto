@@ -47,8 +47,13 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     /// this, never on state alone - a pane with no transcript is worse than
     /// the centred spinner it would replace.
     /// </summary>
+    /// <summary>
+    /// Where a stop has got to. The centre stage holds until the note streams,
+    /// so the pause of the note prefill is spent on a spinner that says so,
+    /// not on an empty document. Advances only forwards within one stop.
+    /// </summary>
     [ObservableProperty]
-    public partial bool TranscriptLoaded { get; private set; }
+    public partial FinalisePhase Phase { get; private set; } = FinalisePhase.None;
 
     /// <summary>
     /// False only during first-time setup, while the one-off model compiles
@@ -340,7 +345,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             ? id.GetString() : null;
         Paused = false;
         AudioSeconds = 0;
-        TranscriptLoaded = false;
+        Phase = FinalisePhase.None;
         ActiveReplay = replay;
         State = SessionState.Recording;
         Status.SetMicVisible(true);
@@ -379,6 +384,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
 
         State = SessionState.Finalising;
+        Phase = FinalisePhase.Sealing;
         Paused = false;
         ActiveReplay = null;
         _metrics?.StopRequested();
@@ -410,7 +416,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         if (string.IsNullOrEmpty(id))
         {
-            TranscriptLoaded = true;  // nothing to fetch; the panes still open
+            Phase = FinalisePhase.Note;  // nothing to fetch; the panes still open
             return;
         }
 
@@ -434,7 +440,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
         finally
         {
-            TranscriptLoaded = true;
+            Phase = FinalisePhase.Note;
         }
     }
 
@@ -466,7 +472,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
         Note.Reset();
         Transcript.Clear();
-        TranscriptLoaded = false;
+        Phase = FinalisePhase.None;
         _regenerating = false;
         State = SessionState.Idle;
         Status.Append("Ready");
@@ -476,6 +482,19 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
+            // Finalise stages advance the phase; the status bar keeps its one
+            // "Finalising". Stages the engine skips never show, and a stage
+            // arriving after the seal cannot move the phase backwards
+            case "session/progress" when State == SessionState.Finalising
+                && Phase < FinalisePhase.Note
+                && parameters.ValueKind == JsonValueKind.Object:
+                Phase = parameters.GetProperty("stage").GetString() switch
+                {
+                    "transcript" => FinalisePhase.Transcript,
+                    "speakers" => FinalisePhase.Speakers,
+                    _ => Phase,
+                };
+                break;
             // The note pane shows the note being written, then the sealed
             // text. The status states writing only once tokens actually
             // stream - a thin recording writes nothing and must never claim
@@ -485,6 +504,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 if (Note.ClinicalNoteText.Length == 0)
                 {
                     Status.Append("Writing clinical note", busy: true);
+                    Phase = FinalisePhase.Streaming;  // the panes open on the first token
                 }
 
                 Note.ClinicalNoteText = parameters.GetProperty("text").GetString() ?? "";

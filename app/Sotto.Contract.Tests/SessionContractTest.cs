@@ -8,7 +8,11 @@ public class SessionContractTest
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    private static readonly string[] ExpectedNotifications = ["note/ready", "patient/ready"];
+    // The stopped session reports its transcript stage before the seal; the
+    // cancelled one reports nothing. No diariser is staged here, so no
+    // "speakers" stage
+    private static readonly string[] ExpectedNotifications =
+        ["session/progress", "note/ready", "patient/ready"];
 
     // Two seconds of PCM16 silence: sessions replay it instead of a microphone
     internal static string WriteSilenceWav()

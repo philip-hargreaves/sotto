@@ -31,6 +31,12 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
     /// <summary>Thrown by the next matching request, once; null answers normally.</summary>
     public Func<string, Exception?>? FailNext { get; set; }
 
+    /// <summary>
+    /// Runs before a request is answered: the engine pushes notifications
+    /// during a blocking request (finalise stages during session/stop).
+    /// </summary>
+    public Action<string>? BeforeReply { get; set; }
+
     public Task<JsonElement> RequestAsync(
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default)
@@ -42,6 +48,8 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
             FailNext = null;
             return Task.FromException<JsonElement>(failure);
         }
+
+        BeforeReply?.Invoke(method);
 
         if (method == "engine/hello")
         {
