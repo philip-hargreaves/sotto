@@ -650,6 +650,7 @@ class SessionController {
                 if (roles.doctor_cluster >= 0) {
                     diariser_->AccrueDoctor(session_audio_, result.slices, roles.doctor_cluster);
                 }
+                stage("anchor accrued");
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
@@ -678,6 +679,7 @@ class SessionController {
             }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
+        stage("stored");
         // The resumed-from session is superseded: everything it held flowed
         // into this one before any outcome could be reached
         std::string resumed;
@@ -692,6 +694,7 @@ class SessionController {
             }
         }
         if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {
+            stage("note lane started");
             StartNoteLane(id, std::move(note_input));
         }
     }
