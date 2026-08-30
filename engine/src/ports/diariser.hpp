@@ -27,7 +27,7 @@ struct LabelledSlice {
 // Where a finalise-time Diarise spent its time; measurement only
 struct DiariseTiming {
     double finish_s = 0;  // VAD tail + segmenting the un-segmented remainder
-    double embed_s = 0;  // per-slice embeddings not served by the capture cache
+    double embed_s = 0;   // per-slice embeddings not served by the capture cache
     int embed_hits = 0;
     int embed_misses = 0;
     double cluster_s = 0;

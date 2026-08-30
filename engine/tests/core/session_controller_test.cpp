@@ -840,8 +840,7 @@ struct FakeDiariser : diar::IDiariser {
     int similarity_calls = 0;
 
     std::vector<double> AnchorSimilarities(std::span<const float>,
-                                           const std::vector<diar::LabelledSlice>&,
-                                           int) override {
+                                           const std::vector<diar::LabelledSlice>&, int) override {
         ++similarity_calls;
         return similarities;
     }

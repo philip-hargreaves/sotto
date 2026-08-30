@@ -82,8 +82,7 @@ TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReus
 
     // Session two: similarities equal the reference voiceprint against the anchor
     const auto second = diariser.Diarise(audio);
-    const auto similarity =
-        diariser.AnchorSimilarities(audio, second.slices, second.cluster_count);
+    const auto similarity = diariser.AnchorSimilarities(audio, second.slices, second.cluster_count);
     ASSERT_EQ(similarity.size(), 2u);
     AnchorStore anchors(anchor_root);
     const auto anchor = anchors.Anchor();

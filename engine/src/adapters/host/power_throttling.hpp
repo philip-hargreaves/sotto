@@ -14,9 +14,9 @@
 namespace sotto::host {
 
 struct ThrottlingState {
-    bool known = false;  // read-back succeeded
+    bool known = false;      // read-back succeeded
     bool throttled = false;  // execution speed throttling is ON
-    bool defaulted = true;  // no explicit policy: Windows decides
+    bool defaulted = true;   // no explicit policy: Windows decides
 };
 
 inline ThrottlingState ReadThrottling(HANDLE process) {

@@ -579,14 +579,14 @@ class SessionController {
                 // future's destructor waits, so an exception below cannot leave
                 // the task running over freed state
                 auto voiceprint_seconds = 0.0;
-                auto anchor_similarity = std::async(
-                    std::launch::async, [this, &result, &voiceprint_seconds] {
+                auto anchor_similarity =
+                    std::async(std::launch::async, [this, &result, &voiceprint_seconds] {
                         const auto started = std::chrono::steady_clock::now();
                         auto similarity = diariser_->AnchorSimilarities(
                             session_audio_, result.slices, result.cluster_count);
-                        voiceprint_seconds =
-                            std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
-                                .count();
+                        voiceprint_seconds = std::chrono::duration<double>(
+                                                 std::chrono::steady_clock::now() - started)
+                                                 .count();
                         return similarity;
                     });
                 // Each merged turn gets the text of its own audio; the
@@ -628,8 +628,7 @@ class SessionController {
                                           turns[i].end_frame - turns[i].first_frame,
                                           turn_texts[i]});
                 }
-                const auto roles =
-                    diar::NameRoles(role_turns, result.cluster_count, similarity);
+                const auto roles = diar::NameRoles(role_turns, result.cluster_count, similarity);
                 std::vector<asr::Turn> attributed;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
                     if (turn_texts[i].empty()) continue;
