@@ -31,6 +31,18 @@ struct SessionSummary {
     int sample_rate = 0;
 };
 
+// The texts a finalised session holds, one of each; a rewrite replaces
+enum class DocumentKind { kNote, kPatient, kTranslation, kLabel };
+
+struct Document {
+    std::string text;             // Empty when the session has no such document
+    std::string language = "en";  // BCP 47
+    std::string style;            // Note only: prose | soap
+    std::string detail;           // Note only: concise | standard | detailed
+    std::string generated_at;     // ISO 8601 UTC; when the model wrote it
+    std::string edited_at;        // ISO 8601 UTC; empty until a person changed it
+};
+
 // The clinical store for one recording session at a time. Appended audio is
 // durable within one second. Finalise keeps the recording, Cancel
 // retains nothing; a session neither finalised nor cancelled is a crash
@@ -61,12 +73,13 @@ class ISessionStore {
 
     virtual std::vector<SessionSummary> ListSessions() = 0;
 
-    // The clinical note and patient information, written after finalise;
-    // reads are empty when nothing was saved and throw for an unknown session
-    virtual void SaveNote(const SessionId& id, const std::string& text) = 0;
-    virtual std::string ReadNote(const SessionId& id) = 0;
-    virtual void SavePatient(const SessionId& id, const std::string& text) = 0;
-    virtual std::string ReadPatient(const SessionId& id) = 0;
+    // Documents are written after finalise. Save records a generation
+    // (stamps generated_at, clears edited_at); Edit records the clinician's
+    // text over it (stamps edited_at, keeps the options). Reads return an
+    // empty document when nothing was saved and throw for an unknown session
+    virtual void SaveDocument(const SessionId& id, DocumentKind kind, const Document& document) = 0;
+    virtual void EditDocument(const SessionId& id, DocumentKind kind, const std::string& text) = 0;
+    virtual Document ReadDocument(const SessionId& id, DocumentKind kind) = 0;
 
     // Read-back and disposal; all refuse the session currently recording
     virtual std::vector<asr::Turn> ReadTurns(const SessionId& id) = 0;

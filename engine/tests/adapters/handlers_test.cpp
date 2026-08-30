@@ -142,7 +142,8 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
     SessionStoreFixture fixture;
     const auto id = fixture.store->Begin({16000, "", ""});
     fixture.store->Finalise(id);
-    fixture.store->SaveNote(id, "The patient presents with a swollen left elbow.");
+    fixture.store->SaveDocument(id, sotto::store::DocumentKind::kNote,
+                                {.text = "The patient presents with a swollen left elbow."});
 
     const auto outcome = HandleSessionNote(*fixture.store, json{{"id", id}});
     ASSERT_TRUE(std::holds_alternative<json>(outcome));

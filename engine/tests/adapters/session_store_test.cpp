@@ -36,10 +36,23 @@ struct TempRoot {
         std::filesystem::remove_all(path, ignored);
     }
 
+    std::filesystem::path DbPath() const {
+        return path / "sotto.db";
+    }
+
+    // The first layout's per-session files, for the import test
     std::filesystem::path SessionFile(const SessionId& id, const char* suffix) const {
         return path / "sessions" / (id + suffix);
     }
 };
+
+ChunkCipher CipherOf(const TempRoot& root, const SessionId& id) {
+    Db db(root.DbPath());
+    Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+    key.BindText(1, id);
+    if (!key.Step()) throw std::runtime_error("no key row for " + id);
+    return ChunkCipher::FromWrapped(key.ColumnBlob(0));
+}
 
 std::vector<float> Ramp(std::size_t frames) {
     std::vector<float> audio(frames);
@@ -60,13 +73,14 @@ struct StoredChunk {
     std::vector<float> frames;
 };
 
-// Reads a finalised session the way recovery will: key file, then chunks
+// Reads a finalised session the way recovery will: key row, then chunks
 std::vector<StoredChunk> DecryptSession(const TempRoot& root, const SessionId& id) {
-    const ChunkCipher cipher =
-        ChunkCipher::FromWrapped(ReadFileBytes(root.SessionFile(id, ".key")));
-    Db db(root.SessionFile(id, ".db"));
-    Db::Stmt select =
-        db.Prepare("SELECT seq, first_frame, lost_before, payload FROM chunks ORDER BY seq");
+    const ChunkCipher cipher = CipherOf(root, id);
+    Db db(root.DbPath());
+    Db::Stmt select = db.Prepare(
+        "SELECT seq, first_frame, lost_before, payload FROM chunks WHERE session_id = ?"
+        " ORDER BY seq");
+    select.BindText(1, id);
     std::vector<StoredChunk> chunks;
     std::int64_t expected_seq = 0;
     while (select.Step()) {
@@ -90,11 +104,12 @@ struct StoredTurn {
 };
 
 std::vector<StoredTurn> DecryptTurns(const TempRoot& root, const SessionId& id) {
-    const ChunkCipher cipher =
-        ChunkCipher::FromWrapped(ReadFileBytes(root.SessionFile(id, ".key")));
-    Db db(root.SessionFile(id, ".db"));
-    Db::Stmt select =
-        db.Prepare("SELECT seq, first_frame, frame_count, payload FROM turns ORDER BY seq");
+    const ChunkCipher cipher = CipherOf(root, id);
+    Db db(root.DbPath());
+    Db::Stmt select = db.Prepare(
+        "SELECT seq, first_frame, frame_count, payload FROM turns WHERE session_id = ?"
+        " ORDER BY seq");
+    select.BindText(1, id);
     std::vector<StoredTurn> turns;
     std::int64_t expected_seq = 0;
     while (select.Step()) {
@@ -159,7 +174,7 @@ TEST(SessionStore, TurnTextIsNotPlaintextAtRest) {
         store.Finalise(id);
     }
 
-    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
+    const auto file = ReadFileBytes(root.DbPath());
     const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
     EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
 }
@@ -181,61 +196,220 @@ TEST(SessionStore, ReadTurnsReturnsWhatWasAppended) {
     EXPECT_EQ(turns[1].text, "about three weeks");
 }
 
-TEST(SessionStore, TheNoteRoundTripsAfterFinalise) {
+TEST(SessionStore, TheNoteRoundTripsWithItsOptionsAfterFinalise) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     const SessionId id = store.Begin({16000, "", ""});
     store.Finalise(id);
 
-    EXPECT_EQ(store.ReadNote(id), "");
-    store.SaveNote(id, "The patient presents with a swollen left elbow.");
-    EXPECT_EQ(store.ReadNote(id), "The patient presents with a swollen left elbow.");
-    store.SaveNote(id, "revised");
-    EXPECT_EQ(store.ReadNote(id), "revised") << "a rewrite replaces the note";
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).text, "");
+    store.SaveDocument(id, DocumentKind::kNote,
+                       {.text = "The patient presents with a swollen left elbow.",
+                        .style = "soap",
+                        .detail = "detailed"});
+    Document note = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(note.text, "The patient presents with a swollen left elbow.");
+    EXPECT_EQ(note.language, "en");
+    EXPECT_EQ(note.style, "soap");
+    EXPECT_EQ(note.detail, "detailed");
+    EXPECT_FALSE(note.generated_at.empty());
+    EXPECT_TRUE(note.edited_at.empty());
+
+    store.SaveDocument(id, DocumentKind::kNote, {.text = "revised", .style = "prose"});
+    note = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(note.text, "revised") << "a rewrite replaces the note";
+    EXPECT_EQ(note.style, "prose") << "and its options";
 }
 
-TEST(SessionStore, TheNoteIsNotPlaintextAtRest) {
-    TempRoot root;
-    const std::string sentinel = "SENTINEL-BURSITIS-PHRASE";
-    SessionId id;
-    {
-        SqliteSessionStore store(root.path, kNever);
-        id = store.Begin({16000, "", ""});
-        store.Finalise(id);
-        store.SaveNote(id, sentinel);
-    }
-
-    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
-    const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
-    EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
-}
-
-TEST(SessionStore, ThePatientSheetRoundTripsEncrypted) {
-    TempRoot root;
-    const std::string sentinel = "SENTINEL-PATIENT-PHRASE";
-    SessionId id;
-    {
-        SqliteSessionStore store(root.path, kNever);
-        id = store.Begin({16000, "", ""});
-        store.Finalise(id);
-        EXPECT_EQ(store.ReadPatient(id), "");
-        store.SavePatient(id, sentinel);
-        EXPECT_EQ(store.ReadPatient(id), sentinel);
-        EXPECT_EQ(store.ReadNote(id), "") << "patient and note are separate";
-    }
-
-    const auto file = ReadFileBytes(root.SessionFile(id, ".db"));
-    const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
-    EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
-}
-
-TEST(SessionStore, TheNoteRefusesTheRecordingSessionAndUnknownIds) {
+TEST(SessionStore, AnEditKeepsTheOptionsAndStampsEditedAt) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     const SessionId id = store.Begin({16000, "", ""});
-    EXPECT_THROW(store.SaveNote(id, "early"), std::runtime_error);
-    EXPECT_THROW(store.ReadNote(id), std::runtime_error);
-    EXPECT_THROW(store.ReadNote("nope"), std::runtime_error);
+    store.Finalise(id);
+    store.SaveDocument(id, DocumentKind::kNote,
+                       {.text = "generated", .style = "soap", .detail = "concise"});
+    const std::string generated_at = store.ReadDocument(id, DocumentKind::kNote).generated_at;
+
+    store.EditDocument(id, DocumentKind::kNote, "the clinician's wording");
+
+    const Document note = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(note.text, "the clinician's wording");
+    EXPECT_EQ(note.style, "soap");
+    EXPECT_EQ(note.detail, "concise");
+    EXPECT_EQ(note.generated_at, generated_at);
+    EXPECT_FALSE(note.edited_at.empty());
+
+    store.SaveDocument(id, DocumentKind::kNote, {.text = "regenerated", .style = "prose"});
+    EXPECT_TRUE(store.ReadDocument(id, DocumentKind::kNote).edited_at.empty())
+        << "a generation replaces the edit";
+}
+
+TEST(SessionStore, DocumentsAreNotPlaintextAtRest) {
+    TempRoot root;
+    const std::string note = "SENTINEL-BURSITIS-PHRASE";
+    const std::string patient = "SENTINEL-PATIENT-PHRASE";
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.Finalise(id);
+        store.SaveDocument(id, DocumentKind::kNote, {.text = note});
+        store.SaveDocument(id, DocumentKind::kPatient, {.text = patient});
+        EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, patient);
+        EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).text, note)
+            << "patient and note are separate";
+        EXPECT_EQ(store.ReadDocument(id, DocumentKind::kTranslation).text, "");
+    }
+
+    const auto file = ReadFileBytes(root.DbPath());
+    for (const std::string& sentinel : {note, patient}) {
+        const std::vector<std::uint8_t> needle(sentinel.begin(), sentinel.end());
+        EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
+    }
+}
+
+TEST(SessionStore, EveryDocumentKindRoundTrips) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Finalise(id);
+    store.SaveDocument(id, DocumentKind::kTranslation, {.text = "Twój łokieć", .language = "pl"});
+    store.SaveDocument(id, DocumentKind::kLabel, {.text = "Elbow swelling"});
+
+    const Document translation = store.ReadDocument(id, DocumentKind::kTranslation);
+    EXPECT_EQ(translation.text, "Twój łokieć");
+    EXPECT_EQ(translation.language, "pl");
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kLabel).text, "Elbow swelling");
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).text, "");
+}
+
+TEST(SessionStore, DocumentsRefuseTheRecordingSessionAndUnknownIds) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    EXPECT_THROW(store.SaveDocument(id, DocumentKind::kNote, {.text = "early"}),
+                 std::runtime_error);
+    EXPECT_THROW(store.EditDocument(id, DocumentKind::kNote, "early"), std::runtime_error);
+    EXPECT_THROW(store.ReadDocument(id, DocumentKind::kNote), std::runtime_error);
+    EXPECT_THROW(store.ReadDocument("nope", DocumentKind::kNote), std::runtime_error);
+}
+
+// Writes the first layout by hand: main.db catalog, sessions/<id>.db with
+// chunks, turns, a sealed note in its own table and the meta bag, and the
+// wrapped key beside it
+SessionId WritePerSessionFileLayout(const TempRoot& root, const std::vector<float>& audio,
+                                    const std::string& turn_text, const std::string& note) {
+    const SessionId id = "0123456789abcdef0123456789abcdef";
+    std::filesystem::create_directories(root.path / "sessions");
+    {
+        Db catalog(root.path / "main.db");
+        catalog.Exec(
+            "CREATE TABLE sessions(id TEXT PRIMARY KEY, started_at TEXT NOT NULL, ended_at TEXT,"
+            " state TEXT NOT NULL, sample_rate INTEGER NOT NULL, device_id TEXT,"
+            " device_name TEXT, lost_frames INTEGER NOT NULL DEFAULT 0)");
+        catalog.Exec(
+            "INSERT INTO sessions VALUES('0123456789abcdef0123456789abcdef',"
+            " '2026-08-01T09:00:00Z', '2026-08-01T09:10:00Z', 'finalised', 16000, 'mic-1',"
+            " 'Old microphone', 7)");
+        catalog.SetUserVersion(1);
+    }
+    const ChunkCipher cipher = ChunkCipher::Generate();
+    {
+        const std::vector<std::uint8_t> wrapped = cipher.Wrapped();
+        std::ofstream key(root.SessionFile(id, ".key"), std::ios::binary);
+        key.write(reinterpret_cast<const char*>(wrapped.data()),
+                  static_cast<std::streamsize>(wrapped.size()));
+    }
+    Db db(root.SessionFile(id, ".db"));
+    db.Exec(
+        "CREATE TABLE chunks(seq INTEGER PRIMARY KEY, first_frame INTEGER NOT NULL,"
+        " frame_count INTEGER NOT NULL, lost_before INTEGER NOT NULL, payload BLOB NOT NULL);"
+        "CREATE TABLE turns(seq INTEGER PRIMARY KEY, first_frame INTEGER NOT NULL,"
+        " frame_count INTEGER NOT NULL, payload BLOB NOT NULL);"
+        "CREATE TABLE note(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL);"
+        "CREATE TABLE patient(seq INTEGER PRIMARY KEY, payload BLOB NOT NULL);"
+        "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+        "INSERT INTO meta VALUES('id', '0123456789abcdef0123456789abcdef')");
+    {
+        const auto sealed = cipher.Seal(
+            Domain::kAudio, id, 0,
+            {reinterpret_cast<const std::uint8_t*>(audio.data()), audio.size() * sizeof(float)});
+        Db::Stmt insert = db.Prepare("INSERT INTO chunks VALUES(0, 0, ?, 7, ?)");
+        insert.BindInt64(1, static_cast<std::int64_t>(audio.size()));
+        insert.BindBlob(2, sealed);
+        insert.Step();
+    }
+    {
+        const std::string content =
+            nlohmann::json{{"speaker", "doctor"}, {"text", turn_text}}.dump();
+        const auto sealed =
+            cipher.Seal(Domain::kTurns, id, 0,
+                        {reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
+        Db::Stmt insert = db.Prepare("INSERT INTO turns VALUES(0, 0, 16000, ?)");
+        insert.BindBlob(1, sealed);
+        insert.Step();
+    }
+    {
+        const auto sealed =
+            cipher.Seal(Domain::kNote, id, 0,
+                        {reinterpret_cast<const std::uint8_t*>(note.data()), note.size()});
+        Db::Stmt insert = db.Prepare("INSERT INTO note VALUES(0, ?)");
+        insert.BindBlob(1, sealed);
+        insert.Step();
+    }
+    db.SetUserVersion(1);
+    return id;
+}
+
+TEST(SessionStore, ImportsThePerSessionFileLayoutOnFirstOpen) {
+    TempRoot root;
+    const auto audio = Ramp(16000);
+    const SessionId id = WritePerSessionFileLayout(root, audio, "how long have you had the pain",
+                                                   "written by the first release");
+
+    SqliteSessionStore store(root.path, kNever);
+
+    const auto sessions = store.ListSessions();
+    ASSERT_EQ(sessions.size(), 1u);
+    EXPECT_EQ(sessions[0].id, id);
+    EXPECT_EQ(sessions[0].state, "finalised");
+    EXPECT_EQ(sessions[0].ended_at, "2026-08-01T09:10:00Z");
+    EXPECT_EQ(store.ReadAudio(id), audio) << "the ciphertext moved unchanged";
+    const auto turns = store.ReadTurns(id);
+    ASSERT_EQ(turns.size(), 1u);
+    EXPECT_EQ(turns[0].speaker, "doctor");
+    EXPECT_EQ(turns[0].text, "how long have you had the pain");
+    const Document note = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(note.text, "written by the first release");
+    EXPECT_TRUE(note.style.empty()) << "the first layout stored no options";
+    EXPECT_TRUE(note.generated_at.empty());
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "");
+
+    Db db(root.DbPath());
+    Db::Stmt row = db.Prepare("SELECT device_name, lost_frames FROM sessions WHERE id = ?");
+    row.BindText(1, id);
+    ASSERT_TRUE(row.Step());
+    EXPECT_EQ(row.ColumnText(0), "Old microphone");
+    EXPECT_EQ(row.ColumnInt64(1), 7);
+
+    EXPECT_FALSE(std::filesystem::exists(root.path / "main.db")) << "the old catalog is gone";
+    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".db")));
+    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".key")));
+    EXPECT_FALSE(std::filesystem::exists(root.path / "sessions"));
+
+    store.EditDocument(id, DocumentKind::kNote, "edited on the new build");
+    EXPECT_FALSE(store.ReadDocument(id, DocumentKind::kNote).edited_at.empty());
+}
+
+TEST(SessionStore, AnUnreadableOldSessionIsLeftInPlace) {
+    TempRoot root;
+    const SessionId id = WritePerSessionFileLayout(root, Ramp(100), "turn", "note");
+    std::filesystem::remove(root.SessionFile(id, ".key"));  // no key: nothing can be read
+
+    SqliteSessionStore store(root.path, kNever);
+    EXPECT_TRUE(store.ListSessions().empty());
+    EXPECT_TRUE(std::filesystem::exists(root.path / "main.db")) << "kept for a later attempt";
+    EXPECT_TRUE(std::filesystem::exists(root.SessionFile(id, ".db")));
 }
 
 TEST(SessionStore, AnAbandonedSessionsTurnsAreReadable) {
@@ -277,10 +451,12 @@ TEST(SessionStore, DeleteErasesAFinishedSession) {
 
     store.Delete(id);
 
-    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".db")));
-    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".key")));
     EXPECT_TRUE(store.ListSessions().empty());
     EXPECT_THROW(store.ReadTurns(id), std::runtime_error);
+    Db db(root.DbPath());
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 0);
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM turns"), 0) << "cascade";
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM chunks"), 0) << "cascade";
 }
 
 TEST(SessionStore, TheRecordingSessionCannotBeReadOrDeleted) {
@@ -317,7 +493,7 @@ TEST(SessionStore, LifecycleRoundTripsTheAudio) {
     EXPECT_EQ(chunks[0].first_frame, 0);
     EXPECT_EQ(chunks[0].frames, audio);
 
-    Db catalog(root.path / "main.db");
+    Db catalog(root.DbPath());
     Db::Stmt row = catalog.Prepare(
         "SELECT state, ended_at IS NOT NULL, sample_rate, device_name FROM sessions WHERE id = ?");
     row.BindText(1, id);
@@ -328,7 +504,7 @@ TEST(SessionStore, LifecycleRoundTripsTheAudio) {
     EXPECT_EQ(row.ColumnText(3), "Test microphone");
 }
 
-TEST(SessionStore, StampsTheSchemaVersionAndMeta) {
+TEST(SessionStore, OneDatabaseStampedWithTheSchemaVersion) {
     TempRoot root;
     SessionId id;
     {
@@ -336,14 +512,18 @@ TEST(SessionStore, StampsTheSchemaVersionAndMeta) {
         id = store.Begin({16000, "", ""});
         store.Finalise(id);
     }
-    Db catalog(root.path / "main.db");
-    EXPECT_EQ(catalog.UserVersion(), 1);
+    EXPECT_FALSE(std::filesystem::exists(root.path / "sessions"));
+    EXPECT_FALSE(std::filesystem::exists(root.path / "main.db"));
 
-    Db session(root.SessionFile(id, ".db"));
-    EXPECT_EQ(session.UserVersion(), 1);
-    Db::Stmt meta = session.Prepare("SELECT value FROM meta WHERE key = 'id'");
-    ASSERT_TRUE(meta.Step());
-    EXPECT_EQ(meta.ColumnText(0), id);
+    Db db(root.DbPath());
+    EXPECT_EQ(db.UserVersion(), 2);
+    EXPECT_EQ(db.QueryInt64("PRAGMA auto_vacuum"), 2) << "incremental";
+    EXPECT_EQ(db.QueryInt64("PRAGMA foreign_keys"), 1);
+    Db::Stmt row = db.Prepare("SELECT id, sample_rate FROM sessions");
+    ASSERT_TRUE(row.Step());
+    EXPECT_EQ(row.ColumnText(0), id);
+    EXPECT_EQ(row.ColumnInt64(1), 16000);
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 1);
 }
 
 TEST(SessionStore, AudioAtRestIsNotPlaintext) {
@@ -361,7 +541,7 @@ TEST(SessionStore, AudioAtRestIsNotPlaintext) {
     // in the raw session file
     const auto* window = reinterpret_cast<const std::uint8_t*>(audio.data() + 1000);
     const std::vector<std::uint8_t> needle(window, window + 64 * sizeof(float));
-    const std::vector<std::uint8_t> file = ReadFileBytes(root.SessionFile(id, ".db"));
+    const std::vector<std::uint8_t> file = ReadFileBytes(root.DbPath());
     EXPECT_EQ(std::search(file.begin(), file.end(), needle.begin(), needle.end()), file.end());
 }
 
@@ -372,13 +552,14 @@ TEST(SessionStore, CancelRetainsNothing) {
     store.Append(id, Ramp(16000), 0);
     store.Cancel(id);
 
-    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".db")));
-    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".db-wal")));
-    EXPECT_FALSE(std::filesystem::exists(root.SessionFile(id, ".key")));
     EXPECT_EQ(store.ScanRecoverable().size(), 0u);
+    EXPECT_THROW(store.ReadAudio(id), std::runtime_error) << "the key is gone";
 
-    Db catalog(root.path / "main.db");
-    EXPECT_EQ(catalog.QueryInt64("SELECT COUNT(*) FROM sessions"), 0);
+    Db db(root.DbPath());
+    for (const char* table : {"sessions", "session_keys", "chunks", "turns"}) {
+        EXPECT_EQ(db.QueryInt64((std::string("SELECT COUNT(*) FROM ") + table).c_str()), 0)
+            << table;
+    }
 }
 
 TEST(SessionStore, RecordingWorksAgainAfterCancel) {
@@ -490,7 +671,7 @@ TEST(SessionStore, LossAccountingReachesTheChunkAndTheCatalog) {
     ASSERT_EQ(chunks.size(), 1u);
     EXPECT_EQ(chunks[0].lost_before, 320);
 
-    Db catalog(root.path / "main.db");
+    Db catalog(root.DbPath());
     Db::Stmt row = catalog.Prepare("SELECT lost_frames FROM sessions WHERE id = ?");
     row.BindText(1, id);
     ASSERT_TRUE(row.Step());
@@ -515,8 +696,8 @@ TEST(SessionStore, RefusesAStoreFromANewerBuild) {
         SqliteSessionStore store(root.path, kNever);
     }
     {
-        Db catalog(root.path / "main.db");
-        catalog.SetUserVersion(999);
+        Db db(root.DbPath());
+        db.SetUserVersion(999);
     }
     EXPECT_THROW(SqliteSessionStore(root.path, kNever), std::runtime_error);
 }

@@ -67,10 +67,18 @@ target_compile_definitions(sqlite3 PRIVATE
 # Not ours to keep warning-clean
 set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
+# The schema is one SQL file, embedded so the engine stays a single binary
+set(sotto_schema_sql ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema/sotto.sql)
+file(READ ${sotto_schema_sql} SOTTO_SCHEMA_SQL)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${sotto_schema_sql})
+configure_file(src/adapters/storage/schema.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/adapters/storage/schema.hpp @ONLY)
+
 add_library(sotto_storage STATIC
     src/adapters/storage/chunk_cipher.cpp
     src/adapters/storage/db.cpp
     src/adapters/storage/sqlite_session_store.cpp)
+target_include_directories(sotto_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(sotto_storage
     PUBLIC sotto_core
     PRIVATE sotto_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)

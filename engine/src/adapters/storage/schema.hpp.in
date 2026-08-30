@@ -1,0 +1,12 @@
+#pragma once
+
+// Generated at configure time from src/adapters/storage/schema/sotto.sql;
+// edit the .sql, not this header
+
+namespace sotto::store {
+
+inline constexpr const char* kSchemaSql = R"sql(
+@SOTTO_SCHEMA_SQL@
+)sql";
+
+}  // namespace sotto::store

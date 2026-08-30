@@ -14,6 +14,8 @@ enum class Domain : std::uint8_t {
     kTurns = 1,
     kNote = 2,
     kPatient = 3,
+    kTranslation = 4,
+    kLabel = 5,
 };
 
 // AES-256-GCM under a per-session key. The IV is domain plus sequence,

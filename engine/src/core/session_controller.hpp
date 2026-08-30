@@ -711,6 +711,28 @@ class SessionController {
         return words;
     }
 
+    // A store refusal never costs the note: the text still reaches the shell
+    void SaveNote(const store::SessionId& id, const std::string& text,
+                  const note::NoteOptions& options) {
+        try {
+            store::Document document;
+            document.text = text;
+            document.style = options.style;
+            document.detail = options.detail;
+            store_.SaveDocument(id, store::DocumentKind::kNote, document);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
+    void SavePatient(const store::SessionId& id, const std::string& text) {
+        try {
+            store::Document document;
+            document.text = text;
+            store_.SaveDocument(id, store::DocumentKind::kPatient, document);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
     // The note writes after the seal on its own thread; a new stop cancels
     // a note still writing
     void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
@@ -719,28 +741,22 @@ class SessionController {
         // its prompt, not the consultation (measured). The engine authors a
         // plain statement instead, delivered as the note so the panes read
         // professionally rather than erroring
+        auto options = CurrentNoteOptions();  // before the lock: same mutex
         if (TranscriptWords(transcript) < min_note_words_) {
             const std::string note =
                 "The recording was too short or did not contain enough clinical "
                 "information to generate an accurate note.";
-            try {
-                store_.SaveNote(id, note);
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
+            SaveNote(id, note, options);
             events_.OnNoteReady(note);
             if (note_writer_->WritesPatient()) {
                 const std::string patient =
                     "The recording was too short or did not contain enough clinical "
                     "information to generate a patient information sheet.";
-                try {
-                    store_.SavePatient(id, patient);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
-                }
+                SavePatient(id, patient);
                 events_.OnPatientReady(patient);
             }
             return;
         }
-        auto options = CurrentNoteOptions();  // before the lock: same mutex
         std::lock_guard<std::mutex> lock(mutex_);
         note_busy_ = true;
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript),
@@ -766,10 +782,7 @@ class SessionController {
                 note = note_writer_->Write(turns, options, [this](const std::string& partial) {
                     events_.OnNotePartial(partial);
                 });
-                try {
-                    store_.SaveNote(id, note);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
-                }
+                SaveNote(id, note, options);
                 events_.OnNoteReady(note);
             } catch (const std::exception& e) {
                 events_.OnNoteFailed(e.what());
@@ -787,10 +800,7 @@ class SessionController {
                 const std::string patient = note_writer_->WritePatient(
                     note,
                     [this](const std::string& partial) { events_.OnPatientPartial(partial); });
-                try {
-                    store_.SavePatient(id, patient);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
-                }
+                SavePatient(id, patient);
                 events_.OnPatientReady(patient);
             } catch (const std::exception& e) {
                 events_.OnPatientFailed(e.what());

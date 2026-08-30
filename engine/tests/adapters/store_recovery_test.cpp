@@ -142,13 +142,16 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
 
     // Every acked chunk survived the kill, decrypts, and carries the exact
     // frames that were appended
-    std::ifstream key_in(root.path / "sessions" / (session_id + ".key"), std::ios::binary);
-    const std::vector<std::uint8_t> wrapped(std::istreambuf_iterator<char>(key_in), {});
-    const ChunkCipher cipher = ChunkCipher::FromWrapped(wrapped);
+    Db db(root.path / "sotto.db");
+    Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+    key.BindText(1, session_id);
+    ASSERT_TRUE(key.Step()) << "the key row was committed with the session";
+    const ChunkCipher cipher = ChunkCipher::FromWrapped(key.ColumnBlob(0));
 
-    Db db(root.path / "sessions" / (session_id + ".db"));
-    Db::Stmt select =
-        db.Prepare("SELECT seq, first_frame, frame_count, payload FROM chunks ORDER BY seq");
+    Db::Stmt select = db.Prepare(
+        "SELECT seq, first_frame, frame_count, payload FROM chunks WHERE session_id = ?"
+        " ORDER BY seq");
+    select.BindText(1, session_id);
     std::int64_t expected_seq = 0;
     std::uint64_t expected_frame = 0;
     while (select.Step()) {
@@ -169,7 +172,8 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     EXPECT_GE(expected_seq, acked) << "an acked commit was lost";
 
     // Turns commit synchronously, so every one before the kill survives too
-    Db::Stmt turns = db.Prepare("SELECT seq, payload FROM turns ORDER BY seq");
+    Db::Stmt turns = db.Prepare("SELECT seq, payload FROM turns WHERE session_id = ? ORDER BY seq");
+    turns.BindText(1, session_id);
     std::int64_t turn_seq = 0;
     while (turns.Step()) {
         ASSERT_EQ(turns.ColumnInt64(0), turn_seq);
@@ -198,7 +202,10 @@ TEST(StoreRecovery, AHardKillAfterCancelLeavesNothing) {
 
     SqliteSessionStore reopened(root.path, std::chrono::hours(1));
     EXPECT_TRUE(reopened.ScanRecoverable().empty());
-    EXPECT_TRUE(std::filesystem::is_empty(root.path / "sessions"));
+    EXPECT_TRUE(reopened.ListSessions().empty());
+    Db db(root.path / "sotto.db");
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 0) << "the key went first";
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM chunks"), 0);
 }
 
 }  // namespace

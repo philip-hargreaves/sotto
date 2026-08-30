@@ -103,6 +103,18 @@ void Db::Stmt::BindText(int index, std::string_view value) {
     }
 }
 
+void Db::Stmt::BindNull(int index) {
+    if (sqlite3_bind_null(stmt_, index) != SQLITE_OK) Throw("bind null", db_);
+}
+
+void Db::Stmt::BindTextOrNull(int index, std::string_view value) {
+    if (value.empty()) {
+        BindNull(index);
+    } else {
+        BindText(index, value);
+    }
+}
+
 void Db::Stmt::BindBlob(int index, std::span<const std::uint8_t> value) {
     if (sqlite3_bind_blob64(stmt_, index, value.data(), value.size(), SQLITE_TRANSIENT) !=
         SQLITE_OK) {

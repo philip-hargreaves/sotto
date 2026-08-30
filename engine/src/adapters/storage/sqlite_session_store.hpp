@@ -15,8 +15,9 @@
 
 namespace sotto::store {
 
-// A catalog (main.db) beside one encrypted db and wrapped key per session.
-// Appends buffer in memory; a writer thread commits once per interval.
+// One database (sotto.db) for every session, content sealed per blob under
+// a per-session key held in the same file. Appends buffer in memory; a
+// writer thread commits once per interval. Layout in schema/sotto.sql.
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(
@@ -34,10 +35,9 @@ class SqliteSessionStore : public ISessionStore {
     void Abandon(const SessionId& id) override;
     std::vector<RecoverableSession> ScanRecoverable() override;
     std::vector<SessionSummary> ListSessions() override;
-    void SaveNote(const SessionId& id, const std::string& text) override;
-    std::string ReadNote(const SessionId& id) override;
-    void SavePatient(const SessionId& id, const std::string& text) override;
-    std::string ReadPatient(const SessionId& id) override;
+    void SaveDocument(const SessionId& id, DocumentKind kind, const Document& document) override;
+    void EditDocument(const SessionId& id, DocumentKind kind, const std::string& text) override;
+    Document ReadDocument(const SessionId& id, DocumentKind kind) override;
     std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
     std::vector<float> ReadAudio(const SessionId& id) override;
     void Delete(const SessionId& id) override;
@@ -45,7 +45,6 @@ class SqliteSessionStore : public ISessionStore {
    private:
     struct Open {
         SessionId id;
-        std::optional<Db> db;
         std::optional<ChunkCipher> cipher;
         std::int64_t next_seq = 0;
         std::int64_t next_turn_seq = 0;
@@ -55,17 +54,20 @@ class SqliteSessionStore : public ISessionStore {
         std::uint64_t pending_lost = 0;
     };
 
-    void SaveText(const SessionId& id, const char* table, Domain domain, const std::string& text);
-    std::string ReadText(const SessionId& id, const char* table, Domain domain);
+    // All private members expect mutex_ held
     Open& RequireOpen(const SessionId& id);
-    void RequireNotRecording(const SessionId& id);  // caller holds mutex_
-    void EraseOnDisk(const SessionId& id);          // key, file, catalog row
-    void CommitPending();  // seals pending as one chunk; caller holds mutex_
+    ChunkCipher CipherFor(const SessionId& id);  // a stored session's key; throws otherwise
+    void InsertTurn(const SessionId& id, std::int64_t seq, const ChunkCipher& cipher,
+                    const asr::Turn& turn);
+    void WriteDocument(const SessionId& id, DocumentKind kind, const Document& document);
+    Document ReadDocumentLocked(const SessionId& id, DocumentKind kind);
+    void Erase(const SessionId& id);  // key row and everything under the session
+    void CommitPending();             // seals pending as one chunk
     void WriterLoop();
+    void ImportPerSessionFiles(const std::filesystem::path& root);
 
-    std::filesystem::path root_;
     std::chrono::milliseconds commit_interval_;
-    Db catalog_;
+    Db db_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::optional<Open> open_;

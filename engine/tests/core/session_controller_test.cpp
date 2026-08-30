@@ -278,29 +278,37 @@ struct FakeSessionStore : store::ISessionStore {
         return {};
     }
 
-    void SaveNote(const store::SessionId& id, const std::string& text) override {
+    void SaveDocument(const store::SessionId& id, store::DocumentKind kind,
+                      const store::Document& document) override {
         const std::lock_guard<std::mutex> lock(mutex);
-        calls.push_back("note " + id);
-        note = text;
+        if (kind == store::DocumentKind::kNote) {
+            calls.push_back("note " + id);
+            note = document.text;
+            note_style = document.style;
+            note_detail = document.detail;
+        } else if (kind == store::DocumentKind::kPatient) {
+            calls.push_back("patient " + id);
+            patient = document.text;
+        }
     }
 
-    std::string ReadNote(const store::SessionId&) override {
+    void EditDocument(const store::SessionId& id, store::DocumentKind kind,
+                      const std::string& text) override {
         const std::lock_guard<std::mutex> lock(mutex);
-        return note;
+        calls.push_back("edit " + id);
+        (kind == store::DocumentKind::kNote ? note : patient) = text;
     }
 
-    void SavePatient(const store::SessionId& id, const std::string& text) override {
+    store::Document ReadDocument(const store::SessionId&, store::DocumentKind kind) override {
         const std::lock_guard<std::mutex> lock(mutex);
-        calls.push_back("patient " + id);
-        patient = text;
-    }
-
-    std::string ReadPatient(const store::SessionId&) override {
-        const std::lock_guard<std::mutex> lock(mutex);
-        return patient;
+        store::Document document;
+        document.text = kind == store::DocumentKind::kNote ? note : patient;
+        return document;
     }
 
     std::string patient;
+    std::string note_style;
+    std::string note_detail;
 
     std::vector<asr::Turn> ReadTurns(const store::SessionId& id) override {
         const std::lock_guard<std::mutex> lock(mutex);

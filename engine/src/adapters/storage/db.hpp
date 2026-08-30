@@ -22,6 +22,9 @@ class Db {
         void BindInt64(int index, std::int64_t value);
         void BindText(int index, std::string_view value);
         void BindBlob(int index, std::span<const std::uint8_t> value);
+        void BindNull(int index);
+        // Empty binds NULL: the store's optional texts are empty strings in C++
+        void BindTextOrNull(int index, std::string_view value);
 
         bool Step();  // true: a row is ready; false: done
         void Reset();
