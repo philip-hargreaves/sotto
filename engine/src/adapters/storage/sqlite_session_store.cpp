@@ -258,15 +258,29 @@ std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {
     return found;
 }
 
+// The label is content, so each row's is opened with its own key; the
+// edit stamp is the latest over the session's documents
 std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<SessionSummary> sessions;
     Db::Stmt select = db_.Prepare(
-        "SELECT id, started_at, ended_at, state, sample_rate FROM sessions"
-        " ORDER BY started_at DESC, rowid DESC");
+        "SELECT s.id, s.started_at, s.ended_at, s.state, s.sample_rate, k.wrapped, l.payload,"
+        " (SELECT max(edited_at) FROM documents d WHERE d.session_id = s.id)"
+        " FROM sessions s"
+        " LEFT JOIN session_keys k ON k.session_id = s.id"
+        " LEFT JOIN documents l ON l.session_id = s.id AND l.kind = 'label'"
+        " ORDER BY s.started_at DESC, s.rowid DESC");
     while (select.Step()) {
-        sessions.push_back({select.ColumnText(0), select.ColumnText(1), select.ColumnText(2),
-                            select.ColumnText(3), static_cast<int>(select.ColumnInt64(4))});
+        SessionSummary summary{select.ColumnText(0), select.ColumnText(1), select.ColumnText(2),
+                               select.ColumnText(3), static_cast<int>(select.ColumnInt64(4))};
+        const std::vector<std::uint8_t> sealed = select.ColumnBlob(6);
+        if (!sealed.empty()) {
+            const ChunkCipher cipher = ChunkCipher::FromWrapped(select.ColumnBlob(5));
+            const auto plain = cipher.Open(Domain::kLabel, summary.id, 0, sealed);
+            summary.label.assign(plain.begin(), plain.end());
+        }
+        summary.edited_at = select.ColumnText(7);
+        sessions.push_back(std::move(summary));
     }
     return sessions;
 }

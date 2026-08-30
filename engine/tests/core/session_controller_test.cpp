@@ -289,6 +289,9 @@ struct FakeSessionStore : store::ISessionStore {
         } else if (kind == store::DocumentKind::kPatient) {
             calls.push_back("patient " + id);
             patient = document.text;
+        } else if (kind == store::DocumentKind::kLabel) {
+            label = document.text;
+            label_typed = false;
         }
     }
 
@@ -296,19 +299,39 @@ struct FakeSessionStore : store::ISessionStore {
                       const std::string& text) override {
         const std::lock_guard<std::mutex> lock(mutex);
         calls.push_back("edit " + id);
+        if (kind == store::DocumentKind::kLabel) {
+            label = text;
+            label_typed = true;
+            return;
+        }
         (kind == store::DocumentKind::kNote ? note : patient) = text;
     }
 
     store::Document ReadDocument(const store::SessionId&, store::DocumentKind kind) override {
         const std::lock_guard<std::mutex> lock(mutex);
         store::Document document;
-        document.text = kind == store::DocumentKind::kNote ? note : patient;
+        switch (kind) {
+            case store::DocumentKind::kNote:
+                document.text = note;
+                break;
+            case store::DocumentKind::kPatient:
+                document.text = patient;
+                break;
+            case store::DocumentKind::kLabel:
+                document.text = label;
+                document.edited_at = label_typed ? "typed" : "";
+                break;
+            case store::DocumentKind::kTranslation:
+                break;
+        }
         return document;
     }
 
     std::string patient;
     std::string note_style;
     std::string note_detail;
+    std::string label;
+    bool label_typed = false;
 
     std::vector<asr::Turn> ReadTurns(const store::SessionId& id) override {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -574,6 +597,53 @@ TEST(SessionController, TheNoteFollowsTheSeal) {
     ASSERT_EQ(writer.calls.size(), 1u);
     EXPECT_FALSE(writer.calls[0].empty()) << "the writer gets the transcript";
     EXPECT_GE(writer.prepares.load(), 1) << "the weights warm while the session records";
+}
+
+TEST(SessionController, TheNoteBringsItsOptionsAndLabel) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+    controller.SetNoteOptions({"soap", "concise"});
+
+    ASSERT_TRUE(controller.Start());
+    for (int i = 0; i < 500 && writer.prepares.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    controller.Stop();
+    ASSERT_TRUE(events.WaitForNote());
+
+    EXPECT_EQ(store.note_style, "soap");
+    EXPECT_EQ(store.note_detail, "concise");
+    EXPECT_EQ(store.label, "the clinical note") << "the note's first sentence names the session";
+    EXPECT_FALSE(store.label_typed);
+}
+
+TEST(SessionController, ATypedLabelSurvivesTheNote) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.label = "Elbow swelling";
+    store.label_typed = true;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    ASSERT_TRUE(controller.Start());
+    for (int i = 0; i < 500 && writer.prepares.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    controller.Stop();
+    ASSERT_TRUE(events.WaitForNote());
+
+    EXPECT_EQ(store.label, "Elbow swelling");
+    EXPECT_TRUE(store.label_typed);
 }
 
 TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {

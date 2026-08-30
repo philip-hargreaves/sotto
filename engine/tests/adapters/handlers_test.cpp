@@ -130,6 +130,13 @@ TEST(Handlers, SessionListAndTranscriptRoundTrip) {
     EXPECT_EQ(list["sessions"][0]["state"], "finalised");
     EXPECT_EQ(list["sessions"][0]["sampleRate"], 16000);
     EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
+    EXPECT_EQ(list["sessions"][0]["label"], "") << "no note yet";
+    EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null());
+    // The fixture is the shape both languages agree on
+    for (const auto& [key, value] :
+         LoadFixture("session-list.json")["result"]["sessions"][0].items()) {
+        EXPECT_TRUE(list["sessions"][0].contains(key)) << key;
+    }
 
     const auto outcome = HandleSessionTranscript(*fixture.store, json{{"id", id}});
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
@@ -143,14 +150,68 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
     const auto id = fixture.store->Begin({16000, "", ""});
     fixture.store->Finalise(id);
     fixture.store->SaveDocument(id, sotto::store::DocumentKind::kNote,
-                                {.text = "The patient presents with a swollen left elbow."});
+                                {.text = "The patient presents with a swollen left elbow.",
+                                 .style = "soap",
+                                 .detail = "concise"});
 
     const auto outcome = HandleSessionNote(*fixture.store, json{{"id", id}});
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
-    EXPECT_EQ(std::get<json>(outcome)["text"], "The patient presents with a swollen left elbow.");
+    const json note = std::get<json>(outcome);
+    EXPECT_EQ(note["text"], "The patient presents with a swollen left elbow.");
+    EXPECT_EQ(note["style"], "soap");
+    EXPECT_EQ(note["detail"], "concise");
+    EXPECT_TRUE(note["generatedAt"].is_string());
+    EXPECT_TRUE(note["editedAt"].is_null());
+    for (const auto& [key, value] : LoadFixture("session-note.json")["result"].items()) {
+        EXPECT_TRUE(note.contains(key)) << key;
+    }
+
+    fixture.store->EditDocument(id, sotto::store::DocumentKind::kNote, "edited");
+    const json edited = std::get<json>(HandleSessionNote(*fixture.store, json{{"id", id}}));
+    EXPECT_EQ(edited["text"], "edited");
+    EXPECT_TRUE(edited["editedAt"].is_string());
 
     const auto missing = HandleSessionNote(*fixture.store, json{{"id", "nope"}});
     ASSERT_TRUE(std::holds_alternative<Error>(missing));
+}
+
+TEST(Handlers, SessionPatientCarriesTheTranslationWhenStored) {
+    using sotto::store::DocumentKind;
+    SessionStoreFixture fixture;
+    const auto id = fixture.store->Begin({16000, "", ""});
+    fixture.store->Finalise(id);
+    fixture.store->SaveDocument(id, DocumentKind::kPatient, {.text = "You have bursitis."});
+
+    json patient = std::get<json>(HandleSessionPatient(*fixture.store, json{{"id", id}}));
+    EXPECT_EQ(patient["text"], "You have bursitis.");
+    EXPECT_EQ(patient["language"], "en");
+    EXPECT_TRUE(patient["translation"].is_null());
+
+    fixture.store->SaveDocument(id, DocumentKind::kTranslation,
+                                {.text = "Masz zapalenie kaletki.", .language = "pl"});
+    patient = std::get<json>(HandleSessionPatient(*fixture.store, json{{"id", id}}));
+    EXPECT_EQ(patient["translation"]["language"], "pl");
+    EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.");
+    for (const auto& [key, value] : LoadFixture("session-patient.json")["result"].items()) {
+        EXPECT_TRUE(patient.contains(key)) << key;
+    }
+}
+
+TEST(Handlers, SessionListCarriesTheLabelAndTheLatestEdit) {
+    using sotto::store::DocumentKind;
+    SessionStoreFixture fixture;
+    const auto id = fixture.store->Begin({16000, "", ""});
+    fixture.store->Finalise(id);
+    fixture.store->SaveDocument(id, DocumentKind::kLabel, {.text = "Elbow swelling"});
+
+    json list = HandleSessionList(*fixture.store);
+    EXPECT_EQ(list["sessions"][0]["label"], "Elbow swelling");
+    EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null());
+
+    fixture.store->SaveDocument(id, DocumentKind::kPatient, {.text = "sheet"});
+    fixture.store->EditDocument(id, DocumentKind::kPatient, "sheet, edited");
+    list = HandleSessionList(*fixture.store);
+    EXPECT_TRUE(list["sessions"][0]["editedAt"].is_string()) << "any document's edit counts";
 }
 
 TEST(Handlers, SessionDeleteRemovesAndUnknownIdsError) {

@@ -17,6 +17,7 @@
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
 #include "core/metrics.hpp"
+#include "core/note_label.hpp"
 #include "core/per_turn.hpp"
 #include "core/resume_source.hpp"
 #include "core/role_naming.hpp"
@@ -711,7 +712,8 @@ class SessionController {
         return words;
     }
 
-    // A store refusal never costs the note: the text still reaches the shell
+    // A store refusal never costs the note: the text still reaches the shell.
+    // The label follows the note until the clinician has typed one
     void SaveNote(const store::SessionId& id, const std::string& text,
                   const note::NoteOptions& options) {
         try {
@@ -720,6 +722,11 @@ class SessionController {
             document.style = options.style;
             document.detail = options.detail;
             store_.SaveDocument(id, store::DocumentKind::kNote, document);
+            if (store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {
+                store::Document label;
+                label.text = core::LabelFrom(text);
+                store_.SaveDocument(id, store::DocumentKind::kLabel, label);
+            }
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
     }
