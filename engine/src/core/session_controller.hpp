@@ -118,6 +118,7 @@ class SessionController {
                 return false;
             }
             running_ = true;
+            reviewing_ = false;  // Record wins over a review
             got_audio_ = false;
             ended_ = false;
             stop_requested_ = false;
@@ -238,6 +239,38 @@ class SessionController {
         return last_finalised_;
     }
 
+    // A stored session becomes the regenerate target, as if it had just
+    // been sealed. Refused while recording, while a note is being written,
+    // and for a session the store cannot read
+    bool Open(const store::SessionId& id) {
+        if (Running() || note_busy_.load()) {
+            return false;
+        }
+        try {
+            (void)store_.ReadTurns(id);
+        } catch (...) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        last_finalised_ = id;
+        reviewing_ = true;
+        return true;
+    }
+
+    // Ends a review; regenerate refuses until the next seal or open
+    void Close() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (reviewing_) {
+            reviewing_ = false;
+            last_finalised_.clear();
+        }
+    }
+
+    bool Reviewing() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return reviewing_;
+    }
+
     // The recording session's id, so the shell can resume it after a crash
     store::SessionId CurrentSession() const {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -255,7 +288,7 @@ class SessionController {
     // False when nothing is finalised, a session is live, or a note is
     // already being written - the RPC thread must never block on the lane.
     bool RegenerateNote(note::NoteOptions options) {
-        if (Running() || note_busy_.load()) {
+        if (note_writer_ == nullptr || Running() || note_busy_.load()) {
             return false;
         }
         store::SessionId id = LastFinalised();
@@ -866,6 +899,7 @@ class SessionController {
     std::atomic<bool> note_abort_{false};
     bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
+    bool reviewing_ = false;  // last_finalised_ came from Open, not a seal
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined
     std::vector<float> session_audio_;

@@ -363,6 +363,22 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         controller.Cancel();
         return json::object();
     });
+    // A past session under review: regenerate and translate act on it as
+    // on a fresh seal; Record closes the review
+    server.RegisterMethod(
+        "session/open", [&controller](const json& params) -> std::variant<json, Error> {
+            const auto id = IdFrom(params);
+            if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            if (!controller.Open(std::get<std::string>(id))) {
+                return Error{kSessionError, "Session error",
+                             json("recording, a note is being written, or no such session")};
+            }
+            return json::object();
+        });
+    server.RegisterMethod("session/close", [&controller](const json&) {
+        controller.Close();
+        return json::object();
+    });
     // The note and patient lanes announce themselves when a writer is
     // wired; without one the stubs keep the contract for CI
     server.RegisterMethod("session/stop", [&server, &controller](const json&) {

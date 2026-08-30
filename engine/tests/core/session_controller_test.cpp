@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -333,8 +334,11 @@ struct FakeSessionStore : store::ISessionStore {
     std::string label;
     bool label_typed = false;
 
+    bool refuse_read_turns = false;
+
     std::vector<asr::Turn> ReadTurns(const store::SessionId& id) override {
         const std::lock_guard<std::mutex> lock(mutex);
+        if (refuse_read_turns) throw std::runtime_error("no session " + id);
         calls.push_back("readTurns " + id);
         return turns;
     }
@@ -644,6 +648,76 @@ TEST(SessionController, ATypedLabelSurvivesTheNote) {
 
     EXPECT_EQ(store.label, "Elbow swelling");
     EXPECT_TRUE(store.label_typed);
+}
+
+TEST(SessionController, AnOpenedSessionIsTheRegenerateTarget) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.turns = {{0, 16000 * 30, "doctor", "a stored consultation with enough words to note"}};
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "nothing to regenerate yet";
+    ASSERT_TRUE(controller.Open("past"));
+    EXPECT_TRUE(controller.Reviewing());
+    EXPECT_EQ(controller.LastFinalised(), "past");
+
+    ASSERT_TRUE(controller.RegenerateNote({"soap", "concise"}));
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(store.note, "the clinical note");
+    EXPECT_EQ(store.note_style, "soap");
+    const auto calls = store.Calls();
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "note past"), calls.end())
+        << "the note is stored against the opened session";
+
+    controller.Close();
+    EXPECT_FALSE(controller.Reviewing());
+    EXPECT_TRUE(controller.LastFinalised().empty());
+    EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "closed";
+}
+
+TEST(SessionController, OpenIsRefusedWhileRecordingOrForAnUnknownSession) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    store.refuse_read_turns = true;
+    EXPECT_FALSE(controller.Open("nope"));
+    store.refuse_read_turns = false;
+
+    ASSERT_TRUE(controller.Open("past"));
+    ASSERT_TRUE(controller.Start());
+    EXPECT_FALSE(controller.Reviewing()) << "Record closes the review";
+    EXPECT_FALSE(controller.Open("past")) << "not while recording";
+    for (int i = 0; i < 500 && writer.prepares.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    controller.Stop();
+    ASSERT_TRUE(events.WaitForNote());
+    EXPECT_EQ(controller.LastFinalised(), "s1") << "the seal sets its own target";
+}
+
+TEST(SessionController, RegenerateWithoutAWriterIsRefusedNotCrashed) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.turns = {{0, 16000, "doctor", "words"}};
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 nullptr, nullptr, 0);
+
+    ASSERT_TRUE(controller.Open("past"));
+    EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"}));
 }
 
 TEST(SessionController, TheNoteLaneFreesTheTranscriberFirst) {

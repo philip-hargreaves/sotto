@@ -126,6 +126,18 @@ public class FixtureTest
     }
 
     [Fact]
+    public void SessionOpenAndCloseFixturesAreRequests()
+    {
+        var open = LoadFixture("session-open.json").RootElement;
+        Assert.Equal("session/open", open.GetProperty("method").GetString());
+        Assert.False(string.IsNullOrEmpty(open.GetProperty("params").GetProperty("id").GetString()));
+
+        var close = LoadFixture("session-close.json").RootElement;
+        Assert.Equal("session/close", close.GetProperty("method").GetString());
+        Assert.Equal(JsonValueKind.Null, close.GetProperty("params").ValueKind);
+    }
+
+    [Fact]
     public void ErrorFixtureCarriesReservedCode()
     {
         var error = LoadFixture("error-method-not-found.json").RootElement.GetProperty("error");

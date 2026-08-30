@@ -74,6 +74,17 @@ public class SessionReadbackContractTest
             Assert.Equal("Elbow swelling", row.GetProperty("label").GetString());
             Assert.False(string.IsNullOrEmpty(row.GetProperty("editedAt").GetString()));
 
+            // Review: a past session reopens for regeneration; the CI engine
+            // has no note model, so regenerate is refused cleanly rather than
+            // crashing, and close ends the review
+            await client.RequestAsync("session/open", new { id }, Timeout);
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => client.RequestAsync(
+                    "note/regenerate", new { style = "prose", detail = "standard" }, Timeout));
+            await client.RequestAsync("session/close", null, Timeout);
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => client.RequestAsync("session/open", new { id = "nope" }, Timeout));
+
             await client.RequestAsync("session/delete", new { id }, Timeout);
 
             var after = await client.RequestAsync("session/list", null, Timeout);
