@@ -9,12 +9,12 @@ All working data goes to `build/perf-loop/` (override with `PERF_DIR`); nothing 
 into the repo.
 
 ```
-python internal/perf-loop/make_tracks.py            # 2/5/10/15/20-minute tracks from demo/
-python internal/perf-loop/perf_loop.py 9            # soak: cycles of all tracks for 9 h
-python internal/perf-loop/perf_loop.py 0.01 c02m    # one 2-minute run
-python internal/perf-loop/analyse.py                # -> build/perf-loop/report.md
-python internal/perf-loop/ab_test.py                # EcoQoS A/B/C, fresh engine per run
-python internal/perf-loop/ab_report.py              # -> build/perf-loop/ab-report.md
+python tools/perf-loop/make_tracks.py            # 2/5/10/15/20-minute tracks from demo/
+python tools/perf-loop/perf_loop.py 9            # soak: cycles of all tracks for 9 h
+python tools/perf-loop/perf_loop.py 0.01 c02m    # one 2-minute run
+python tools/perf-loop/analyse.py                # -> build/perf-loop/report.md
+python tools/perf-loop/ab_test.py                # EcoQoS A/B/C, fresh engine per run
+python tools/perf-loop/ab_report.py              # -> build/perf-loop/ab-report.md
 ```
 
 Transcript quality gate (method: research repo `docs/production/transcript-quality-gate.md`):
@@ -23,8 +23,8 @@ Transcript quality gate (method: research repo `docs/production/transcript-quali
 # before and after a change, all 57 consults at 16x, transcripts saved per consult
 $env:PERF_TAG='-before'; $env:PERF_SAVE='1'; $env:PERF_SPEED='16'; $env:PERF_CYCLES='1'
 $env:PERF_AUDIO_DIR='C:\dev\intelliscribe\bench\transcription\mixed'
-python internal/perf-loop/perf_loop.py 3
-python internal/perf-loop/score_gate.py before after   # WER, negation diffs, attribution
+python tools/perf-loop/perf_loop.py 3
+python tools/perf-loop/score_gate.py before after   # WER, negation diffs, attribution
 ```
 
 Rules that the numbers depend on: one model-loading job on the machine at a time; state the
