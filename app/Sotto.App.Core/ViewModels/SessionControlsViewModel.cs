@@ -14,7 +14,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
         {
             if (e.PropertyName is nameof(ConsultationViewModel.State)
                 or nameof(ConsultationViewModel.EngineReady)
-                or nameof(ConsultationViewModel.TranscriptLoaded)
+                or nameof(ConsultationViewModel.Phase)
                 or nameof(ConsultationViewModel.ModelsReady))
             {
                 OnPropertyChanged(nameof(State));
@@ -24,6 +24,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
                 OnPropertyChanged(nameof(FinalisingVisible));
+                OnPropertyChanged(nameof(FinalisingLabel));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
@@ -33,15 +34,17 @@ public sealed partial class SessionControlsViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ElapsedLabel));
             }
-            else if (e.PropertyName is nameof(ConsultationViewModel.FinalisingLabel))
-            {
-                OnPropertyChanged(nameof(FinalisingLabel));
-            }
         };
     }
 
-    /// <summary>"Finalising", then the engine's stage as it starts.</summary>
-    public string FinalisingLabel => _session.FinalisingLabel;
+    /// <summary>The centre-stage caption for the current finalise phase.</summary>
+    public string FinalisingLabel => _session.Phase switch
+    {
+        FinalisePhase.Transcript => "Writing transcript",
+        FinalisePhase.Speakers => "Labelling speakers",
+        FinalisePhase.Note => "Preparing note",
+        _ => "Finalising",
+    };
 
     public SessionState State => _session.State;
 
@@ -52,16 +55,17 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public bool ReviewVisible => _session.State == SessionState.Review;
 
-    // The centre holds until the sealed transcript exists: a pane with no
-    // transcript is worse than the spinner it would replace. Never coexist.
+    // The centre holds until the note streams: an empty document waiting on
+    // the prefill is worse than a spinner that says "Preparing note". The
+    // panes and the centre never coexist.
     public bool CentreStageVisible =>
         _session.State is SessionState.Idle or SessionState.Recording
-        || _session.State == SessionState.Finalising && !_session.TranscriptLoaded;
+        || _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
 
     public bool PanesVisible => !CentreStageVisible;
 
     public bool FinalisingVisible =>
-        _session.State == SessionState.Finalising && !_session.TranscriptLoaded;
+        _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
 
     /// <summary>The status bar owns the level data; the centre stage shows it.</summary>
     public System.Collections.ObjectModel.ObservableCollection<LevelBar> Meter =>

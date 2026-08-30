@@ -88,13 +88,38 @@ public class SessionCommandsTest
         Assert.True(controls.RecordingVisible);
         Assert.True(controls.CentreStageVisible);
 
+        // Sealed, note not yet streaming: the centre holds and says why
         await controls.StopRecordingCommand.ExecuteAsync(null);
+        Assert.True(controls.CentreStageVisible);
+        Assert.True(controls.FinalisingVisible);
+        Assert.False(controls.PanesVisible);
+        Assert.Equal("Preparing note", controls.FinalisingLabel);
+
+        // The first token opens the panes, with the note already filling
+        engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(controls.PanesVisible);
         Assert.False(controls.FinalisingVisible);
         engine.RaiseNotification("note/ready");
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
         Assert.False(controls.CentreStageVisible);
+    }
+
+    [Fact]
+    public async Task AThinRecordingOpensThePanesOnTheCannedNote()
+    {
+        // No partial ever streams for a thin recording; note/ready must open
+        // the panes on its own, or the centre would spin forever
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        Assert.True(controls.CentreStageVisible);
+
+        engine.RaiseNotification("note/ready", Params(new { text = "The recording was too short" }));
+
+        Assert.True(controls.PanesVisible);
+        Assert.True(controls.ReviewVisible);
     }
 
     [Fact]
@@ -154,38 +179,60 @@ public class SessionCommandsTest
     {
         var (session, engine, _) = TestSession.Create();
         var controls = new SessionControlsViewModel(session);
-        var labels = new List<string>();
-        controls.PropertyChanged += (_, e) =>
+        var phases = new List<FinalisePhase>();
+        session.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SessionControlsViewModel.FinalisingLabel))
+            if (e.PropertyName == nameof(ConsultationViewModel.Phase))
             {
-                labels.Add(controls.FinalisingLabel);
+                phases.Add(session.Phase);
             }
         };
 
         await session.StartRecordingAsync();
         engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
-        Assert.Equal("Finalising", controls.FinalisingLabel);  // not finalising yet: ignored
+        Assert.Equal(FinalisePhase.None, session.Phase);  // not finalising yet: ignored
 
+        // The engine reports its stages while session/stop blocks
+        engine.BeforeReply = method =>
+        {
+            if (method != "session/stop")
+            {
+                return;
+            }
+
+            Assert.Equal("Finalising", controls.FinalisingLabel);
+            engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
+            Assert.Equal("Writing transcript", controls.FinalisingLabel);
+            engine.RaiseNotification("session/progress", Params(new { stage = "unknown" }));
+            Assert.Equal("Writing transcript", controls.FinalisingLabel);  // unknown: unchanged
+            engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+            Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+        };
         await session.StopRecordingAsync();
-        Assert.Equal("Finalising", controls.FinalisingLabel);
-        engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
-        Assert.Equal("Writing transcript", controls.FinalisingLabel);
-        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
-        Assert.Equal("Labelling speakers", controls.FinalisingLabel);
-        engine.RaiseNotification("session/progress", Params(new { stage = "unknown" }));
-        Assert.Equal("Labelling speakers", controls.FinalisingLabel);  // unknown stages keep the last
-        Assert.Collection(labels,
-            l => Assert.Equal("Writing transcript", l),
-            l => Assert.Equal("Labelling speakers", l));
+        engine.BeforeReply = null;
 
-        // The next stop starts from the plain caption again
+        // Sealed: the caption names the prefill, and a late stage cannot go back
+        Assert.Equal(FinalisePhase.Note, session.Phase);
+        Assert.Equal("Preparing note", controls.FinalisingLabel);
+        engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
+        Assert.Equal(FinalisePhase.Note, session.Phase);
+        // Start resets to None; the stop then walks forward only
+        Assert.Collection(phases.SkipWhile(p => p == FinalisePhase.None),
+            p => Assert.Equal(FinalisePhase.Sealing, p),
+            p => Assert.Equal(FinalisePhase.Transcript, p),
+            p => Assert.Equal(FinalisePhase.Speakers, p),
+            p => Assert.Equal(FinalisePhase.Note, p));
+
+        // The next stop starts from the beginning again
+        engine.RaiseNotification("note/partial", Params(new { text = "The" }));
+        Assert.Equal(FinalisePhase.Streaming, session.Phase);
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
         session.StartNewConsultation();
+        Assert.Equal(FinalisePhase.None, session.Phase);
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
-        Assert.Equal("Finalising", controls.FinalisingLabel);
+        Assert.Equal(FinalisePhase.Note, session.Phase);
     }
 
     private static System.Text.Json.JsonElement Params(object value) =>
