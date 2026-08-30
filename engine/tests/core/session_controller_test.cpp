@@ -542,11 +542,17 @@ TEST(SessionController, TheNoteFollowsTheSeal) {
     asr::ScriptedTranscriber transcriber;
     PassthroughVad vad;
     FakeNoteWriter writer;
-    SessionController controller(FactoryFor(ScriptedSource::Script::kCompleteAfterAudio), events,
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
                                  store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
                                  &writer, nullptr, 0);
 
     ASSERT_TRUE(controller.Start());
+    // The warm-up rides the diarisation thread's first tick; a source that
+    // completes at exactly the tick threshold races the stop, so stream
+    // until the warm-up has been observed
+    for (int i = 0; i < 500 && writer.prepares.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     controller.Stop();
 
     ASSERT_TRUE(events.WaitForNote());
@@ -800,6 +806,7 @@ struct FakeDiariser : diar::IDiariser {
     std::size_t audio_frames = 0;
     int clusters = 1;
     std::vector<double> similarities;
+    diar::DiariseTiming timing;
 
     std::size_t boundary_cuts = 0;
     std::vector<std::uint64_t> bounds;
@@ -820,7 +827,7 @@ struct FakeDiariser : diar::IDiariser {
         audio_frames = audio.size();
         diar::DiariseResult result;
         result.cluster_count = clusters;
-        result.anchor_similarity = similarities;
+        result.timing = timing;
         if (clusters == 1) {
             result.slices = {{0, audio.size(), 0}};
         } else {
@@ -828,6 +835,15 @@ struct FakeDiariser : diar::IDiariser {
             result.slices = {{0, half, 0}, {half, audio.size(), 1}};
         }
         return result;
+    }
+
+    int similarity_calls = 0;
+
+    std::vector<double> AnchorSimilarities(std::span<const float>,
+                                           const std::vector<diar::LabelledSlice>&,
+                                           int) override {
+        ++similarity_calls;
+        return similarities;
     }
 
     void AccrueDoctor(std::span<const float>, const std::vector<diar::LabelledSlice>&,
@@ -918,6 +934,7 @@ TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
     }
     EXPECT_EQ(diariser.accruals, 1);
     EXPECT_EQ(diariser.accrued_cluster, 1) << "the nearer cluster to the anchor is the doctor";
+    EXPECT_EQ(diariser.similarity_calls, 1) << "the anchor is consulted once, off the decode path";
     EXPECT_GT(diariser.boundary_cuts, 0u) << "transcribed-turn edges reach the diariser as cuts";
 }
 
@@ -1165,6 +1182,32 @@ TEST(SessionController, StopWithoutADiariserReportsOnlyTheTranscriptStage) {
 
     EXPECT_EQ(events.progress, (std::vector<std::string>{"transcript"}))
         << "a stage that never runs is never announced";
+}
+
+TEST(SessionController, DiariseTimingReachesTheMetrics) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.timing.embed_s = 0.25;
+    diariser.timing.embed_misses = 3;
+    metrics::Registry registry;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser, 5 * kSampleRate,
+                                 nullptr, &registry);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitForFrames(store, 12800));
+    controller.Stop();
+
+    const auto s = registry.Take();
+    EXPECT_EQ(s.stage_seconds.at("diarise embed"), 0.25);
+    EXPECT_EQ(s.stage_seconds.at("diarise embed misses"), 3);
+    EXPECT_TRUE(s.stage_seconds.contains("diarise voiceprints"))
+        << "the overlapped voiceprint task is timed by the controller";
+    EXPECT_TRUE(s.stage_seconds.contains("voiceprints joined"));
+    EXPECT_TRUE(s.stage_seconds.contains("diarised"));
 }
 
 TEST(SessionController, CancelErasesTheSession) {

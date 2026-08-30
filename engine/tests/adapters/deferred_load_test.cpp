@@ -77,10 +77,28 @@ struct CountingDiariser : diar::IDiariser {
     void AccrueDoctor(std::span<const float>, const std::vector<diar::LabelledSlice>&,
                       int) override {}
 
+    std::vector<double> AnchorSimilarities(std::span<const float>,
+                                           const std::vector<diar::LabelledSlice>&,
+                                           int cluster_count) override {
+        return std::vector<double>(static_cast<std::size_t>(cluster_count), 0.75);
+    }
+
     void DiscardCapture() override {
         ++discards;
     }
 };
+
+// The engine only ever sees the wrapper; a method it does not forward is a
+// method the product does not have (this one was missed once)
+TEST(DeferredDiariser, ForwardsAnchorSimilarities) {
+    std::atomic<int> discards{0};
+    diar::DeferredDiariser diariser(
+        [&discards] { return std::make_unique<CountingDiariser>(discards); });
+
+    const auto similarity = diariser.AnchorSimilarities({}, {}, 2);
+
+    EXPECT_EQ(similarity, (std::vector<double>{0.75, 0.75}));
+}
 
 TEST(DeferredDiariser, DiscardBeforeTheLoadIsANoOp) {
     std::atomic<int> discards{0};

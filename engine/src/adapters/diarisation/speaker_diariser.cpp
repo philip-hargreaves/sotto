@@ -1,6 +1,7 @@
 #include "adapters/diarisation/speaker_diariser.hpp"
 
 #include <algorithm>
+#include <chrono>
 
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
@@ -36,6 +37,14 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
                                        std::span<const std::uint64_t> turn_boundaries) {
     DiariseResult result;
     if (audio.empty()) return result;
+    // Stage laps for the finalise breakdown; measurement only
+    auto lap_start = std::chrono::steady_clock::now();
+    const auto lap = [&lap_start] {
+        const auto now = std::chrono::steady_clock::now();
+        const double seconds = std::chrono::duration<double>(now - lap_start).count();
+        lap_start = now;
+        return seconds;
+    };
 
     // With capture-phase state, finalise only completes it; without, the
     // whole recording is processed here. Either way the maths is identical
@@ -61,6 +70,7 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         seg = segmenter_.Run(audio);
     }
 
+    result.timing.finish_s = lap();
     const auto regions = SpeechRegions(probabilities, audio.size());
     seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
                              turn_boundaries.end());
@@ -75,18 +85,22 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         if (it != capture.embeddings.end()) {
             if (it->second.empty()) continue;  // was too short to embed
             embeddings.push_back(it->second);
+            ++result.timing.embed_hits;
         } else {
             const auto ranges = EmbeddingRanges(slice, seg.overlap_spans);
             if (ranges.empty()) continue;
             const auto clip = Gather(audio, ranges);
             if (clip.size() < 400) continue;  // below one fbank frame
             embeddings.push_back(embedder_.Embed(clip));
+            ++result.timing.embed_misses;
         }
         durations.push_back(slice.end_frame - slice.first_frame);
         kept.push_back(slice);
     }
 
+    result.timing.embed_s = lap();
     const auto clusters = ClusterSpeakers(embeddings, durations);
+    result.timing.cluster_s = lap();
     std::vector<LabelledSlice> out;
     for (std::size_t i = 0; i < kept.size(); ++i) {
         out.push_back({kept[i].first_frame, kept[i].end_frame, clusters.labels[i]});
@@ -123,32 +137,45 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         }
     }
 
+    result.timing.overlap_s = lap();
     std::sort(out.begin(), out.end(), [](const LabelledSlice& a, const LabelledSlice& b) {
         return a.first_frame < b.first_frame;
     });
     result.slices = std::move(out);
     result.cluster_count = clusters.count;
 
+    voiceprints_.clear();  // a new finalise; AnchorSimilarities refills them
+    return result;
+}
+
+std::vector<double> SpeakerDiariser::AnchorSimilarities(std::span<const float> audio,
+                                                        const std::vector<LabelledSlice>& slices,
+                                                        int cluster_count) {
     // Each cluster's similarity to the accrued anchor; a cluster too short
     // for a voiceprint ranks below any real match
-    if (const auto anchor = anchors_.Anchor()) {
-        result.anchor_similarity.assign(static_cast<std::size_t>(clusters.count), -2.0);
-        for (int c = 0; c < clusters.count; ++c) {
-            const auto voiceprint = ClusterVoiceprint(embedder_, audio, result.slices, c);
-            if (voiceprint.empty()) continue;
-            double dot = 0.0;
-            for (std::size_t d = 0; d < voiceprint.size(); ++d) {
-                dot += static_cast<double>(voiceprint[d]) * (*anchor)[d];
-            }
-            result.anchor_similarity[static_cast<std::size_t>(c)] = dot;
+    const auto anchor = anchors_.Anchor();
+    if (!anchor) return {};
+    std::vector<double> similarity(static_cast<std::size_t>(cluster_count), -2.0);
+    voiceprints_.assign(static_cast<std::size_t>(cluster_count), {});
+    for (int c = 0; c < cluster_count; ++c) {
+        auto voiceprint = ClusterVoiceprint(embedder_, audio, slices, c);
+        if (voiceprint.empty()) continue;
+        double dot = 0.0;
+        for (std::size_t d = 0; d < voiceprint.size(); ++d) {
+            dot += static_cast<double>(voiceprint[d]) * (*anchor)[d];
         }
+        similarity[static_cast<std::size_t>(c)] = dot;
+        voiceprints_[static_cast<std::size_t>(c)] = std::move(voiceprint);
     }
-    return result;
+    return similarity;
 }
 
 void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,
                                    const std::vector<LabelledSlice>& slices, int doctor_cluster) {
-    const auto voiceprint = ClusterVoiceprint(embedder_, audio, slices, doctor_cluster);
+    const auto index = static_cast<std::size_t>(doctor_cluster);
+    const auto voiceprint = index < voiceprints_.size() && !voiceprints_[index].empty()
+                                ? voiceprints_[index]
+                                : ClusterVoiceprint(embedder_, audio, slices, doctor_cluster);
     if (!voiceprint.empty()) anchors_.Accrue(voiceprint);
 }
 
