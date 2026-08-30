@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "adapters/host/power_throttling.hpp"
 #include "adapters/ipc/framing.hpp"
 
 namespace sotto::note {
@@ -100,6 +101,7 @@ struct WorkerNoteWriter::Impl {
                                     sizeof(limits));
             AssignProcessToJobObject(job, info.hProcess);
         }
+        host::DisableThrottling(info.hProcess);  // the host repeats this on itself
         ResumeThread(info.hThread);
         CloseHandle(info.hThread);
         process = info.hProcess;

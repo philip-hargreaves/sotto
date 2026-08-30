@@ -48,6 +48,10 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
             try
             {
                 _job.Assign(handle);
+                if (OperatingSystem.IsWindowsVersionAtLeast(8))
+                {
+                    PowerThrottling.Disable(handle);  // the engine repeats this on itself
+                }
                 if (PInvoke.ResumeThread(info.hThread) == uint.MaxValue)
                 {
                     throw new Win32Exception();

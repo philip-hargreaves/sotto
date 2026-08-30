@@ -15,6 +15,7 @@
 #include <crtdbg.h>
 #endif
 
+#include "adapters/host/power_throttling.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -97,6 +98,8 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "usage: sotto_note_host <pipe> <models> <prompts-dir>\n");
             return 2;
         }
+        std::fprintf(stderr, "sotto-note-host: power throttling %s\n",
+                     sotto::host::Describe(sotto::host::DisableThrottlingOnSelf()).c_str());
         const std::wstring pipe_name = std::filesystem::path(argv[1]).wstring();
         const std::filesystem::path models_root = argv[2];
         const std::filesystem::path prompt_path = argv[3];
