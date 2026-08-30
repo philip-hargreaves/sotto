@@ -46,9 +46,10 @@ struct Document {
 };
 
 // The clinical store for one recording session at a time. Appended audio is
-// durable within one second. Finalise keeps the recording, Cancel
-// retains nothing; a session neither finalised nor cancelled is a crash
-// and stays discoverable. Layout, SQL and encryption live behind this port.
+// durable within one second and exists to resume a crash: Finalise seals
+// the transcript and erases the audio, Cancel retains nothing; a session
+// neither finalised nor cancelled is a crash and stays discoverable with
+// its audio. Layout, SQL and encryption live behind this port.
 class ISessionStore {
    public:
     virtual ~ISessionStore() = default;

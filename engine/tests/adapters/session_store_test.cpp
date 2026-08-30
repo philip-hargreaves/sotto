@@ -298,7 +298,8 @@ TEST(SessionStore, DocumentsRefuseTheRecordingSessionAndUnknownIds) {
 // chunks, turns, a sealed note in its own table and the meta bag, and the
 // wrapped key beside it
 SessionId WritePerSessionFileLayout(const TempRoot& root, const std::vector<float>& audio,
-                                    const std::string& turn_text, const std::string& note) {
+                                    const std::string& turn_text, const std::string& note,
+                                    const char* state = "finalised") {
     const SessionId id = "0123456789abcdef0123456789abcdef";
     std::filesystem::create_directories(root.path / "sessions");
     {
@@ -307,10 +308,12 @@ SessionId WritePerSessionFileLayout(const TempRoot& root, const std::vector<floa
             "CREATE TABLE sessions(id TEXT PRIMARY KEY, started_at TEXT NOT NULL, ended_at TEXT,"
             " state TEXT NOT NULL, sample_rate INTEGER NOT NULL, device_id TEXT,"
             " device_name TEXT, lost_frames INTEGER NOT NULL DEFAULT 0)");
-        catalog.Exec(
+        Db::Stmt insert = catalog.Prepare(
             "INSERT INTO sessions VALUES('0123456789abcdef0123456789abcdef',"
-            " '2026-08-01T09:00:00Z', '2026-08-01T09:10:00Z', 'finalised', 16000, 'mic-1',"
+            " '2026-08-01T09:00:00Z', '2026-08-01T09:10:00Z', ?, 16000, 'mic-1',"
             " 'Old microphone', 7)");
+        insert.BindText(1, state);
+        insert.Step();
         catalog.SetUserVersion(1);
     }
     const ChunkCipher cipher = ChunkCipher::Generate();
@@ -374,7 +377,7 @@ TEST(SessionStore, ImportsThePerSessionFileLayoutOnFirstOpen) {
     EXPECT_EQ(sessions[0].id, id);
     EXPECT_EQ(sessions[0].state, "finalised");
     EXPECT_EQ(sessions[0].ended_at, "2026-08-01T09:10:00Z");
-    EXPECT_EQ(store.ReadAudio(id), audio) << "the ciphertext moved unchanged";
+    EXPECT_TRUE(store.ReadAudio(id).empty()) << "finalised: the audio is held to the seal rule";
     const auto turns = store.ReadTurns(id);
     ASSERT_EQ(turns.size(), 1u);
     EXPECT_EQ(turns[0].speaker, "doctor");
@@ -399,6 +402,18 @@ TEST(SessionStore, ImportsThePerSessionFileLayoutOnFirstOpen) {
 
     store.EditDocument(id, DocumentKind::kNote, "edited on the new build");
     EXPECT_FALSE(store.ReadDocument(id, DocumentKind::kNote).edited_at.empty());
+}
+
+TEST(SessionStore, AnOldCrashedSessionImportsWithItsAudioForRecovery) {
+    TempRoot root;
+    const auto audio = Ramp(16000);
+    const SessionId id = WritePerSessionFileLayout(root, audio, "turn", "", "recording");
+
+    SqliteSessionStore store(root.path, kNever);
+    const auto recoverable = store.ScanRecoverable();
+    ASSERT_EQ(recoverable.size(), 1u);
+    EXPECT_EQ(recoverable[0].id, id);
+    EXPECT_EQ(store.ReadAudio(id), audio) << "the ciphertext moved unchanged";
 }
 
 TEST(SessionStore, AnUnreadableOldSessionIsLeftInPlace) {
@@ -476,22 +491,23 @@ TEST(SessionStore, UnknownIdsAreRefused) {
     EXPECT_THROW(store.Delete("nope"), std::runtime_error);
 }
 
-TEST(SessionStore, LifecycleRoundTripsTheAudio) {
+TEST(SessionStore, LifecycleSealsTheSessionAndErasesTheAudio) {
     TempRoot root;
     const auto audio = Ramp(40000);  // 2.5 s at 16 kHz
     SessionId id;
     {
-        SqliteSessionStore store(root.path, kNever);
+        SqliteSessionStore store(root.path, 30ms);
         id = store.Begin({16000, "mic-1", "Test microphone"});
         store.Append(id, std::span(audio).subspan(0, 15000), 0);
+        std::this_thread::sleep_for(150ms);  // the first half is on disk
         store.Append(id, std::span(audio).subspan(15000), 0);
+        store.AppendTurn(id, {0, 40000, "doctor", "the record"});
         store.Finalise(id);
-    }
 
-    const auto chunks = DecryptSession(root, id);
-    ASSERT_EQ(chunks.size(), 1u);
-    EXPECT_EQ(chunks[0].first_frame, 0);
-    EXPECT_EQ(chunks[0].frames, audio);
+        EXPECT_TRUE(store.ReadAudio(id).empty()) << "the seal erases the recording";
+        ASSERT_EQ(store.ReadTurns(id).size(), 1u) << "and keeps the transcript";
+    }
+    EXPECT_TRUE(DecryptSession(root, id).empty()) << "committed and pending alike";
 
     Db catalog(root.DbPath());
     Db::Stmt row = catalog.Prepare(
@@ -531,11 +547,13 @@ TEST(SessionStore, AudioAtRestIsNotPlaintext) {
     const auto audio = Ramp(32000);
     SessionId id;
     {
-        SqliteSessionStore store(root.path, kNever);
+        SqliteSessionStore store(root.path, 30ms);
         id = store.Begin({16000, "", ""});
         store.Append(id, audio, 0);
-        store.Finalise(id);
+        std::this_thread::sleep_for(150ms);
+        store.Abandon(id);  // recoverable, so the audio is on disk
     }
+    ASSERT_FALSE(DecryptSession(root, id).empty());
 
     // A 64-frame window from the middle of the input must not appear anywhere
     // in the raw session file
@@ -574,7 +592,7 @@ TEST(SessionStore, RecordingWorksAgainAfterCancel) {
 
         second = store.Begin({16000, "", ""});
         store.Append(second, audio, 0);
-        store.Finalise(second);
+        store.Abandon(second);
     }
     const auto chunks = DecryptSession(root, second);
     ASSERT_EQ(chunks.size(), 1u);
@@ -643,7 +661,8 @@ TEST(SessionStore, TheWriterCommitsWhileRecording) {
             store.Append(id, std::span(audio).subspan(offset, 8000), 0);
             std::this_thread::sleep_for(40ms);
         }
-        store.Finalise(id);
+        std::this_thread::sleep_for(60ms);  // the last append reaches disk
+        store.Abandon(id);
     }
 
     const auto chunks = DecryptSession(root, id);
@@ -663,13 +682,17 @@ TEST(SessionStore, LossAccountingReachesTheChunkAndTheCatalog) {
     SessionId id;
     {
         SqliteSessionStore store(root.path, kNever);
+        const SessionId abandoned = store.Begin({16000, "", ""});
+        store.Append(abandoned, Ramp(8000), 320);
+        store.Abandon(abandoned);
+        const auto chunks = DecryptSession(root, abandoned);
+        ASSERT_EQ(chunks.size(), 1u);
+        EXPECT_EQ(chunks[0].lost_before, 320) << "the chunk carries the loss before it";
+
         id = store.Begin({16000, "", ""});
         store.Append(id, Ramp(8000), 320);
-        store.Finalise(id);
+        store.Finalise(id);  // the audio goes; the count does not
     }
-    const auto chunks = DecryptSession(root, id);
-    ASSERT_EQ(chunks.size(), 1u);
-    EXPECT_EQ(chunks[0].lost_before, 320);
 
     Db catalog(root.DbPath());
     Db::Stmt row = catalog.Prepare("SELECT lost_frames FROM sessions WHERE id = ?");

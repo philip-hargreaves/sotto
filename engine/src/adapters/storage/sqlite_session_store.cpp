@@ -194,17 +194,26 @@ void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::
     txn.Commit();
 }
 
+// The seal is where the audio goes: the transcript is the record from here
+// on, and the recording only ever existed to resume a crashed session.
+// Pending frames are dropped unwritten; their loss count still lands
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
-    if (!session.pending.empty() || session.pending_lost != 0) CommitPending();
+    const std::uint64_t lost = session.lost_committed + session.pending_lost;
 
+    Db::Transaction txn(db_);
+    Db::Stmt erase = db_.Prepare("DELETE FROM chunks WHERE session_id = ?");
+    erase.BindText(1, session.id);
+    erase.Step();
     Db::Stmt update = db_.Prepare(
         "UPDATE sessions SET ended_at = ?, state = 'finalised', lost_frames = ? WHERE id = ?");
     update.BindText(1, Iso8601Now());
-    update.BindInt64(2, static_cast<std::int64_t>(session.lost_committed));
+    update.BindInt64(2, static_cast<std::int64_t>(lost));
     update.BindText(3, session.id);
     update.Step();
+    txn.Commit();
+    db_.Exec("PRAGMA incremental_vacuum");
 
     open_.reset();
 }
@@ -515,9 +524,11 @@ void SqliteSessionStore::ImportPerSessionFiles(const std::filesystem::path& root
             key.Step();
             {
                 Db session(db_path);
+                // Audio crosses only for a session still to be recovered; a
+                // finalised one is held to the seal-erases-audio rule
                 Db::Stmt chunks = session.Prepare(
                     "SELECT seq, first_frame, frame_count, lost_before, payload FROM chunks");
-                while (chunks.Step()) {
+                while (row.state == "recording" && chunks.Step()) {
                     Db::Stmt copy = db_.Prepare(
                         "INSERT INTO chunks(session_id, seq, first_frame, frame_count,"
                         " lost_before, payload) VALUES(?, ?, ?, ?, ?, ?)");
