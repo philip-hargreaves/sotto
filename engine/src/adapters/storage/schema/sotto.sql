@@ -15,7 +15,8 @@ CREATE TABLE sessions (
     sample_rate  INTEGER NOT NULL,
     device_id    TEXT,                            -- capture device at the time, a snapshot
     device_name  TEXT,
-    lost_frames  INTEGER NOT NULL DEFAULT 0       -- frames the device dropped
+    lost_frames  INTEGER NOT NULL DEFAULT 0,      -- frames the device dropped
+    retain       INTEGER NOT NULL DEFAULT 1       -- 0: erased once the consultation is left
 );
 
 CREATE TABLE session_keys (

@@ -15,6 +15,7 @@ struct SessionMeta {
     int sample_rate = 0;
     std::string device_id;
     std::string device_name;
+    bool retain = true;  // false: erased once the consultation is left
 };
 
 struct RecoverableSession {
@@ -91,6 +92,10 @@ class ISessionStore {
     virtual std::vector<float> ReadAudio(const SessionId& id) = 0;
 
     virtual void Delete(const SessionId& id) = 0;
+
+    // Erases every finalised session recorded with retain off. A crashed one
+    // waits for its recovery, so the audio is never lost to the setting
+    virtual void EraseUnretained() = 0;
 };
 
 }  // namespace sotto::store

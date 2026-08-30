@@ -41,6 +41,7 @@ class SqliteSessionStore : public ISessionStore {
     std::vector<asr::Turn> ReadTurns(const SessionId& id) override;
     std::vector<float> ReadAudio(const SessionId& id) override;
     void Delete(const SessionId& id) override;
+    void EraseUnretained() override;
 
    private:
     struct Open {

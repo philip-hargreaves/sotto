@@ -282,8 +282,10 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                                                   r.value("speed", 1.0), r.value("monitor", false)};
             }
             // resume: a crashed session's id; its stored audio replays ahead
-            // of the live source into the new session
-            if (!controller.Start(std::move(replay), params.value("resume", ""))) {
+            // of the live source into the new session. retain false: the
+            // session is erased once the consultation is left
+            if (!controller.Start(std::move(replay), params.value("resume", ""),
+                                  params.value("retain", true))) {
                 return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
             }
             return json{{"sessionId", controller.CurrentSession()}};

@@ -110,8 +110,10 @@ class SessionController {
     // passed first, with the reason left in LastEnd. A resume replays the
     // crashed session's stored audio ahead of the live source, into a new
     // session that supersedes the old one at its first storage outcome.
+    // retain false: the session is erased once the consultation is left
+    // (close, the next start, or the next engine start)
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
-               const store::SessionId& resume_from = {}) {
+               const store::SessionId& resume_from = {}, bool retain = true) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
@@ -135,7 +137,10 @@ class SessionController {
                              resume_from.c_str(),
                              static_cast<double>(resumed_audio.size()) / kSampleRate);
             }
-            const store::SessionId id = store_.Begin({kSampleRate, "", ""});
+            store_.EraseUnretained();  // the previous consultation is left
+            store::SessionMeta meta{kSampleRate, "", ""};
+            meta.retain = retain;
+            const store::SessionId id = store_.Begin(meta);
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
             resumed_from_ = resume_from;
@@ -257,12 +262,21 @@ class SessionController {
         return true;
     }
 
-    // Ends a review; regenerate refuses until the next seal or open
+    // Leaving the consultation: ends a review (regenerate refuses until the
+    // next seal or open) and erases what was recorded with retain off
     void Close() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (reviewing_) {
-            reviewing_ = false;
-            last_finalised_.clear();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (reviewing_) {
+                reviewing_ = false;
+                last_finalised_.clear();
+            }
+        }
+        if (!Running()) {
+            try {
+                store_.EraseUnretained();
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
         }
     }
 

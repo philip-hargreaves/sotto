@@ -1,12 +1,16 @@
 #pragma once
 
-// Generated at configure time from src/adapters/storage/schema/sotto.sql;
-// edit the .sql, not this header
+// Generated at configure time from src/adapters/storage/schema/*.sql;
+// edit the .sql files, not this header
 
 namespace sotto::store {
 
 inline constexpr const char* kSchemaSql = R"sql(
 @SOTTO_SCHEMA_SQL@
+)sql";
+
+inline constexpr const char* kMigrate2To3Sql = R"sql(
+@SOTTO_MIGRATE_2_TO_3_SQL@
 )sql";
 
 }  // namespace sotto::store

@@ -14,8 +14,9 @@ namespace sotto::store {
 
 namespace {
 
-// 1 was a catalog beside one file per session; 2 is the single database
-constexpr std::int64_t kSchemaVersion = 2;
+// 1 was a catalog beside one file per session; 2 the single database;
+// 3 adds the retention flag
+constexpr std::int64_t kSchemaVersion = 3;
 
 struct KindSpec {
     const char* name;  // documents.kind
@@ -88,6 +89,11 @@ Db OpenDatabase(const std::filesystem::path& root) {
         db.SetUserVersion(kSchemaVersion);
     } else if (version > kSchemaVersion) {
         throw std::runtime_error("store schema is newer than this build");
+    } else if (version == 2) {
+        Db::Transaction txn(db);
+        db.Exec(kMigrate2To3Sql);
+        txn.Commit();
+        db.SetUserVersion(3);
     }
     return db;
 }
@@ -124,13 +130,14 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
     // not at all
     Db::Transaction txn(db_);
     Db::Stmt insert = db_.Prepare(
-        "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name)"
-        " VALUES(?, ?, 'recording', ?, ?, ?)");
+        "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name, retain)"
+        " VALUES(?, ?, 'recording', ?, ?, ?, ?)");
     insert.BindText(1, session.id);
     insert.BindText(2, Iso8601Now());
     insert.BindInt64(3, meta.sample_rate);
     insert.BindTextOrNull(4, meta.device_id);
     insert.BindTextOrNull(5, meta.device_name);
+    insert.BindInt64(6, meta.retain ? 1 : 0);
     insert.Step();
     Db::Stmt key = db_.Prepare("INSERT INTO session_keys(session_id, wrapped) VALUES(?, ?)");
     key.BindText(1, session.id);
@@ -251,6 +258,15 @@ void SqliteSessionStore::Erase(const SessionId& id) {
         throw std::runtime_error("no session " + id);
     }
     db_.Exec("PRAGMA incremental_vacuum");
+}
+
+void SqliteSessionStore::EraseUnretained() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE retain = 0 AND state = 'finalised'");
+    erase.Step();
+    if (db_.QueryInt64("SELECT changes()") > 0) {
+        db_.Exec("PRAGMA incremental_vacuum");
+    }
 }
 
 std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {

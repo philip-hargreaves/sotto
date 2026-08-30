@@ -89,6 +89,15 @@ public class SessionReadbackContractTest
 
             var after = await client.RequestAsync("session/list", null, Timeout);
             Assert.Equal(0, after.GetProperty("sessions").GetArrayLength());
+
+            // Keep consultations off: readable until the consultation is left
+            await client.RequestAsync("session/start", new { retain = false }, Timeout);
+            await client.RequestAsync("session/stop", null, Timeout);
+            var unretained = await client.RequestAsync("session/list", null, Timeout);
+            Assert.Equal(1, unretained.GetProperty("sessions").GetArrayLength());
+            await client.RequestAsync("session/close", null, Timeout);
+            var left = await client.RequestAsync("session/list", null, Timeout);
+            Assert.Equal(0, left.GetProperty("sessions").GetArrayLength());
             Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "sotto.db")));
             Assert.False(Directory.Exists(Path.Combine(engine.StoreRoot, "sessions")));
 

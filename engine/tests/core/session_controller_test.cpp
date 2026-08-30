@@ -230,6 +230,7 @@ struct FakeSessionStore : store::ISessionStore {
             throw std::runtime_error("store is broken");
         }
         EXPECT_EQ(meta.sample_rate, kSampleRate);
+        last_retain = meta.retain;
         const auto id = "s" + std::to_string(++begins);
         calls.push_back("begin " + id);
         return id;
@@ -335,6 +336,12 @@ struct FakeSessionStore : store::ISessionStore {
     bool label_typed = false;
 
     bool refuse_read_turns = false;
+    bool last_retain = true;
+    std::atomic<int> sweeps{0};  // apart from calls: the sequences there are exact
+
+    void EraseUnretained() override {
+        ++sweeps;
+    }
 
     std::vector<asr::Turn> ReadTurns(const store::SessionId& id) override {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -704,6 +711,29 @@ TEST(SessionController, OpenIsRefusedWhileRecordingOrForAnUnknownSession) {
     controller.Stop();
     ASSERT_TRUE(events.WaitForNote());
     EXPECT_EQ(controller.LastFinalised(), "s1") << "the seal sets its own target";
+}
+
+TEST(SessionController, RetainReachesTheStoreAndLeavingSweeps) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 nullptr, nullptr, 0);
+
+    ASSERT_TRUE(controller.Start(std::nullopt, {}, false));
+    EXPECT_FALSE(store.last_retain);
+    EXPECT_EQ(store.sweeps.load(), 1) << "the previous consultation is left at start";
+    controller.Stop();
+
+    controller.Close();
+    EXPECT_EQ(store.sweeps.load(), 2) << "and at close";
+
+    ASSERT_TRUE(controller.Start());
+    EXPECT_TRUE(store.last_retain) << "the default keeps";
+    EXPECT_EQ(store.sweeps.load(), 3);
+    controller.Stop();
 }
 
 TEST(SessionController, RegenerateWithoutAWriterIsRefusedNotCrashed) {

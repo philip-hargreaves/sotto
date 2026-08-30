@@ -416,6 +416,84 @@ TEST(SessionStore, AnOldCrashedSessionImportsWithItsAudioForRecovery) {
     EXPECT_EQ(store.ReadAudio(id), audio) << "the ciphertext moved unchanged";
 }
 
+TEST(SessionStore, TheSweepErasesFinalisedSessionsRecordedWithRetainOff) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    SessionMeta keep{16000, "", ""};
+    SessionMeta drop{16000, "", ""};
+    drop.retain = false;
+
+    const SessionId kept = store.Begin(keep);
+    store.AppendTurn(kept, {0, 16000, "doctor", "kept"});
+    store.Finalise(kept);
+    const SessionId dropped = store.Begin(drop);
+    store.AppendTurn(dropped, {0, 16000, "doctor", "dropped"});
+    store.Finalise(dropped);
+    ASSERT_EQ(store.ListSessions().size(), 2u) << "readable until the consultation is left";
+
+    store.EraseUnretained();
+
+    const auto sessions = store.ListSessions();
+    ASSERT_EQ(sessions.size(), 1u);
+    EXPECT_EQ(sessions[0].id, kept);
+    EXPECT_THROW(store.ReadTurns(dropped), std::runtime_error);
+    Db db(root.DbPath());
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 1);
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM turns"), 1);
+}
+
+TEST(SessionStore, ACrashedRetainOffSessionWaitsForRecovery) {
+    TempRoot root;
+    const auto audio = Ramp(16000);
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        SessionMeta drop{16000, "", ""};
+        drop.retain = false;
+        id = store.Begin(drop);
+        store.Append(id, audio, 0);
+        store.Abandon(id);
+    }
+    SqliteSessionStore reopened(root.path, kNever);
+    reopened.EraseUnretained();
+    ASSERT_EQ(reopened.ScanRecoverable().size(), 1u) << "its audio is still needed";
+    EXPECT_EQ(reopened.ReadAudio(id), audio);
+}
+
+TEST(SessionStore, AVersionTwoDatabaseGainsTheRetentionFlag) {
+    TempRoot root;
+    SessionId id;
+    {
+        SqliteSessionStore store(root.path, kNever);
+        id = store.Begin({16000, "", ""});
+        store.Finalise(id);
+    }
+    {
+        // Back to the version-2 shape: the same table without retain
+        Db db(root.DbPath());
+        db.Exec("PRAGMA foreign_keys=OFF");
+        db.Exec(
+            "CREATE TABLE sessions_v2(id TEXT PRIMARY KEY, started_at TEXT NOT NULL,"
+            " ended_at TEXT, state TEXT NOT NULL, sample_rate INTEGER NOT NULL,"
+            " device_id TEXT, device_name TEXT, lost_frames INTEGER NOT NULL DEFAULT 0);"
+            "INSERT INTO sessions_v2 SELECT id, started_at, ended_at, state, sample_rate,"
+            " device_id, device_name, lost_frames FROM sessions;"
+            "DROP TABLE sessions;"
+            "ALTER TABLE sessions_v2 RENAME TO sessions");
+        db.SetUserVersion(2);
+    }
+
+    SqliteSessionStore migrated(root.path, kNever);
+    Db db(root.DbPath());
+    EXPECT_EQ(db.UserVersion(), 3);
+    Db::Stmt row = db.Prepare("SELECT retain FROM sessions WHERE id = ?");
+    row.BindText(1, id);
+    ASSERT_TRUE(row.Step());
+    EXPECT_EQ(row.ColumnInt64(0), 1) << "sessions from before the setting are kept";
+    migrated.EraseUnretained();
+    EXPECT_EQ(migrated.ListSessions().size(), 1u);
+}
+
 TEST(SessionStore, AnUnreadableOldSessionIsLeftInPlace) {
     TempRoot root;
     const SessionId id = WritePerSessionFileLayout(root, Ramp(100), "turn", "note");
@@ -532,7 +610,7 @@ TEST(SessionStore, OneDatabaseStampedWithTheSchemaVersion) {
     EXPECT_FALSE(std::filesystem::exists(root.path / "main.db"));
 
     Db db(root.DbPath());
-    EXPECT_EQ(db.UserVersion(), 2);
+    EXPECT_EQ(db.UserVersion(), 3);
     EXPECT_EQ(db.QueryInt64("PRAGMA auto_vacuum"), 2) << "incremental";
     EXPECT_EQ(db.QueryInt64("PRAGMA foreign_keys"), 1);
     Db::Stmt row = db.Prepare("SELECT id, sample_rate FROM sessions");

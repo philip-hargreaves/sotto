@@ -67,10 +67,13 @@ target_compile_definitions(sqlite3 PRIVATE
 # Not ours to keep warning-clean
 set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
-# The schema is one SQL file, embedded so the engine stays a single binary
-set(sotto_schema_sql ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema/sotto.sql)
-file(READ ${sotto_schema_sql} SOTTO_SCHEMA_SQL)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${sotto_schema_sql})
+# The schema and its migrations are SQL files, embedded so the engine stays
+# a single binary
+set(sotto_schema_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema)
+file(READ ${sotto_schema_dir}/sotto.sql SOTTO_SCHEMA_SQL)
+file(READ ${sotto_schema_dir}/migrate-2-to-3.sql SOTTO_MIGRATE_2_TO_3_SQL)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${sotto_schema_dir}/sotto.sql ${sotto_schema_dir}/migrate-2-to-3.sql)
 configure_file(src/adapters/storage/schema.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/adapters/storage/schema.hpp @ONLY)
 
