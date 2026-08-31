@@ -43,17 +43,32 @@
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     Style="{StaticResource ChipBorder}"
                     Visibility="{x:Bind AsrChipVisible, Mode=OneWay}">
+                    <!-- Colour pairs swapped by visibility: code-resolved
+                         brushes follow the OS theme, not the chosen one -->
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Ellipse
                             Width="6"
                             Height="6"
                             VerticalAlignment="Center"
-                            Fill="{x:Bind DotFill(ViewModel.AsrActive), Mode=OneWay}" />
+                            Fill="{ThemeResource SystemFillColorSuccessBrush}"
+                            Visibility="{x:Bind ViewModel.AsrActive, Mode=OneWay}" />
+                        <Ellipse
+                            Width="6"
+                            Height="6"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
+                            Visibility="{x:Bind ViewModel.AsrResting, Mode=OneWay}" />
                         <TextBlock
-                            Foreground="{x:Bind AsrForeground(ViewModel.RealtimeLow), Mode=OneWay}"
                             Style="{StaticResource CaptionText}"
                             Text="{x:Bind ViewModel.AsrChip, Mode=OneWay}"
-                            Typography.NumeralAlignment="Tabular" />
+                            Typography.NumeralAlignment="Tabular"
+                            Visibility="{x:Bind ViewModel.RealtimeHealthy, Mode=OneWay}" />
+                        <TextBlock
+                            Foreground="{ThemeResource CautionBrush}"
+                            Style="{StaticResource CaptionText}"
+                            Text="{x:Bind ViewModel.AsrChip, Mode=OneWay}"
+                            Typography.NumeralAlignment="Tabular"
+                            Visibility="{x:Bind ViewModel.RealtimeLow, Mode=OneWay}" />
                     </StackPanel>
                 </Border>
                 <Border
@@ -65,7 +80,14 @@
                             Width="6"
                             Height="6"
                             VerticalAlignment="Center"
-                            Fill="{x:Bind DotFill(ViewModel.NoteActive), Mode=OneWay}" />
+                            Fill="{ThemeResource SystemFillColorSuccessBrush}"
+                            Visibility="{x:Bind ViewModel.NoteActive, Mode=OneWay}" />
+                        <Ellipse
+                            Width="6"
+                            Height="6"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
+                            Visibility="{x:Bind ViewModel.NoteResting, Mode=OneWay}" />
                         <TextBlock
                             Style="{StaticResource CaptionText}"
                             Text="{x:Bind ViewModel.NoteChip, Mode=OneWay}"

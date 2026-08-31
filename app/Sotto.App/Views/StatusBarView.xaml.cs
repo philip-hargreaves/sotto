@@ -14,9 +14,11 @@ public sealed partial class StatusBarView : UserControl
         ViewModel = viewModel;
         _credits = credits;
         InitializeComponent();
-        // Presentation only: the marks re-resolve when the theme changes
+        // Marks re-resolve on theme change, and on Loaded: a theme switched
+        // while this view was off-tree fires no ActualThemeChanged here
         BuildCredits();
         ActualThemeChanged += (_, _) => BuildCredits();
+        Loaded += (_, _) => BuildCredits();
         // Chip visibility is computed here; the async model fetch needs a nudge
         viewModel.PropertyChanged += (_, e) =>
         {
@@ -38,18 +40,6 @@ public sealed partial class StatusBarView : UserControl
 
     public bool MemoryChipVisible => ViewModel.MetricsVisible && ViewModel.MemoryChip.Length > 0;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822",
-        Justification = "x:Bind function bindings require an instance member")]
-    public Microsoft.UI.Xaml.Media.Brush AsrForeground(bool low) =>
-        (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
-            low ? "CautionBrush" : "TextFillColorSecondaryBrush"];
-
-    // Idle is not a fault, so the resting dot is a quiet neutral, never red
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822",
-        Justification = "x:Bind function bindings require an instance member")]
-    public Microsoft.UI.Xaml.Media.Brush DotFill(bool active) =>
-        (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
-            active ? "SystemFillColorSuccessBrush" : "ControlStrongFillColorDisabledBrush"];
 
     private void BuildCredits()
     {

@@ -19,6 +19,9 @@
             <SolidColorBrush x:Key="RecordingSoftBrush" Color="{StaticResource StatusRecordingSoft}" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{StaticResource StatusSecureSoft}" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="{StaticResource StatusCautionSoft}" />
+            <SolidColorBrush x:Key="UnknownSpeakerBrush" Color="#707070" />
+            <SolidColorBrush x:Key="MutedTextBrush" Color="#3C3C3C" />
+            <SolidColorBrush x:Key="FaintTextBrush" Color="#5A5A5A" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Default">
@@ -30,6 +33,9 @@
             <SolidColorBrush x:Key="RecordingSoftBrush" Color="#4A2320" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="#1E3A2A" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="#43301C" />
+            <SolidColorBrush x:Key="UnknownSpeakerBrush" Color="#9A9A9A" />
+            <SolidColorBrush x:Key="MutedTextBrush" Color="#C5C5C5" />
+            <SolidColorBrush x:Key="FaintTextBrush" Color="#9D9D9D" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
@@ -41,6 +47,9 @@
             <SolidColorBrush x:Key="RecordingSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="OnDeviceSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="CautionSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="UnknownSpeakerBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="MutedTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="FaintTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>

@@ -108,12 +108,23 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
     public bool NoteActive => TokensStreaming;
 
+    // The resting dot and healthy text are the visible-inverse halves of the
+    // colour pairs the view swaps; XAML gets properties, never functions
+    public bool AsrResting => !AsrActive;
+
+    public bool NoteResting => !NoteActive;
+
+    public bool RealtimeHealthy => !RealtimeLow;
+
     // Live figures are unlabelled and move; settled ones say "Averaged" - the
     // session's true average, held through review for reading after a run
     private void RecomputeChips()
     {
         OnPropertyChanged(nameof(AsrActive));
         OnPropertyChanged(nameof(NoteActive));
+        OnPropertyChanged(nameof(AsrResting));
+        OnPropertyChanged(nameof(NoteResting));
+        OnPropertyChanged(nameof(RealtimeHealthy));
         AsrChip = Chip(_asrName, _asrDevice,
             (MicVisible || DecodeActive) && RealtimeFactor > 0
                 ? $"{Figure(RealtimeFactor)}× RT"
@@ -184,8 +195,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
                     break;
                 case "note/ready" or "patient/ready" or "translate/ready":
                     _meter.End(Now());
-                    // The ready event carries the generation's average - the
-                    // engine-measured truth - which the chip then holds
+                    // The ready event carries the whole-generation average
                     PublishThroughput(SourceRate(parameters));
                     break;
                 case "note/failed" or "patient/failed" or "translate/failed":
@@ -393,10 +403,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
         }
     }
 
-    // One loop for the connected lifetime: 1 Hz while recording (the factor
-    // updates per decoded window), a gentle 5 s otherwise - so a model
-    // moving device (the NPU switch, a first-use compile) reaches the chip
-    // within seconds, not at the next recording
+    // One loop for the connected lifetime: 1 Hz while recording, 5 s idle,
+    // so a device switch reaches the chip within seconds
     private async Task PollWhileConnectedAsync()
     {
         _polling = true;
