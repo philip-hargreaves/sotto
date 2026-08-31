@@ -5,10 +5,6 @@ using Sotto.App.Core.Metrics;
 
 namespace Sotto.App.Core.ViewModels;
 
-/// <summary>
-/// Skeleton. Real settings arrive with the features that own them: model tiers
-/// with distribution, privacy with storage, performance reporting with telemetry.
-/// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AppPreferences? _preferences;
@@ -41,6 +37,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
         KeepConsultations = preferences?.KeepConsultations ?? false;
         ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
+        Theme = preferences?.Theme ?? "system";
         _initialising = false;
     }
 
@@ -102,6 +99,38 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string Heading { get; set; } = "Settings";
+
+    /// <summary>"system", "light" or "dark"; the shell applies it live.</summary>
+    [ObservableProperty]
+    public partial string Theme { get; set; } = "system";
+
+    /// <summary>Wired by the shell to the window's requested theme.</summary>
+    public Action<string>? ApplyTheme { get; set; }
+
+    partial void OnThemeChanged(string value)
+    {
+        OnPropertyChanged(nameof(ThemeIndex));
+        if (_initialising)
+        {
+            return;
+        }
+
+        ApplyTheme?.Invoke(value);
+        if (_preferences is not null)
+        {
+            _preferences.Theme = value;
+            _preferences.Save();
+        }
+    }
+
+    public IReadOnlyList<string> ThemeOptions { get; } = ["System default", "Light", "Dark"];
+
+    /// <summary>Theme as the Appearance control's selection, same order.</summary>
+    public int ThemeIndex
+    {
+        get => Theme switch { "light" => 1, "dark" => 2, _ => 0 };
+        set => Theme = value switch { 1 => "light", 2 => "dark", _ => "system" };
+    }
 
     /// <summary>Shows the replay tray. A developer control, never clinical.</summary>
     [ObservableProperty]

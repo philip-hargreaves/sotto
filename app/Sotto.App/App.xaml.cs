@@ -129,15 +129,31 @@ public partial class App : Application
             dispatcher.Post(() => statusBar.SetEngineState(host.Status, host.Fault));
 
         _window = Services.GetRequiredService<MainWindow>();
+        // Applied before Activate so a dark preference never flashes light;
+        // ElementTheme.Default IS follow-the-OS, so "system" tracks it live
+        void ApplyTheme(string theme)
+        {
+            if (_window?.Content is FrameworkElement root)
+            {
+                root.RequestedTheme = theme switch
+                {
+                    "light" => ElementTheme.Light,
+                    "dark" => ElementTheme.Dark,
+                    _ => ElementTheme.Default,
+                };
+            }
+        }
+
+        ApplyTheme(Services.GetRequiredService<AppPreferences>().Theme);
+        Services.GetRequiredService<SettingsViewModel>().ApplyTheme = ApplyTheme;
         _window.Closed += (_, _) => host.Shutdown();
         _window.Activate();
         host.Start();
         _ = RequestMicrophoneAccessAsync();
     }
 
-    // Registers the app on the Settings microphone page and shows the system
-    // prompt where Windows requires one. Enforcement is the engine's job: it
-    // reads the toggle this page writes before every capture.
+    // Registers the app on the Settings microphone page; enforcement is the
+    // engine's job
     private static async Task RequestMicrophoneAccessAsync()
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))

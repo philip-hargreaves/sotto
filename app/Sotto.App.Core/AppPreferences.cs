@@ -9,7 +9,7 @@ public sealed class AppPreferences(string path)
         bool DemoTrayEnabled, bool NpuTranscription, bool CollectPerformanceData,
         string? NoteStyle = null, string? NoteDetail = null,
         bool KeepConsultations = false, bool ShowPerformanceMetrics = false,
-        string? MicId = null);
+        string? MicId = null, string? Theme = null);
 
     public bool DemoTrayEnabled { get; set; }
 
@@ -29,6 +29,9 @@ public sealed class AppPreferences(string path)
     /// <summary>The chosen microphone's endpoint id; empty means the default.</summary>
     public string MicId { get; set; } = "";
 
+    /// <summary>"system" follows the OS; "light" and "dark" override it.</summary>
+    public string Theme { get; set; } = "system";
+
     public string NoteStyle { get; set; } = "prose";
 
     public string NoteDetail { get; set; } = "standard";
@@ -45,6 +48,8 @@ public sealed class AppPreferences(string path)
             preferences.KeepConsultations = stored?.KeepConsultations ?? false;
             preferences.ShowPerformanceMetrics = stored?.ShowPerformanceMetrics ?? false;
             preferences.MicId = stored?.MicId ?? "";
+            // Values the shell cannot render never leave this boundary
+            preferences.Theme = stored?.Theme is "light" or "dark" ? stored.Theme : "system";
             // Values the engine would refuse never leave this boundary
             preferences.NoteStyle = stored?.NoteStyle is "prose" or "soap"
                 ? stored.NoteStyle : "prose";
@@ -65,7 +70,8 @@ public sealed class AppPreferences(string path)
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(new Stored(
                 DemoTrayEnabled, NpuTranscription, CollectPerformanceData,
-                NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics, MicId)));
+                NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics, MicId,
+                Theme)));
         }
         catch (Exception)
         {

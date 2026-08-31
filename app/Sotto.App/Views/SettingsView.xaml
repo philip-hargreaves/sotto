@@ -21,13 +21,22 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Spacing="12">
+            <ComboBox
+                Header="Appearance"
+                MinWidth="200"
+                ItemsSource="{x:Bind ViewModel.ThemeOptions}"
+                SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}" />
+            <TextBlock
+                Foreground="{ThemeResource FaintTextBrush}"
+                Text="System default follows the Windows setting."
+                TextWrapping="Wrap" />
             <ToggleSwitch
                 Header="Save consultation data"
                 IsOn="{x:Bind ViewModel.KeepConsultations, Mode=TwoWay}"
                 OffContent="Off"
                 OnContent="On" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Keeps the transcript, note and patient sheet of each consultation on this device, encrypted, until you delete it. Audio is never kept. Applies to consultations from now on; earlier ones are unchanged."
                 TextWrapping="Wrap" />
             <ToggleSwitch
@@ -36,7 +45,7 @@
                 OffContent="Hidden"
                 OnContent="Shown" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Replays a recorded consultation through the full pipeline, for testing and demos. Not a clinical feature."
                 TextWrapping="Wrap" />
             <ToggleSwitch
@@ -45,7 +54,7 @@
                 OffContent="GPU"
                 OnContent="NPU" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Runs transcription on the NPU to save battery. The engine restarts to apply; the first switch prepares the model and can take a few minutes."
                 TextWrapping="Wrap" />
             <ToggleSwitch
@@ -54,7 +63,7 @@
                 OffContent="Hidden"
                 OnContent="Shown" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Shows the models at work in the status bar - device, transcription speed, writing speed and memory use. For testing, not a clinical feature."
                 TextWrapping="Wrap" />
             <ToggleSwitch
@@ -63,16 +72,16 @@
                 OffContent="Off"
                 OnContent="On" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Records timings, device names and memory use per session - never audio or text - to a local file (metrics.jsonl in the app's data folder), for comparing hardware."
                 TextWrapping="Wrap" />
             <Button Command="{x:Bind ViewModel.ExportPerformanceReportCommand}" Content="Export performance report" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="{x:Bind ViewModel.ExportResult, Mode=OneWay}"
                 TextWrapping="Wrap" />
             <TextBlock
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="Model tiers and privacy land here as their features arrive."
                 TextWrapping="Wrap" />
         </StackPanel>

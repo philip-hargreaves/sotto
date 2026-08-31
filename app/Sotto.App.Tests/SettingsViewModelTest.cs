@@ -202,6 +202,50 @@ public class SettingsViewModelTest
     }
 
     [Fact]
+    public void ThemeDefaultsToSystemPersistsAndAppliesLive()
+    {
+        var preferences = TempPreferences();
+        var applied = new List<string>();
+        var settings = new SettingsViewModel(preferences);
+        settings.ApplyTheme = applied.Add;
+        Assert.Equal("system", settings.Theme);
+        Assert.Equal(0, settings.ThemeIndex);
+
+        settings.ThemeIndex = 2;
+
+        Assert.Equal("dark", settings.Theme);
+        Assert.Equal(["dark"], applied);
+        Assert.Equal("dark", preferences.Theme);
+
+        var reopened = new SettingsViewModel(preferences);
+        Assert.Equal(2, reopened.ThemeIndex);
+    }
+
+    [Fact]
+    public void RestoringASavedThemeFiresNoHandlers()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var preferences = new AppPreferences(path) { Theme = "light" };
+
+        var settings = new SettingsViewModel(preferences);
+
+        Assert.Equal("light", settings.Theme);
+        Assert.False(File.Exists(path), "launch restore must not re-save");
+    }
+
+    [Fact]
+    public void AnUnknownStoredThemeFallsToSystem()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var preferences = new AppPreferences(path) { Theme = "dark" };
+        preferences.Save();
+        File.WriteAllText(path, File.ReadAllText(path).Replace("dark", "solarized"));
+
+        Assert.Equal("system", AppPreferences.Load(path).Theme);
+        File.Delete(path);
+    }
+
+    [Fact]
     public void MetricsToggleDefaultsOffAndReachesTheBar()
     {
         var preferences = TempPreferences();
