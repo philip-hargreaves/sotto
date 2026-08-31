@@ -47,7 +47,7 @@ class WhisperTranscriber : public ITranscriber {
     explicit WhisperTranscriber(DecodeFn decode);  // Tests inject the decode
     explicit WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics = nullptr,
                                 DecodeLoader clip_loader = {});  // Tests pace the load
-    WhisperTranscriber(DecodeFn decode, DecodeFn clip_decode);  // Tests split the devices
+    WhisperTranscriber(DecodeFn decode, DecodeFn clip_decode);   // Tests split the devices
     ~WhisperTranscriber() override;
 
     void Begin(ITurnSink& sink) override;

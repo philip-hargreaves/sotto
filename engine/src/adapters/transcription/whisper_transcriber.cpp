@@ -75,18 +75,18 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                                        std::string device_override, metrics::Registry* metrics)
-    : WhisperTranscriber(
-          DecodeLoader([&store, &runtime, device = device_override, metrics] {
-              return MakeWhisperDecode(store, runtime, device, metrics);
-          }),
-          metrics,
-          // Live off the GPU: clips burst on the manifest device (the GPU,
-          // idle at stop) so finalise never pays the low-power decode rate
-          device_override.empty() || device_override == "GPU"
-              ? DecodeLoader{}
-              : DecodeLoader([&store, &runtime, metrics] {
-                    return MakeWhisperDecode(store, runtime, "", metrics, "asr finalise");
-                })) {}
+    : WhisperTranscriber(DecodeLoader([&store, &runtime, device = device_override, metrics] {
+                             return MakeWhisperDecode(store, runtime, device, metrics);
+                         }),
+                         metrics,
+                         // Live off the GPU: clips burst on the manifest device (the GPU,
+                         // idle at stop) so finalise never pays the low-power decode rate
+                         device_override.empty() || device_override == "GPU"
+                             ? DecodeLoader{}
+                             : DecodeLoader([&store, &runtime, metrics] {
+                                   return MakeWhisperDecode(store, runtime, "", metrics,
+                                                            "asr finalise");
+                               })) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });
