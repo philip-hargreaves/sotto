@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -40,6 +41,7 @@
 #include "core/cli_args.hpp"
 #include "core/metrics.hpp"
 #include "core/session_controller.hpp"
+#include "core/throughput.hpp"
 
 namespace {
 
@@ -69,18 +71,48 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     // Partials are cumulative, so intermediates can drop freely: a ~12 Hz
-    // cap keeps the pipe and the shell's bindings calm at token cadence
+    // cap keeps the pipe and the shell's bindings calm at token cadence.
+    // The meter sees EVERY call, before the cap, so tokensPerSecond is the
+    // model's real rate, never the notification cadence (an Intel-requested
+    // figure, used for testing)
     void PushPartial(const std::string& method, nlohmann::json params) {
         const auto now = std::chrono::steady_clock::now();
+        double rate = 0;
         {
             std::lock_guard<std::mutex> lock(throttle_mutex_);
+            auto& meter = meters_[method];
+            meter.Token(Seconds(now));
+            rate = meter.Rate(Seconds(now));
             auto& last = last_partial_[method];
             if (now - last < std::chrono::milliseconds(80)) {
                 return;
             }
             last = now;
         }
+        params["tokensPerSecond"] = Rounded(rate);
         server_.PushNotification(method, std::move(params));
+    }
+
+    // The stream's end carries its whole-generation average - the accurate
+    // summary a test can hold the hardware to - and retires the meter
+    void PushStreamEnd(const char* partial_method, const char* method, nlohmann::json params) {
+        double average = 0;
+        {
+            std::lock_guard<std::mutex> lock(throttle_mutex_);
+            average = meters_[partial_method].Average();
+            meters_.erase(partial_method);
+            last_partial_.erase(partial_method);
+        }
+        if (average > 0) {
+            params["tokensPerSecond"] = Rounded(average);
+        }
+        server_.PushNotification(method, std::move(params));
+    }
+
+    void DropStream(const char* partial_method) {
+        std::lock_guard<std::mutex> lock(throttle_mutex_);
+        meters_.erase(partial_method);
+        last_partial_.erase(partial_method);
     }
 
     void OnNotePartial(const std::string& text) override {
@@ -88,7 +120,7 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     void OnNoteReady(const std::string& text) override {
-        server_.PushNotification("note/ready", {{"text", text}});
+        PushStreamEnd("note/partial", "note/ready", {{"text", text}});
         // The translator warms while the patient sheet writes, so the first
         // translation is as fast as the rest
         if (translator_ != nullptr) {
@@ -101,6 +133,7 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     void OnNoteFailed(const std::string& detail) override {
+        DropStream("note/partial");
         server_.PushNotification("note/failed", {{"detail", detail}});
     }
 
@@ -109,10 +142,11 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
     void OnPatientReady(const std::string& text) override {
-        server_.PushNotification("patient/ready", {{"text", text}});
+        PushStreamEnd("patient/partial", "patient/ready", {{"text", text}});
     }
 
     void OnPatientFailed(const std::string& detail) override {
+        DropStream("patient/partial");
         server_.PushNotification("patient/failed", {{"detail", detail}});
     }
 
@@ -121,10 +155,20 @@ class WireEvents : public sotto::audio::ISessionEvents {
         return reason == sotto::audio::SourceEndReason::kDeviceLost ? "deviceLost" : "failed";
     }
 
+    double Seconds(std::chrono::steady_clock::time_point now) const {
+        return std::chrono::duration<double>(now - started_).count();
+    }
+
+    static double Rounded(double rate) {
+        return std::round(rate * 10.0) / 10.0;
+    }
+
     sotto::ipc::PipeServer& server_;
     sotto::translate::ITranslator* translator_ = nullptr;
     std::mutex throttle_mutex_;
     std::map<std::string, std::chrono::steady_clock::time_point> last_partial_;
+    std::map<std::string, sotto::core::ThroughputMeter> meters_;
+    const std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
 };
 
 }  // namespace
@@ -303,7 +347,15 @@ int main(int argc, char* argv[]) {
                     if (method == "translate/partial") {
                         events.PushPartial(method, params);
                     } else {
-                        server.PushNotification(method, params);
+                        // The same source-side rate and average as the note
+                        if (method == "translate/ready") {
+                            events.PushStreamEnd("translate/partial", "translate/ready", params);
+                        } else if (method == "translate/failed") {
+                            events.DropStream("translate/partial");
+                            server.PushNotification(method, params);
+                        } else {
+                            server.PushNotification(method, params);
+                        }
                     }
                 });
             events.SetTranslator(translator.get());

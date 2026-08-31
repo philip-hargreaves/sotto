@@ -32,12 +32,60 @@
 
             <Border Grid.Column="1" />
 
-            <TextBlock
+            <!-- The two models at work, each with its live figure inside its
+                 own chip; tabular figures so digits change without jitter -->
+            <StackPanel
                 Grid.Column="2"
-                VerticalAlignment="Center"
-                FontFamily="Consolas"
-                Style="{StaticResource MicroText}"
-                Text="{x:Bind ViewModel.PerformanceLine, Mode=OneWay}" />
+                Orientation="Horizontal"
+                Spacing="8"
+                VerticalAlignment="Center">
+                <Border
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    Style="{StaticResource ChipBorder}"
+                    Visibility="{x:Bind AsrChipVisible, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse
+                            Width="6"
+                            Height="6"
+                            VerticalAlignment="Center"
+                            Fill="{x:Bind DotFill(ViewModel.AsrActive), Mode=OneWay}" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{x:Bind AsrForeground(ViewModel.RealtimeLow), Mode=OneWay}"
+                            Style="{StaticResource CaptionText}"
+                            Text="{x:Bind ViewModel.AsrChip, Mode=OneWay}"
+                            Typography.NumeralAlignment="Tabular" />
+                    </StackPanel>
+                </Border>
+                <Border
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    Style="{StaticResource ChipBorder}"
+                    Visibility="{x:Bind NoteChipVisible, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse
+                            Width="6"
+                            Height="6"
+                            VerticalAlignment="Center"
+                            Fill="{x:Bind DotFill(ViewModel.NoteActive), Mode=OneWay}" />
+                        <TextBlock
+                            FontSize="11"
+                            Style="{StaticResource CaptionText}"
+                            Text="{x:Bind ViewModel.NoteChip, Mode=OneWay}"
+                            Typography.NumeralAlignment="Tabular" />
+                    </StackPanel>
+                </Border>
+                <!-- Not a worker, so no dot: ambient footprint, same grammar -->
+                <Border
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    Style="{StaticResource ChipBorder}"
+                    Visibility="{x:Bind MemoryChipVisible, Mode=OneWay}">
+                    <TextBlock
+                        FontSize="11"
+                        Style="{StaticResource CaptionText}"
+                        Text="{x:Bind ViewModel.MemoryChip, Mode=OneWay}"
+                        Typography.NumeralAlignment="Tabular" />
+                </Border>
+            </StackPanel>
 
             <!-- Partner marks from Assets/logos/credits.json; edit the file
                  per showcase, never the code -->

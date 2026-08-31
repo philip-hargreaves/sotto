@@ -85,6 +85,18 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 new { languages = FakeLanguages }));
         }
 
+        if (method == "engine/models")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(new
+            {
+                models = new object[]
+                {
+                    new { id = "whisper-turbo-int8", task = "asr", tier = "default", device = "GPU", licence = "MIT" },
+                    new { id = "qwen3.5-9b-int4", task = "note", tier = "default", device = "GPU", licence = "Apache-2.0" },
+                },
+            }));
+        }
+
         if (method == "engine/metrics")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(

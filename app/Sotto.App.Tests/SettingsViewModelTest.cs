@@ -42,6 +42,28 @@ public class SettingsViewModelTest
         new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
 
     [Fact]
+    public void RestoringSavedSettingsFiresNoHandlers()
+    {
+        var preferences = TempPreferences();
+        preferences.NpuTranscription = true;
+        preferences.KeepConsultations = true;
+        var engine = new FakeEngineHost();
+        var asked = 0;
+
+        var settings = new SettingsViewModel(preferences, engine, new FakeSession());
+        settings.ConfirmKeepConsultations = () =>
+        {
+            asked++;
+            return Task.FromResult(false);
+        };
+
+        Assert.True(settings.NpuTranscription);
+        Assert.True(settings.KeepConsultations);
+        Assert.Empty(engine.Calls);  // a launch must never restart the engine
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
     public void KeepConsultationsDefaultsOffAndPersists()
     {
         var preferences = TempPreferences();
@@ -166,10 +188,31 @@ public class SettingsViewModelTest
     public void PreferencesRoundTripThroughTheFile()
     {
         var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var preferences = new AppPreferences(path) { NpuTranscription = true };
+        var preferences = new AppPreferences(path)
+        {
+            NpuTranscription = true,
+            ShowPerformanceMetrics = true,
+        };
         preferences.Save();
 
-        Assert.True(AppPreferences.Load(path).NpuTranscription);
+        var loaded = AppPreferences.Load(path);
+        Assert.True(loaded.NpuTranscription);
+        Assert.True(loaded.ShowPerformanceMetrics);
         File.Delete(path);
+    }
+
+    [Fact]
+    public void MetricsToggleDefaultsOffAndReachesTheBar()
+    {
+        var preferences = TempPreferences();
+        var bar = new StatusBarViewModel();
+        var settings = new SettingsViewModel(preferences, status: bar);
+        Assert.False(settings.ShowPerformanceMetrics, "chips are for testing, not GPs");
+        Assert.False(bar.MetricsVisible);
+
+        settings.ShowPerformanceMetrics = true;
+
+        Assert.True(bar.MetricsVisible);
+        Assert.True(preferences.ShowPerformanceMetrics);
     }
 }

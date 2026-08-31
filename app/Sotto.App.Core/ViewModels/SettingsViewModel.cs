@@ -33,11 +33,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         _metrics = metrics;
         _exportDirectory = exportDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        // Restoring saved values is not the clinician changing them: the
+        // handlers (persist, confirm, engine restart) must not fire here
+        _initialising = true;
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
         KeepConsultations = preferences?.KeepConsultations ?? false;
+        ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
+        _initialising = false;
     }
+
+    private readonly bool _initialising;
 
     /// <summary>
     /// Off by default: a consultation is erased when it is left. On: the
@@ -56,7 +63,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnKeepConsultationsChanged(bool value)
     {
-        if (_reverting)
+        if (_reverting || _initialising)
         {
             return;
         }
@@ -102,9 +109,32 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnDemoTrayEnabledChanged(bool value)
     {
-        if (_preferences is not null)
+        if (!_initialising && _preferences is not null)
         {
             _preferences.DemoTrayEnabled = value;
+            _preferences.Save();
+        }
+    }
+
+    /// <summary>Shows the status-bar model and memory chips. For testing.</summary>
+    [ObservableProperty]
+    public partial bool ShowPerformanceMetrics { get; set; }
+
+    partial void OnShowPerformanceMetricsChanged(bool value)
+    {
+        if (_initialising)
+        {
+            return;
+        }
+
+        if (_status is not null)
+        {
+            _status.MetricsVisible = value;
+        }
+
+        if (_preferences is not null)
+        {
+            _preferences.ShowPerformanceMetrics = value;
             _preferences.Save();
         }
     }
@@ -115,7 +145,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnCollectPerformanceDataChanged(bool value)
     {
-        if (_preferences is not null)
+        if (!_initialising && _preferences is not null)
         {
             _preferences.CollectPerformanceData = value;
             _preferences.Save();
@@ -156,7 +186,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnNpuTranscriptionChanged(bool value)
     {
-        if (_reverting)
+        if (_reverting || _initialising)
         {
             return;
         }
@@ -181,7 +211,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             _status?.Append(value
                 ? "switching transcription to the NPU - the first switch can take a few minutes"
-                : "switching transcription to the GPU");
+                : "switching transcription to the GPU", busy: true);
             _engine.Shutdown();
             _engine.Start();
         }

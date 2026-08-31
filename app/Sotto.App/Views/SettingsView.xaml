@@ -49,6 +49,15 @@
                 Text="Runs transcription on the NPU to save battery. The engine restarts to apply; the first switch prepares the model and can take a few minutes."
                 TextWrapping="Wrap" />
             <ToggleSwitch
+                Header="Show performance metrics"
+                IsOn="{x:Bind ViewModel.ShowPerformanceMetrics, Mode=TwoWay}"
+                OffContent="Hidden"
+                OnContent="Shown" />
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Text="Shows the models at work in the status bar - device, transcription speed, writing speed and memory use. For testing, not a clinical feature."
+                TextWrapping="Wrap" />
+            <ToggleSwitch
                 Header="Collect performance data"
                 IsOn="{x:Bind ViewModel.CollectPerformanceData, Mode=TwoWay}"
                 OffContent="Off"

@@ -8,7 +8,7 @@ public sealed class AppPreferences(string path)
     private sealed record Stored(
         bool DemoTrayEnabled, bool NpuTranscription, bool CollectPerformanceData,
         string? NoteStyle = null, string? NoteDetail = null,
-        bool KeepConsultations = false);
+        bool KeepConsultations = false, bool ShowPerformanceMetrics = false);
 
     public bool DemoTrayEnabled { get; set; }
 
@@ -21,6 +21,9 @@ public sealed class AppPreferences(string path)
     /// the clinician opts in. Applies to consultations from now on.
     /// </summary>
     public bool KeepConsultations { get; set; }
+
+    /// <summary>Off by default: the status-bar chips are for testing, not GPs.</summary>
+    public bool ShowPerformanceMetrics { get; set; }
 
     public string NoteStyle { get; set; } = "prose";
 
@@ -36,6 +39,7 @@ public sealed class AppPreferences(string path)
             preferences.NpuTranscription = stored?.NpuTranscription ?? false;
             preferences.CollectPerformanceData = stored?.CollectPerformanceData ?? false;
             preferences.KeepConsultations = stored?.KeepConsultations ?? false;
+            preferences.ShowPerformanceMetrics = stored?.ShowPerformanceMetrics ?? false;
             // Values the engine would refuse never leave this boundary
             preferences.NoteStyle = stored?.NoteStyle is "prose" or "soap"
                 ? stored.NoteStyle : "prose";
@@ -56,7 +60,7 @@ public sealed class AppPreferences(string path)
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(new Stored(
                 DemoTrayEnabled, NpuTranscription, CollectPerformanceData,
-                NoteStyle, NoteDetail, KeepConsultations)));
+                NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics)));
         }
         catch (Exception)
         {
