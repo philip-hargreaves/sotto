@@ -92,8 +92,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 devices = AudioInputs
                     .Select(d => new
                     {
-                        id = d.Id, name = d.Name, shortName = d.ShortName,
-                        isDefault = d.IsDefault, bluetooth = d.Bluetooth,
+                        id = d.Id,
+                        name = d.Name,
+                        shortName = d.ShortName,
+                        isDefault = d.IsDefault,
+                        bluetooth = d.Bluetooth,
                     })
                     .ToArray(),
             }));
