@@ -34,13 +34,16 @@ internal sealed class RecordingNavigationService : INavigationService
 internal static class TestSession
 {
     public static (ConsultationViewModel Session, FakeEngineClient Engine, NoteViewModel Note)
-        Create(AppPreferences? preferences = null)
+        Create(AppPreferences? preferences = null,
+            Func<Core.Metrics.PowerState>? powerState = null)
     {
         var engine = new FakeEngineClient(autoNotify: false);
         var note = new NoteViewModel();
         var session = new ConsultationViewModel(
             engine, new InlineDispatcher(), new TranscriptViewModel(), note,
-            new StatusBarViewModel(), preferences: preferences);
+            new StatusBarViewModel(), preferences: preferences,
+            // The host machine's real power state must never reach a test
+            powerState: powerState ?? (() => new Core.Metrics.PowerState("balanced", true)));
         return (session, engine, note);
     }
 }

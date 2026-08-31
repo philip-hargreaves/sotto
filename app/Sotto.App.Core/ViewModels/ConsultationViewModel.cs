@@ -22,6 +22,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     private readonly IEngineClient _engine;
     private readonly Metrics.PerformanceCollector? _metrics;
     private readonly AppPreferences? _preferences;
+    private readonly Func<Metrics.PowerState> _powerState;
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
@@ -65,6 +66,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public bool ConsultationActive => State != SessionState.Idle;
 
+    /// <summary>Finalising is the state worth splitting: its stages differ
+    /// by an order of magnitude, so a crash log needs which one.</summary>
+    public string SessionPhase =>
+        State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();
+
     public TranscriptViewModel Transcript { get; }
 
     public NoteViewModel Note { get; }
@@ -75,11 +81,12 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         IEngineClient engine, IUiDispatcher dispatcher,
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
         Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
-        AppPreferences? preferences = null)
+        AppPreferences? preferences = null, Func<Metrics.PowerState>? powerState = null)
     {
         _engine = engine;
         _metrics = metrics;
         _preferences = preferences;
+        _powerState = powerState ?? Metrics.PowerState.Read;
         _readinessPollInterval = readinessPollInterval ?? TimeSpan.FromSeconds(2);
         Transcript = transcript;
         Note = note;
@@ -107,12 +114,17 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             Status.SetEngineReady(connected);
             if (!connected)
             {
-                // A restarted engine will never answer the in-flight translation
+                // A restarted engine will never answer the in-flight translation.
+                // The host state already reads "Recovering" - an intentional
+                // restart (the NPU switch) must not look like a failure
                 Note.TranslationRunning = false;
-                Status.Append("Connection lost - recovering", busy: true);
+                Status.Log("connection lost");
             }
             else
             {
+                // Whatever activity a restart interrupted ("switching
+                // transcription...") is over; resume overwrites this
+                Status.Append("Ready");
                 _ = LoadLanguagesAsync();
                 _ = CheckReadinessAsync();
                 _ = PushNoteOptionsAsync();
@@ -421,7 +433,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 "session/start", parameters, TimeSpan.FromSeconds(60)).ConfigureAwait(true);
             _recordingSessionId = response.TryGetProperty("sessionId", out var id)
                 ? id.GetString() : null;
-            Status.Append("Recording");
+            Status.Append(RecordingLabel());
         }
         catch (Exception e) when (e is EngineErrorException or OperationCanceledException)
         {
@@ -471,11 +483,17 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Recording;
         Status.ResetThroughput();
         Status.SetMicVisible(true);
-        Status.Append(replay is null ? "Recording" : "Replaying");
+        Status.Append(replay is null ? RecordingLabel() : "Replaying");
         _metrics?.SessionStarted(
             replay is null ? "mic" : "replay", replay?.Speed ?? 0,
             replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
+
+    // ADR-0028: said once at start; power saving roughly halves finalise
+    // speed and the hint lets the clinician choose
+    private string RecordingLabel() => _powerState().SavingPower
+        ? "Recording - saving power, notes will be slower"
+        : "Recording";
 
     public async Task SetPausedAsync(bool paused)
     {
@@ -511,6 +529,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         ActiveReplay = null;
         _metrics?.StopRequested();
         Status.SetMicVisible(false);
+        Status.SetDecodeActive(true);  // the tail decode keeps the RT figure up
         Note.Apply(NotePipelineEvent.NoteWritingStarted);
         Status.Append("Finalising", busy: true);
         var response = await RequestValueAsync("session/stop", StopTimeout).ConfigureAwait(true);
@@ -520,6 +539,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             // the store either way
             State = SessionState.Idle;
             Note.Reset();
+            Status.SetDecodeActive(false);
             Status.Append("Stop failed - session kept");
             return;
         }
@@ -538,6 +558,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         if (string.IsNullOrEmpty(id))
         {
+            Status.SetDecodeActive(false);
             Phase = FinalisePhase.Note;  // nothing to fetch; the panes still open
             return;
         }
@@ -562,6 +583,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
         finally
         {
+            Status.SetDecodeActive(false);  // sealed: the tail decode is over
             Phase = FinalisePhase.Note;
         }
     }
@@ -601,6 +623,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 {
                     "transcript" => FinalisePhase.Transcript,
                     "speakers" => FinalisePhase.Speakers,
+                    "turns" => FinalisePhase.Turns,
                     _ => Phase,
                 };
                 break;
@@ -710,6 +733,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 ActiveReplay = null;
                 Note.Reset();
                 Status.SetMicVisible(false);
+                Status.SetDecodeActive(false);
                 Status.Append(parameters.ValueKind == JsonValueKind.Object
                     ? $"Recording interrupted ({parameters.GetProperty("detail").GetString()}) - session kept"
                     : "Recording interrupted - session kept");
