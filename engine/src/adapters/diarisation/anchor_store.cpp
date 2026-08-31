@@ -13,7 +13,7 @@
 #include <dpapi.h>
 // clang-format on
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 namespace {
 
@@ -69,7 +69,7 @@ void AnchorStore::Load() {
     DATA_BLOB blob_out{};
     if (!CryptUnprotectData(&blob_in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN,
                             &blob_out)) {
-        std::fprintf(stderr, "sotto-engine: anchor unreadable, starting fresh\n");
+        std::fprintf(stderr, "ambient-engine: anchor unreadable, starting fresh\n");
         return;
     }
     const std::uint8_t* p = blob_out.pbData;
@@ -85,7 +85,7 @@ void AnchorStore::Load() {
             std::memcpy(sum_.data(), p + 16, static_cast<std::size_t>(dims) * 4);
             count_ = count;
         } else {
-            std::fprintf(stderr, "sotto-engine: anchor format mismatch, starting fresh\n");
+            std::fprintf(stderr, "ambient-engine: anchor format mismatch, starting fresh\n");
         }
     }
     SecureZeroMemory(blob_out.pbData, blob_out.cbData);
@@ -102,7 +102,7 @@ void AnchorStore::Save() const {
 
     DATA_BLOB blob_in{static_cast<DWORD>(plain.size()), plain.data()};
     DATA_BLOB blob_out{};
-    if (!CryptProtectData(&blob_in, L"sotto clinician anchor", nullptr, nullptr, nullptr,
+    if (!CryptProtectData(&blob_in, L"ambient clinician anchor", nullptr, nullptr, nullptr,
                           CRYPTPROTECT_UI_FORBIDDEN, &blob_out)) {
         throw std::runtime_error("CryptProtectData failed for the anchor");
     }
@@ -113,4 +113,4 @@ void AnchorStore::Save() const {
     if (!out) throw std::runtime_error("anchor write failed");
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

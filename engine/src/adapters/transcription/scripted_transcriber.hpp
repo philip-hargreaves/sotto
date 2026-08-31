@@ -4,9 +4,9 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 
-// Stand-in until the Whisper adapter
+// CI stand-in when no ASR model is staged
 class ScriptedTranscriber : public ITranscriber {
    public:
     void Begin(ITurnSink& sink) override {
@@ -36,4 +36,4 @@ class ScriptedTranscriber : public ITranscriber {
     int turns_ = 0;
 };
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

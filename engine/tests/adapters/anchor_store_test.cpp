@@ -9,7 +9,7 @@
 
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 struct TempDir {
@@ -18,7 +18,7 @@ struct TempDir {
     TempDir() {
         path =
             std::filesystem::temp_directory_path() /
-            ("sotto-anchor-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+            ("ambient-anchor-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
              "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
         std::filesystem::create_directories(path);
     }
@@ -97,4 +97,4 @@ TEST(VoiceprintRanges, StopAtTheCapAndRefuseUnderASecond) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

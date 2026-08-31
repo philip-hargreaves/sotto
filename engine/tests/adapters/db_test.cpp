@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-namespace sotto::store {
+namespace ambient::store {
 namespace {
 
 struct TempDb {
@@ -13,7 +13,7 @@ struct TempDb {
 
     TempDb() {
         path = std::filesystem::temp_directory_path() /
-               ("sotto-db-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+               ("ambient-db-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
                 "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name() + ".db");
     }
 
@@ -103,9 +103,9 @@ TEST(Db, BadSqlThrows) {
 }
 
 TEST(Db, OpenInMissingDirectoryThrows) {
-    const auto path = std::filesystem::temp_directory_path() / "sotto-db-no-such-dir" / "x.db";
+    const auto path = std::filesystem::temp_directory_path() / "ambient-db-no-such-dir" / "x.db";
     EXPECT_THROW(Db{path}, std::runtime_error);
 }
 
 }  // namespace
-}  // namespace sotto::store
+}  // namespace ambient::store

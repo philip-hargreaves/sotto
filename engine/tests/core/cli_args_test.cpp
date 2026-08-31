@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace sotto {
+namespace ambient {
 namespace {
 
 TEST(CliArgs, TakesTheFlagAndItsValue) {
@@ -24,4 +24,4 @@ TEST(CliArgs, FlagWithoutAValueIsIgnored) {
 }
 
 }  // namespace
-}  // namespace sotto
+}  // namespace ambient

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="Ambient.App.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The same card chrome as the consultation view; the column centres
+         so a wide window frames it instead of leaving it in a corner -->
+    <Border Margin="8,0,8,8" Style="{StaticResource CardSurface}">
+        <Grid RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Margin="16,16,16,0" Orientation="Horizontal" Spacing="12">
+                <Button Command="{x:Bind Shell.GoBackCommand}" ToolTipService.ToolTip="Back">
+                    <FontIcon FontSize="14" Glyph="&#xE72B;" />
+                </Button>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource TitleTextBlockStyle}"
+                    Text="{x:Bind ViewModel.Heading}" />
+            </StackPanel>
+            <ScrollViewer Grid.Row="1">
+                <StackPanel
+                    MaxWidth="640"
+                    Margin="16,0,16,16"
+                    HorizontalAlignment="Center"
+                    Spacing="4">
+
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Appearance" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Theme" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="System default follows Windows" />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            MinWidth="160"
+                            VerticalAlignment="Center"
+                            ItemsSource="{x:Bind ViewModel.ThemeOptions}"
+                            SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Consultations" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Save consultation data" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Encrypted on this device, the audio is never kept" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsOn="{x:Bind ViewModel.KeepConsultations, Mode=TwoWay}"
+                            OffContent="Off"
+                            OnContent="On" />
+                    </Grid>
+                </Border>
+
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Power" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Low-power transcription" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Uses the NPU to save battery; the first switch takes a few minutes" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsOn="{x:Bind ViewModel.NpuTranscription, Mode=TwoWay}"
+                            OffContent="GPU"
+                            OnContent="NPU" />
+                    </Grid>
+                </Border>
+
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Developer tools" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Demo tray" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Replay recordings through the pipeline" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsOn="{x:Bind ViewModel.DemoTrayEnabled, Mode=TwoWay}"
+                            OffContent="Hidden"
+                            OnContent="Shown" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Performance metrics" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Model and speed figures in the status bar" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsOn="{x:Bind ViewModel.ShowPerformanceMetrics, Mode=TwoWay}"
+                            OffContent="Hidden"
+                            OnContent="Shown" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Collect performance data" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Timings to a local file, the audio and text are never included" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsOn="{x:Bind ViewModel.CollectPerformanceData, Mode=TwoWay}"
+                            OffContent="Off"
+                            OnContent="On" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Export performance report" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Saves the report as an HTML file" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.ExportPerformanceReportCommand}"
+                            Content="Export" />
+                    </Grid>
+                </Border>
+                    <TextBlock Style="{StaticResource SettingsDescription}"
+                               Margin="2,4,0,0"
+                               Text="{x:Bind ViewModel.ExportResult, Mode=OneWay}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

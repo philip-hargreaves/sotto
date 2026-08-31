@@ -4,11 +4,10 @@
 #include <string>
 #include <vector>
 
-namespace sotto::translate {
+namespace ambient::translate {
 
-// Translates finished text to a named target language. Translate streams
-// partial text through progress and returns the full translation; it
-// throws on failure. Cancel interrupts from another thread.
+// Streams partials, returns the translation, throws on failure; Cancel
+// interrupts from another thread
 class ITranslator {
    public:
     using Progress = std::function<void(const std::string&)>;
@@ -27,4 +26,4 @@ class ITranslator {
     virtual void Cancel() {}
 };
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

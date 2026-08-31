@@ -11,7 +11,7 @@
 #include "core/diar_regions.hpp"
 #include "ports/diariser.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // 0.30 s: at 0.40 a clinical "No." was dropped and the note fabricated the denial
 inline constexpr std::uint64_t kPerTurnMinClipFrames = 4800;
@@ -61,9 +61,8 @@ inline std::vector<LabelledSlice> MergeByCluster(const std::vector<LabelledSlice
     return turns;
 }
 
-// Decode spans double as cache keys. Heads clamp past the previous end; a
-// nested overlap turn clamps to nothing (decoding it returns the louder
-// speaker's words under the wrong name)
+// Spans double as cache keys; heads clamp past the previous end, a nested
+// overlap turn clamps to nothing
 inline std::vector<Region> DecodeSpans(const std::vector<LabelledSlice>& turns,
                                        std::uint64_t audio_frames) {
     std::vector<Region> spans(turns.size());
@@ -103,4 +102,4 @@ inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>
     return texts;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

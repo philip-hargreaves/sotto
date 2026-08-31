@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto {
+namespace ambient {
 
 // Removes "--name value" from args and returns the value; "" if absent
 inline std::string TakeFlag(std::vector<std::string>& args, const std::string& name) {
@@ -17,4 +17,4 @@ inline std::string TakeFlag(std::vector<std::string>& args, const std::string& n
     return {};
 }
 
-}  // namespace sotto
+}  // namespace ambient

@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 // Emits an authored probability per hop; holds the last value past the end
@@ -224,4 +224,4 @@ TEST(Endpointer, FlushWithoutSpeechIsEmpty) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

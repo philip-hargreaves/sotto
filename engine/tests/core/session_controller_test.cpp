@@ -15,7 +15,7 @@
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 constexpr auto kTestSettle = std::chrono::milliseconds(200);
@@ -1726,4 +1726,4 @@ TEST(SessionController, AResumeOfAMissingSessionFailsTheStart) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

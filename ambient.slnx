@@ -1,0 +1,37 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/app/">
+    <Project Path="app/Ambient.App.Core/Ambient.App.Core.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.App.Tests/Ambient.App.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.App/Ambient.App.csproj">
+      <Platform Project="x64" />
+      <Deploy Solution="*|x64" />
+      <Deploy Solution="Debug|Any CPU" />
+    </Project>
+    <Project Path="app/Ambient.Client.Tests/Ambient.Client.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.Client/Ambient.Client.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.Contract.Tests/Ambient.Contract.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.Fetch/Ambient.Fetch.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+    <Project Path="app/Ambient.Fetch.Tests/Ambient.Fetch.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/engine/">
+    <File Path="engine/CMakeLists.txt" />
+  </Folder>
+</Solution>

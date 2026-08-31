@@ -23,7 +23,7 @@
 #include "adapters/audio/capture_errors.hpp"
 #include "adapters/audio/capture_timeline.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 namespace {
 
@@ -47,11 +47,8 @@ std::wstring ConsentStoreValue(const std::wstring& subkey) {
     return value;
 }
 
-// Windows records the Settings microphone toggle but does not enforce it
-// against a full-trust process, and CheckAccess reports the unenforced
-// truth: Allowed even under an explicit deny (both measured). The store the
-// Settings page writes is therefore the only signal of what the user chose,
-// so a clinical recorder reads it and enforces it itself.
+// Windows records the mic privacy toggle but does not enforce it for
+// full-trust processes (measured), so the engine enforces it itself
 bool ConsentDenied() {
     const std::wstring store =
         L"Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore"
@@ -110,7 +107,7 @@ void WasapiCapture::RequestStop() {
     }
 }
 
-// OnEnd is the port's one guarantee, so Run funnels every outcome through it
+// Every outcome, success or failure, ends with OnEnd
 void WasapiCapture::Run(IAudioSink& sink) {
     sink.OnEnd(RunToEnd(sink));
 }
@@ -151,11 +148,8 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return Fail("Activate", hr);
     }
 
-    // Communications category, declared before Initialize: without it
-    // Windows never raises a Bluetooth headset's hands-free microphone
-    // link and the endpoint delivers pure silence (measured: 14.9 s
-    // captured, zero speech, while Voice Recorder heard fine). Side
-    // effect accepted: other apps' audio ducks while recording
+    // Without the communications category Windows never wakes a Bluetooth mic
+    // link (measured: silence); other apps' audio ducks while recording
     ComPtr<IAudioClient2> client2;
     if (SUCCEEDED(client.As(&client2))) {
         AudioClientProperties properties{};
@@ -187,7 +181,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     }
     // One line per stream: device rate and open time make a dead or slow
     // microphone (a Bluetooth link waking is seconds) diagnosable from the log
-    std::fprintf(stderr, "sotto-engine: capture open, native %lu Hz, %.2f s\n",
+    std::fprintf(stderr, "ambient-engine: capture open, native %lu Hz, %.2f s\n",
                  static_cast<unsigned long>(native_rate),
                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t_init).count());
 
@@ -229,7 +223,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
             // peak 0.0000 with packets flowing is the LE Audio failure
             // signature: a healthy-looking stream of unflagged zeros
             std::fprintf(stderr,
-                         "sotto-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
+                         "ambient-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
                          static_cast<unsigned long long>(stream_packets),
                          static_cast<unsigned long long>(stream_silent), stream_peak);
             return {SourceEndReason::kStopped, ""};
@@ -286,4 +280,4 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     }
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

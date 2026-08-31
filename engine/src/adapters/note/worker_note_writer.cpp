@@ -17,7 +17,7 @@
 #include "adapters/host/power_throttling.hpp"
 #include "adapters/ipc/framing.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 using nlohmann::json;
 
@@ -74,7 +74,7 @@ struct WorkerNoteWriter::Impl {
         }
         CloseWorker();
 
-        const std::wstring pipe_path = L"\\\\.\\pipe\\LOCAL\\sotto-note-" +
+        const std::wstring pipe_path = L"\\\\.\\pipe\\LOCAL\\ambient-note-" +
                                        std::to_wstring(GetCurrentProcessId()) + L"-" +
                                        std::to_wstring(++spawn_count);
         std::wstring command = L"\"" + host_exe.wstring() + L"\" \"" + pipe_path + L"\" \"" +
@@ -202,9 +202,8 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // A failed or dead worker gets one fresh process before the failure is
-    // the session's: the fresh-context retry is the configuration measured
-    // to succeed where every in-process recovery failed
+    // One fresh process before failing: the fresh-context retry is the
+    // configuration measured to work
     std::string Run(const std::string& method, json params, const Progress& progress) {
         try {
             return Attempt(method, params, progress);
@@ -212,7 +211,7 @@ struct WorkerNoteWriter::Impl {
             {
                 std::lock_guard<std::mutex> lock(state_mutex);
                 if (closing) throw;
-                std::fprintf(stderr, "sotto-engine: note worker failed (%.100s); respawning\n",
+                std::fprintf(stderr, "ambient-engine: note worker failed (%.100s); respawning\n",
                              e.what());
                 CloseWorker();
             }
@@ -232,14 +231,12 @@ WorkerNoteWriter::~WorkerNoteWriter() {
     impl_->CloseWorker();
 }
 
-// Called at session start and stop; the spawn and the model load both hide
-// inside capture. SOTTO_NOTE_LOAD=stop defers the load to generation time,
-// so the GPU never hosts the model beside live transcription (experiment
-// knob for the co-residency fault). Failure stays quiet and surfaces on Write.
+// Spawn and load hide inside capture; AMBIENT_NOTE_LOAD=stop defers the load
+// (co-residency experiment knob). Failure surfaces on Write
 void WorkerNoteWriter::Prepare() {
     static const bool load_at_stop = [] {
         char* value = nullptr;
-        const bool at_stop = _dupenv_s(&value, nullptr, "SOTTO_NOTE_LOAD") == 0 &&
+        const bool at_stop = _dupenv_s(&value, nullptr, "AMBIENT_NOTE_LOAD") == 0 &&
                              value != nullptr && std::string(value) == "stop";
         std::free(value);
         return at_stop;
@@ -250,7 +247,7 @@ void WorkerNoteWriter::Prepare() {
             impl_->Send("prepare", json::object());
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: note worker prepare failed (%s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: note worker prepare failed (%s)\n", e.what());
     }
 }
 
@@ -287,7 +284,7 @@ std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
     try {
         return impl_->Attempt("label", {{"note", note}}, nullptr);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: no label (%.100s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: no label (%.100s)\n", e.what());
         return {};
     }
 }
@@ -302,4 +299,4 @@ void WorkerNoteWriter::Cancel() {
     }
 }
 
-}  // namespace sotto::note
+}  // namespace ambient::note

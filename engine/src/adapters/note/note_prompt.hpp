@@ -10,7 +10,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 // Read fresh every note, so a prompt edit applies to the next generation
 inline std::string LoadPrompt(const std::filesystem::path& path) {
@@ -34,4 +34,4 @@ inline std::string TranscriptBlock(const std::vector<asr::Turn>& turns) {
     return block;
 }
 
-}  // namespace sotto::note
+}  // namespace ambient::note

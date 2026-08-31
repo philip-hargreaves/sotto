@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace sotto::core {
+namespace ambient::core {
 namespace {
 
 TEST(Throughput, ASteadyStreamReadsItsRate) {
@@ -50,4 +50,4 @@ TEST(Throughput, DegenerateInputsAreQuiet) {
 }
 
 }  // namespace
-}  // namespace sotto::core
+}  // namespace ambient::core

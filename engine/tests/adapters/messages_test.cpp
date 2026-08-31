@@ -6,11 +6,11 @@
 #include <stdexcept>
 #include <string>
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 namespace {
 
 json LoadFixture(const std::string& name) {
-    std::ifstream in(std::string(SOTTO_FIXTURE_DIR) + "/" + name);
+    std::ifstream in(std::string(AMBIENT_FIXTURE_DIR) + "/" + name);
     // Throwing here names the missing file; parsing a closed stream would not
     if (!in.is_open()) {
         throw std::runtime_error("missing fixture: " + name);
@@ -27,14 +27,14 @@ TEST(Messages, ParsesHelloRequestFixture) {
 
     auto peer = PeerInfoFromJson(req.params);
     ASSERT_TRUE(peer.has_value());
-    EXPECT_EQ(peer->name, "sotto-shell");
+    EXPECT_EQ(peer->name, "ambient-shell");
     EXPECT_EQ(peer->version, "0.1.0");
     EXPECT_EQ(peer->protocol_version, 1);
 }
 
 TEST(Messages, HelloResponseMatchesFixture) {
     const json built =
-        MakeResult(std::int64_t{1}, ToJson(PeerInfo{"sotto", "0.1.0", kProtocolVersion}));
+        MakeResult(std::int64_t{1}, ToJson(PeerInfo{"ambient", "0.1.0", kProtocolVersion}));
     EXPECT_EQ(built, LoadFixture("hello-response.json"));
 }
 
@@ -166,4 +166,4 @@ TEST(Messages, DeeplyNestedParamsDoesNotOverflow) {
 }
 
 }  // namespace
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

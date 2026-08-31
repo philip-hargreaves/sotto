@@ -20,7 +20,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-$staging = Join-Path ([IO.Path]::GetTempPath()) "sotto-stage-$Id"
+$staging = Join-Path ([IO.Path]::GetTempPath()) "ambient-stage-$Id"
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $staging | Out-Null
 

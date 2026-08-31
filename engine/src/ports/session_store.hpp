@@ -7,7 +7,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::store {
+namespace ambient::store {
 
 using SessionId = std::string;
 
@@ -47,11 +47,9 @@ struct Document {
     std::string edited_at;        // ISO 8601 UTC; empty until a person changed it
 };
 
-// The clinical store for one recording session at a time. Appended audio is
-// durable within one second and exists to resume a crash: Finalise seals
-// the transcript and erases the audio, Cancel retains nothing; a session
-// neither finalised nor cancelled is a crash and stays discoverable with
-// its audio. Layout, SQL and encryption live behind this port.
+// Audio is durable within a second and exists to resume a crash: Finalise
+// seals the transcript and erases audio, Cancel retains nothing, anything
+// else is a crash and stays discoverable
 class ISessionStore {
    public:
     virtual ~ISessionStore() = default;
@@ -78,10 +76,8 @@ class ISessionStore {
 
     virtual std::vector<SessionSummary> ListSessions() = 0;
 
-    // Documents are written after finalise. Save records a generation
-    // (stamps generated_at, clears edited_at); Edit records the clinician's
-    // text over it (stamps edited_at, keeps the options). Reads return an
-    // empty document when nothing was saved and throw for an unknown session
+    // Save records a generation, Edit the clinician's text over it; reads of
+    // an unknown session throw
     virtual void SaveDocument(const SessionId& id, DocumentKind kind, const Document& document) = 0;
     virtual void EditDocument(const SessionId& id, DocumentKind kind, const std::string& text) = 0;
     virtual Document ReadDocument(const SessionId& id, DocumentKind kind) = 0;
@@ -99,4 +95,4 @@ class ISessionStore {
     virtual void EraseUnretained() = 0;
 };
 
-}  // namespace sotto::store
+}  // namespace ambient::store

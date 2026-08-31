@@ -6,12 +6,10 @@
 #include <span>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 
-// The clinician's accrued voiceprint: a running mean over confidently
-// named sessions, in one DPAPI-protected file (same at-rest protection as
-// session keys). Clear erases it. A corrupt file resets to empty - the
-// anchor rebuilds itself, unlike clinical data
+// The clinician's accrued voiceprint, DPAPI-protected; a corrupt file
+// resets to empty and rebuilds
 class AnchorStore {
    public:
     explicit AnchorStore(const std::filesystem::path& root);
@@ -32,4 +30,4 @@ class AnchorStore {
     std::uint64_t count_ = 0;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

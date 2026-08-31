@@ -1,6 +1,6 @@
 {
   "id": "whisper-turbo-int8",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/whisper-turbo-int8",
   "files": {
     "added_tokens.json": "baa0435347ab385da4cc489ddf70daecd4d6832dc94b73e457dc83107641afd9",

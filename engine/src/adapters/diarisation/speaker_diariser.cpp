@@ -8,7 +8,7 @@
 #include "core/diar_regions.hpp"
 #include "core/slice_refinement.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 namespace {
 
@@ -179,4 +179,4 @@ void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,
     if (!voiceprint.empty()) anchors_.Accrue(voiceprint);
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

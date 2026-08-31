@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Below this lexical margin no one is named. Chosen from the observed
 // margin range, not swept; revisit first if it abstains too often
@@ -95,10 +95,8 @@ inline const std::vector<std::vector<std::string>> kPlanPhrases = {
 
 }  // namespace detail
 
-// Cold-start scorer, positive leaning clinician. Reads no question
-// features: question weighting inverts on consultations where the patient
-// asks the questions (measured 6/6 -> 0/6). Self-identification and plan
-// speech suppress the first-person penalty - the suppression is the point
+// Cold-start scorer; no question features - they invert where the patient
+// asks the questions (measured 6/6 -> 0/6)
 inline double LexicalDoctorScore(const std::string& text) {
     const auto words = detail::WordsOf(text);
     if (words.empty()) return 0.0;
@@ -131,11 +129,9 @@ inline double LexicalDoctorScore(const std::string& text) {
     return bonus + 7.0 * (second / n) - 11.0 * (first / n);
 }
 
-// Anonymous clusters -> roles. The two dominant clusters by talk time are
-// the candidates; anything further stays unknown. With anchor similarities
-// the nearer of the pair is the doctor (rank, never a threshold). Without
-// them the higher mean lexical score decides, abstaining below the margin:
-// a confident inversion is the one failure that corrupts the record
+// The two dominant clusters are the candidates; anchor rank names the
+// doctor, else lexical score with abstention - a confident inversion is
+// the one failure that corrupts the record
 inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
                             const std::vector<double>& anchor_similarity = {}) {
     RoleResult result;
@@ -199,4 +195,4 @@ inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_coun
     return result;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

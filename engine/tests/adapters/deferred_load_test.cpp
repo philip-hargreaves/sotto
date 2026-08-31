@@ -10,7 +10,7 @@
 #include "adapters/diarisation/deferred_diariser.hpp"
 #include "adapters/vad/deferred_vad.hpp"
 
-namespace sotto {
+namespace ambient {
 namespace {
 
 TEST(DeferredLoad, GetWaitsForTheBuild) {
@@ -120,4 +120,4 @@ TEST(DeferredDiariser, DiscardBeforeTheLoadIsANoOp) {
 }
 
 }  // namespace
-}  // namespace sotto
+}  // namespace ambient

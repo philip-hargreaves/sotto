@@ -14,7 +14,7 @@
 
 #include "adapters/audio/wasapi_player.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 namespace {
 
@@ -127,7 +127,7 @@ void WavSource::SetMonitor(bool monitor) {
     monitor_.store(monitor, std::memory_order_relaxed);
 }
 
-// OnEnd is the port's one guarantee, so Run funnels every outcome through it
+// Every outcome, success or failure, ends with OnEnd
 void WavSource::Run(IAudioSink& sink) {
     sink.OnEnd(RunToEnd(sink));
 }
@@ -163,7 +163,7 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
     std::vector<float> decimated;
     std::unique_ptr<WasapiPlayer> player;
     bool player_failed = false;
-    // Decimate by speed: the tape-speed effect, no exotic sample rate needed
+    // Decimate by speed (tape-speed effect)
     const std::size_t step =
         config_.speed > 1.0 ? static_cast<std::size_t>(config_.speed + 0.5) : 1;
 
@@ -232,4 +232,4 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
     return {SourceEndReason::kCompleted, ""};
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

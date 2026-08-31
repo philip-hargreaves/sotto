@@ -11,13 +11,13 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 namespace {
 
 // Research-generated fixtures: reference fbank features and the embeddings
-// the same INT8 IR produced for them (export_sotto_fixtures.py). The staged
+// the same INT8 IR produced for them (export_ambient_fixtures.py). The staged
 // copy must reproduce the embeddings before any pipeline code consumes it
-constexpr const char* kFixtureDir = SOTTO_DIAR_FIXTURE_DIR;
+constexpr const char* kFixtureDir = AMBIENT_DIAR_FIXTURE_DIR;
 
 struct Slice {
     std::string role;
@@ -63,7 +63,7 @@ float Cosine(const std::vector<float>& a, const std::vector<float>& b) {
 }
 
 TEST(EmbedderModel, StagedExportReproducesTheResearchEmbeddings) {
-    const ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     OvRuntime runtime;
     auto loaded = runtime.Load(store, "diarisation", "default", "model.xml");
     EXPECT_EQ(loaded.device, "CPU") << "the embedder's researched placement";
@@ -112,4 +112,4 @@ TEST(EmbedderModel, StagedExportReproducesTheResearchEmbeddings) {
 }
 
 }  // namespace
-}  // namespace sotto::models
+}  // namespace ambient::models

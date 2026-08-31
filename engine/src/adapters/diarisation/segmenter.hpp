@@ -9,7 +9,7 @@
 #include "adapters/models/ov_runtime.hpp"
 #include "core/diar_regions.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 inline constexpr std::size_t kSegWindowFrames = 160000;  // the model's fixed 10 s input
 inline constexpr int kSegMinHoldFrames = 6;              // ~100 ms flicker guard
@@ -19,10 +19,8 @@ struct SegResult {
     std::vector<Region> overlap_spans;         // absolute frames where two speakers are active
 };
 
-// Pure decode of one 10 s window's powerset argmax classes (7 classes:
-// none, three single speakers, three pairwise overlaps). A speaker change
-// counts only after the previous speaker held kSegMinHoldFrames; silence
-// and overlap carry no change. Appends into result
+// Pure decode of one 10 s window's powerset argmax; a change counts only
+// after kSegMinHoldFrames
 void DecodeSegWindow(std::span<const std::int8_t> classes, std::uint64_t window_first_frame,
                      SegResult& result);
 
@@ -38,4 +36,4 @@ class Segmenter {
     ov::InferRequest request_;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

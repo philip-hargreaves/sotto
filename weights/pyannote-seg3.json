@@ -1,6 +1,6 @@
 {
   "id": "pyannote-seg3",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/pyannote-seg3",
   "files": {
     "model.onnx": "5ddebfc5885930ad9b92c39d903e89c5170c9fc47533d885f416b1d360fa48dc"

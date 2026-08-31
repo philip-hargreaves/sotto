@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 // The full stage against the research reference: our fbank + our runtime on
 // raw audio must reproduce the fixture embeddings (research fbank + research
 // runtime). A failure here with fbank parity green points at the glue
-constexpr const char* kFixtureDir = SOTTO_DIAR_FIXTURE_DIR;
+constexpr const char* kFixtureDir = AMBIENT_DIAR_FIXTURE_DIR;
 
 std::vector<float> LoadWav(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
@@ -36,7 +36,7 @@ TEST(SpeakerEmbedder, ReproducesTheResearchEmbeddingsFromRawAudio) {
     const auto meta = nlohmann::json::parse(in);
     const auto audio = LoadWav(meta.at("wav"));
 
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
     SpeakerEmbedder embedder(store, runtime);
 
@@ -55,7 +55,7 @@ TEST(SpeakerEmbedder, ReproducesTheResearchEmbeddingsFromRawAudio) {
 }
 
 TEST(SpeakerEmbedder, ASliceShorterThanOneFrameIsRefused) {
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
     SpeakerEmbedder embedder(store, runtime);
     const std::vector<float> silence(399, 0.0f);
@@ -63,4 +63,4 @@ TEST(SpeakerEmbedder, ASliceShorterThanOneFrameIsRefused) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

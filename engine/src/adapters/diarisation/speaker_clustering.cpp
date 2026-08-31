@@ -6,7 +6,7 @@
 
 #include "fastcluster.h"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 std::vector<std::vector<float>> Normalised(const std::vector<std::vector<float>>& embeddings) {
@@ -154,4 +154,4 @@ ClusterResult ClusterSpeakers(const std::vector<std::vector<float>>& embeddings,
     return result;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

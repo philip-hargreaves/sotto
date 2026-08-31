@@ -5,7 +5,7 @@
 
 #include "sqlite3.h"
 
-namespace sotto::store {
+namespace ambient::store {
 
 namespace {
 
@@ -169,4 +169,4 @@ void Db::Transaction::Commit() {
     done_ = true;
 }
 
-}  // namespace sotto::store
+}  // namespace ambient::store

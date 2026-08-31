@@ -5,7 +5,7 @@
 
 #include "adapters/diarisation/fbank.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 SpeakerEmbedder::SpeakerEmbedder(const models::ModelStore& store, models::OvRuntime& runtime) {
     request_ =
@@ -30,4 +30,4 @@ std::vector<float> SpeakerEmbedder::Embed(std::span<const float> audio) {
     return embedding;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

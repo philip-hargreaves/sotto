@@ -4,13 +4,10 @@
 #include <string>
 #include <string_view>
 
-namespace sotto::core {
+namespace ambient::core {
 
-// The consultation in a line for the session list: the note's first
-// sentence, cut at a word when longer than the cap. A sentence ends at
-// . ! ? followed by whitespace or the end, so "1.5 mg" does not end it
-// (an abbreviation such as "Dr." does: a label, not a parser); whitespace
-// collapses so a header or line break never lands in the list
+// The note's first sentence, cut at a word; "1.5 mg" does not end a
+// sentence, whitespace collapses
 inline std::string LabelFrom(std::string_view note, std::size_t max_chars = 80) {
     std::string label;
     bool space_pending = false;
@@ -40,10 +37,8 @@ inline std::string LabelFrom(std::string_view note, std::size_t max_chars = 80) 
     return label;
 }
 
-// A model-written title, held to the list's standard: first line only,
-// wrapping quotes and trailing punctuation stripped, whitespace collapsed,
-// capped at a word boundary. Empty when nothing survives - and an empty
-// label means the list shows the date instead, so rejection is safe
+// Model titles held to the list's standard; empty falls back to the date,
+// so rejection is safe
 inline std::string SanitiseLabel(std::string_view raw, std::size_t max_chars = 60) {
     const auto line_end = raw.find('\n');
     std::string label = LabelFrom(raw.substr(0, line_end), max_chars);
@@ -57,4 +52,4 @@ inline std::string SanitiseLabel(std::string_view raw, std::size_t max_chars = 6
     return label;
 }
 
-}  // namespace sotto::core
+}  // namespace ambient::core

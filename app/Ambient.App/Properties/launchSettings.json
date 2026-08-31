@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Ambient.App (Unpackaged)": {
+      "commandName": "Project"
+    },
+    "Ambient.App (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

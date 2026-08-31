@@ -9,16 +9,15 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 struct LevelReading {
     float level = 0.0F;  // 0..1 over a dBFS scale from the floor up
     bool clipped = false;
 };
 
-// Mic-activity level from the samples alone: one reading per 100 ms window,
-// RMS on a dBFS scale, instant attack, exponential release. No wall clock,
-// so identical audio gives identical readings at any replay speed.
+// RMS per 100 ms on dBFS, instant attack, exponential release; no wall
+// clock, so replay speed cannot change the readings
 class LevelMeter {
    public:
     static constexpr std::size_t kWindowFrames = static_cast<std::size_t>(kSampleRate) / 10;
@@ -67,4 +66,4 @@ class LevelMeter {
     float envelope_ = 0.0F;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

@@ -12,7 +12,7 @@
 #include <dpapi.h>
 // clang-format on
 
-namespace sotto::store {
+namespace ambient::store {
 
 namespace {
 
@@ -101,7 +101,7 @@ ChunkCipher ChunkCipher::FromWrapped(std::span<const std::uint8_t> wrapped) {
 std::vector<std::uint8_t> ChunkCipher::Wrapped() const {
     DATA_BLOB in{static_cast<DWORD>(kKeyBytes), const_cast<std::uint8_t*>(impl_->key_bytes)};
     DATA_BLOB out{};
-    if (!CryptProtectData(&in, L"sotto session key", nullptr, nullptr, nullptr,
+    if (!CryptProtectData(&in, L"ambient session key", nullptr, nullptr, nullptr,
                           CRYPTPROTECT_UI_FORBIDDEN, &out)) {
         throw std::runtime_error("CryptProtectData failed");
     }
@@ -171,4 +171,4 @@ std::vector<std::uint8_t> ChunkCipher::Open(Domain domain, std::string_view sess
     return plain;
 }
 
-}  // namespace sotto::store
+}  // namespace ambient::store

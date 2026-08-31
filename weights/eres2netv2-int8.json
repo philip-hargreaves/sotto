@@ -1,6 +1,6 @@
 {
   "id": "eres2netv2-int8",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/eres2netv2-int8",
   "files": {
     "model.bin": "3c7da7d312da2ba295324309d95b1624bb21e42e105034dc3afa582f142742da",

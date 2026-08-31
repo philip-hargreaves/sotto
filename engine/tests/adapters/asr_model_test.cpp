@@ -6,14 +6,14 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 namespace {
 
 // Staged on dev machines by:
 //   tools/stage-model.ps1 -Id whisper-turbo-int8 -Task asr -Tier default -Licence MIT
 //       -Source C:\dev\intelliscribe\ml-models\asr\whisper-large-v3-turbo-int8
 TEST(AsrModel, StagedVerifiedAndCompilesOnTheGpu) {
-    const ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
 
     const ModelInfo& info = store.Resolve("asr", "default");
     EXPECT_EQ(info.id, "whisper-turbo-int8");
@@ -27,4 +27,4 @@ TEST(AsrModel, StagedVerifiedAndCompilesOnTheGpu) {
 }
 
 }  // namespace
-}  // namespace sotto::models
+}  // namespace ambient::models

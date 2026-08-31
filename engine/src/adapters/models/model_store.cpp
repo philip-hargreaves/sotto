@@ -14,7 +14,7 @@
 #include <bcrypt.h>
 // clang-format on
 
-namespace sotto::models {
+namespace ambient::models {
 
 namespace {
 
@@ -144,4 +144,4 @@ void ModelStore::Verify(const ModelInfo& model) const {
     }
 }
 
-}  // namespace sotto::models
+}  // namespace ambient::models

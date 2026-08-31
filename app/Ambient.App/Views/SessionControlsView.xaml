@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="Ambient.App.Views.SessionControlsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Ambient.App.Core.ViewModels">
+
+    <!-- The centre holds the one action -->
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.IdleVisible, Mode=OneWay}">
+            <Button
+                AutomationProperties.Name="Start recording"
+                Command="{x:Bind ViewModel.StartRecordingCommand}"
+                Style="{StaticResource RecordDisc}">
+                <FontIcon FontSize="32" Glyph="&#xE720;" />
+            </Button>
+            <!-- The one action on screen carries the one large label -->
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="Start recording" />
+        </StackPanel>
+
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.RecordingVisible, Mode=OneWay}">
+            <Button
+                AutomationProperties.Name="Stop recording"
+                Command="{x:Bind ViewModel.StopRecordingCommand}"
+                Style="{StaticResource StopDisc}">
+                <FontIcon FontSize="28" Glyph="&#xE71A;" />
+            </Button>
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource ClockText}"
+                Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+
+            <!-- Rolling level history -->
+            <ItemsControl HorizontalAlignment="Center" ItemsSource="{x:Bind ViewModel.Meter}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel
+                            Height="30"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LevelBar">
+                        <Rectangle
+                            Width="1.5"
+                            Height="{x:Bind Height, Mode=OneWay}"
+                            Margin="0.25,0"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                            RadiusX="0.75"
+                            RadiusY="0.75" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button
+                HorizontalAlignment="Center"
+                Command="{x:Bind ViewModel.CancelRecordingCommand}"
+                Content="Cancel"
+                Style="{StaticResource TrayButton}" />
+        </StackPanel>
+
+        <!-- Stop pressed, transcript still sealing: the same region, one
+             caption, until there is something to show -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="14"
+            Visibility="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}">
+            <ProgressRing
+                Width="44"
+                Height="44"
+                HorizontalAlignment="Center"
+                IsActive="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="{x:Bind ViewModel.FinalisingLabel, Mode=OneWay}" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource ClockText}"
+                Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -9,16 +9,17 @@
 #include <openvino/op/parameter.hpp>
 #include <string>
 
-namespace sotto::models {
+namespace ambient::models {
 namespace {
 
 struct TempRoot {
     std::filesystem::path path;
 
     TempRoot() {
-        path = std::filesystem::temp_directory_path() /
-               ("sotto-ovrt-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
-                "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
+        path =
+            std::filesystem::temp_directory_path() /
+            ("ambient-ovrt-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+             "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
         std::filesystem::create_directories(path);
     }
 
@@ -105,4 +106,4 @@ TEST(OvRuntime, AnUnsupportedManifestDeviceIsRefused) {
 }
 
 }  // namespace
-}  // namespace sotto::models
+}  // namespace ambient::models

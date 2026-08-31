@@ -12,7 +12,7 @@
 #include "ports/diariser.hpp"
 #include "ports/transcriber.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Decodes per speculation pass; small so a long pass cannot stall the
 // causal stages that keep the settled frontier fresh
@@ -28,9 +28,8 @@ struct CaptureDiarisation {
     TurnTexts turn_texts;  // the speculation cache, keyed on exact decode spans
 };
 
-// Diarisation's causal stages, run during capture strictly behind the
-// settled frontier; finalise stays bit-identical to a whole-recording pass
-// and pays only the tail. Borrows the diariser's models
+// Capture-phase stages behind the settled frontier; finalise stays
+// bit-identical and pays only the tail
 class DiarWorker {
    public:
     DiarWorker(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder);
@@ -46,7 +45,6 @@ class DiarWorker {
         return !state_.vad_probabilities.empty();
     }
 
-    // Resets the worker for the next session
     CaptureDiarisation Take() {
         overlap_cache_.clear();
         return std::exchange(state_, {});
@@ -64,4 +62,4 @@ class DiarWorker {
     CaptureDiarisation state_;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

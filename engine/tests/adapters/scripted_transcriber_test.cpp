@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace sotto::asr {
+namespace ambient::asr {
 namespace {
 
 struct RecordingSink : ITurnSink {
@@ -64,4 +64,4 @@ TEST(ScriptedTranscriber, BeginResetsTheScript) {
 }
 
 }  // namespace
-}  // namespace sotto::asr
+}  // namespace ambient::asr

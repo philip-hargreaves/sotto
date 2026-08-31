@@ -10,7 +10,7 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "core/metrics.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 namespace {
 
 struct RecordingSink : ITurnSink {
@@ -332,4 +332,4 @@ TEST(WhisperWorker, BeginPointsTurnsAtTheNewSink) {
 }
 
 }  // namespace
-}  // namespace sotto::asr
+}  // namespace ambient::asr

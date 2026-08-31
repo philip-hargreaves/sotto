@@ -8,13 +8,10 @@
 
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
-// Diarisation's speech regions: a batch Silero pass over
-// the whole recording, cut finer than the ASR endpointer so speaker
-// handovers become region edges. A faithful transliteration of the
-// research's sample-exact port; constants are the validated configuration -
-// do not retune
+// Batch Silero over the whole recording, cut finer than the endpointer;
+// validated configuration - do not retune
 inline constexpr float kEnter = 0.40f;
 inline constexpr float kExit = 0.25f;
 inline constexpr std::uint64_t kMinSpeechFrames = 1600;   // 100 ms
@@ -75,4 +72,4 @@ inline std::vector<Region> SpeechRegions(std::span<const float> probabilities,
     return regions;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

@@ -9,7 +9,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 std::vector<float> Sequence(std::size_t count, float first = 0.0F) {
@@ -149,4 +149,4 @@ TEST(AudioSourcePort, ASinkReceivesAudioThenTheEnd) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

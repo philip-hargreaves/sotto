@@ -1,0 +1,62 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Ambient.App.Core.ViewModels;
+
+namespace Ambient.App.Views;
+
+public sealed partial class StatusBarView : UserControl
+{
+    private readonly CreditsViewModel _credits;
+
+    public StatusBarView(StatusBarViewModel viewModel, CreditsViewModel credits)
+    {
+        ViewModel = viewModel;
+        _credits = credits;
+        InitializeComponent();
+        // Marks re-resolve on theme change, and on Loaded: a theme switched
+        // while this view was off-tree fires no ActualThemeChanged here
+        BuildCredits();
+        ActualThemeChanged += (_, _) => BuildCredits();
+        Loaded += (_, _) => BuildCredits();
+        // Chip visibility is computed here; the async model fetch needs a nudge
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(StatusBarViewModel.AsrChip)
+                or nameof(StatusBarViewModel.NoteChip)
+                or nameof(StatusBarViewModel.MemoryChip)
+                or nameof(StatusBarViewModel.MetricsVisible))
+            {
+                Bindings.Update();
+            }
+        };
+    }
+
+    public StatusBarViewModel ViewModel { get; }
+
+    public bool AsrChipVisible => ViewModel.MetricsVisible && ViewModel.AsrChip.Length > 0;
+
+    public bool NoteChipVisible => ViewModel.MetricsVisible && ViewModel.NoteChip.Length > 0;
+
+    public bool MemoryChipVisible => ViewModel.MetricsVisible && ViewModel.MemoryChip.Length > 0;
+
+
+    private void BuildCredits()
+    {
+        CreditsRow.Children.Clear();
+        var dark = ActualTheme == ElementTheme.Dark;
+        foreach (var mark in _credits.Marks)
+        {
+            var path = dark ? mark.DarkPath : mark.LightPath;
+            var uri = new Uri(path);
+            CreditsRow.Children.Add(new Image
+            {
+                Height = mark.Height,
+                Source = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                    ? new SvgImageSource(uri)
+                    : new BitmapImage(uri),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+    }
+}

@@ -7,7 +7,7 @@
 #include "core/diar_regions.hpp"
 #include "ports/diariser.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 inline constexpr std::uint64_t kVoiceprintCapFrames = 90 * 16000;  // long-exposure cap
 inline constexpr std::uint64_t kVoiceprintMinFrames = 16000;       // under 1 s carries no identity
@@ -32,4 +32,4 @@ inline std::vector<Region> VoiceprintRanges(const std::vector<LabelledSlice>& sl
 std::vector<float> ClusterVoiceprint(SpeakerEmbedder& embedder, std::span<const float> audio,
                                      const std::vector<LabelledSlice>& slices, int cluster);
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

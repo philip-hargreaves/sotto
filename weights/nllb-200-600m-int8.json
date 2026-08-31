@@ -1,6 +1,6 @@
 {
   "id": "nllb-200-600m-int8",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/nllb-200-600m-int8",
   "files": {
     "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",
@@ -144,7 +144,7 @@
       "device": "CPU"
     },
     "source": {
-      "path": "C:\\dev\\sotto\\build\\nllb-export\\nllb-200-600m-int8"
+      "path": "C:\\dev\\ambient\\build\\nllb-export\\nllb-200-600m-int8"
     },
     "files": {
       "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",

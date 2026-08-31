@@ -28,7 +28,7 @@ namespace {
 // the pipe stays responsive to cancel
 class GenerationLane {
    public:
-    explicit GenerationLane(sotto::ipc::PipeServer& server) : server_(server) {}
+    explicit GenerationLane(ambient::ipc::PipeServer& server) : server_(server) {}
 
     ~GenerationLane() {
         if (thread_.joinable()) {
@@ -36,7 +36,7 @@ class GenerationLane {
         }
     }
 
-    bool Run(std::function<std::string(const sotto::note::INoteWriter::Progress&)> generate) {
+    bool Run(std::function<std::string(const ambient::note::INoteWriter::Progress&)> generate) {
         if (running_.exchange(true)) {
             return false;
         }
@@ -51,7 +51,7 @@ class GenerationLane {
                     if (first) {
                         first = false;
                         std::fprintf(
-                            stderr, "sotto-note-host: first token in %.1f s\n",
+                            stderr, "ambient-note-host: first token in %.1f s\n",
                             std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
                                 .count());
                     }
@@ -69,13 +69,13 @@ class GenerationLane {
     }
 
    private:
-    sotto::ipc::PipeServer& server_;
+    ambient::ipc::PipeServer& server_;
     std::thread thread_;
     std::atomic<bool> running_{false};
 };
 
-std::vector<sotto::asr::Turn> TurnsFrom(const nlohmann::json& params) {
-    std::vector<sotto::asr::Turn> turns;
+std::vector<ambient::asr::Turn> TurnsFrom(const nlohmann::json& params) {
+    std::vector<ambient::asr::Turn> turns;
     for (const auto& t : params.value("turns", nlohmann::json::array())) {
         turns.push_back({t.value("firstFrame", std::uint64_t{0}),
                          t.value("frameCount", std::uint64_t{0}), t.value("speaker", ""),
@@ -95,24 +95,24 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         if (argc < 4) {
-            std::fprintf(stderr, "usage: sotto_note_host <pipe> <models> <prompts-dir>\n");
+            std::fprintf(stderr, "usage: ambient_note_host <pipe> <models> <prompts-dir>\n");
             return 2;
         }
-        std::fprintf(stderr, "sotto-note-host: power throttling %s\n",
-                     sotto::host::Describe(sotto::host::DisableThrottlingOnSelf()).c_str());
+        std::fprintf(stderr, "ambient-note-host: power throttling %s\n",
+                     ambient::host::Describe(ambient::host::DisableThrottlingOnSelf()).c_str());
         const std::wstring pipe_name = std::filesystem::path(argv[1]).wstring();
         const std::filesystem::path models_root = argv[2];
         const std::filesystem::path prompt_path = argv[3];
 
-        sotto::ipc::PipeServer server(pipe_name);
-        sotto::models::ModelStore store(models_root);
-        sotto::models::OvRuntime runtime;
-        sotto::note::QwenNoteWriter writer(store, runtime, prompt_path);
+        ambient::ipc::PipeServer server(pipe_name);
+        ambient::models::ModelStore store(models_root);
+        ambient::models::OvRuntime runtime;
+        ambient::note::QwenNoteWriter writer(store, runtime, prompt_path);
         GenerationLane lane(server);
 
-        using sotto::ipc::Error;
-        using sotto::ipc::json;
-        using sotto::ipc::kSessionError;
+        using ambient::ipc::Error;
+        using ambient::ipc::json;
+        using ambient::ipc::kSessionError;
         server.RegisterMethod("prepare", [&writer](const json&) {
             writer.Prepare();
             return json::object();
@@ -124,8 +124,8 @@ int main(int argc, char* argv[]) {
         server.RegisterMethod(
             "write", [&writer, &lane](const json& params) -> std::variant<json, Error> {
                 auto turns = TurnsFrom(params);
-                sotto::note::NoteOptions options{params.value("style", "prose"),
-                                                 params.value("detail", "standard")};
+                ambient::note::NoteOptions options{params.value("style", "prose"),
+                                                   params.value("detail", "standard")};
                 if (!lane.Run([&writer, turns = std::move(turns),
                                options = std::move(options)](const auto& progress) {
                         return writer.Write(turns, options, progress);
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
         server.ServeOneClient();
         return 0;
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-note-host: fatal: %s\n", e.what());
+        std::fprintf(stderr, "ambient-note-host: fatal: %s\n", e.what());
         return 1;
     }
 }

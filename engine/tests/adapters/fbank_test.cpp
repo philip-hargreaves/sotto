@@ -5,7 +5,7 @@
 #include <cmath>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 std::vector<float> Tone(std::size_t samples) {
@@ -43,4 +43,4 @@ TEST(Fbank, EveryMelBinIsMeanNormalised) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

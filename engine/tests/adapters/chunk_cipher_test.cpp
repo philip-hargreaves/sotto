@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace sotto::store {
+namespace ambient::store {
 namespace {
 
 std::vector<std::uint8_t> SampleChunk() {
@@ -105,4 +105,4 @@ TEST(ChunkCipher, GarbageWrappedKeyThrows) {
 }
 
 }  // namespace
-}  // namespace sotto::store
+}  // namespace ambient::store

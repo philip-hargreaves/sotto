@@ -1,4 +1,4 @@
-# sotto
+# ambient
 
 On-device ambient AI for clinical consultations. A C++20 engine with a WinUI 3 shell that
 listens to the consultation, produces a labelled transcript, and drafts a structured clinical note.
@@ -12,7 +12,7 @@ Requires Visual Studio 2022 or 2026 with the Desktop development with C++ worklo
 ```powershell
 cmake --preset dev
 cmake --build --preset dev
-dotnet build sotto.slnx
+dotnet build ambient.slnx
 ```
 
 Configures and builds the engine, then the shell. Use the `release` presets for an optimised
@@ -35,18 +35,18 @@ packages carry the same tool as `get-models.cmd` - double-click it once beside t
 
 ```powershell
 cmake --workflow --preset dev
-dotnet test sotto.slnx
+dotnet test ambient.slnx
 ```
 
 The workflow runs configure, build and the engine tests in one step. `dotnet test` builds and
-runs the C# suites; the integration tests launch `sotto_engine.exe`, so build the engine first.
+runs the C# suites; the integration tests launch `ambient_engine.exe`, so build the engine first.
 
 Unit tests cover the view models and the supervision policy with fakes at the ports.
 Integration tests exercise the real Win32 adapters (job objects, process launch, kill and
 restart) by spawning short-lived stand-in processes, and carry the `Integration` trait:
 
 ```powershell
-dotnet test sotto.slnx --filter "Category!=Integration"
+dotnet test ambient.slnx --filter "Category!=Integration"
 ```
 
 runs the unit tests alone. Both kinds run on every build. There is no UI automation; the

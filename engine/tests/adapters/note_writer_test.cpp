@@ -7,10 +7,10 @@
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/qwen_note_writer.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 namespace {
 
-const std::filesystem::path kModels = SOTTO_MODELS_DIR;
+const std::filesystem::path kModels = AMBIENT_MODELS_DIR;
 
 std::vector<asr::Turn> ElbowTranscript() {
     return {{0, 16000, "doctor", "What seems to be the problem today?"},
@@ -144,4 +144,4 @@ TEST(QwenNoteWriter, AnEmptyTranscriptRefusesToWrite) {
 }
 
 }  // namespace
-}  // namespace sotto::note
+}  // namespace ambient::note

@@ -6,12 +6,9 @@
 
 #include <string>
 
-// Windows throttles windowless background processes (EcoQoS) once the user
-// is idle: measured finalise 4.0 s -> 6.3 s and the note model load 22 s ->
-// 37 s. The engine and note host opt out at startup; the shell and the engine
-// also set it on the children they spawn, so the state never depends on one
-// call succeeding
-namespace sotto::host {
+// EcoQoS throttling measured finalise 4.0 -> 6.3 s; engine, note host and
+// shell all opt out, so the state never depends on one call
+namespace ambient::host {
 
 struct ThrottlingState {
     bool known = false;      // read-back succeeded
@@ -53,4 +50,4 @@ inline std::string Describe(const ThrottlingState& state) {
     return "default";
 }
 
-}  // namespace sotto::host
+}  // namespace ambient::host

@@ -12,7 +12,7 @@
 #include "core/turn_assembly.hpp"
 #include "ports/audio_source.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 namespace {
 
@@ -29,7 +29,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     store.Verify(info);
     const std::string device =
         runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
-    std::fprintf(stderr, "sotto-engine: %s on %s\n", role, device.c_str());
+    std::fprintf(stderr, "ambient-engine: %s on %s\n", role, device.c_str());
     if (metrics != nullptr) metrics->RecordDevice(role, device);
 
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
@@ -160,9 +160,8 @@ std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
     return text.get();
 }
 
-// Load off the hot path: the engine serves and sessions record while the
-// pipeline compiles; queued windows decode afterwards. A failed load drains
-// windows without turns, so nothing hangs
+// Load off the hot path; a failed load drains windows without turns, so
+// nothing hangs
 void WhisperTranscriber::RecordDecode(std::size_t frames,
                                       std::chrono::steady_clock::time_point t0) {
     if (metrics_ != nullptr) {
@@ -185,7 +184,7 @@ void WhisperTranscriber::LoadIfPending() {
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: transcription unavailable (%s)\n", e.what());
     }
     loader_ = {};
 
@@ -194,7 +193,7 @@ void WhisperTranscriber::LoadIfPending() {
             clip_decode_ = clip_loader_();
         } catch (const std::exception& e) {
             // Clips then share the live pipeline: slower, never wrong
-            std::fprintf(stderr, "sotto-engine: finalise stays on the live device (%s)\n",
+            std::fprintf(stderr, "ambient-engine: finalise stays on the live device (%s)\n",
                          e.what());
         }
         clip_loader_ = {};
@@ -276,9 +275,7 @@ void WhisperTranscriber::WorkerLoop() {
                 RecordDecode(window.frames.size(), t0);
                 AnchorFirstTurn(turns, window.first_frame);
                 DropReheardTurns(turns, window.first_new_frame);
-                // The dedup backstop acts at the window boundary only: within
-                // a window the decoder never duplicates its own segments, and
-                // stripping there would eat genuine repetition
+                // Boundary-only dedup: within a window, stripping would eat genuine repetition
                 if (!turns.empty() && previous.has_value()) {
                     StripBoundaryDuplicates(*previous, turns.front());
                 }
@@ -300,4 +297,4 @@ void WhisperTranscriber::WorkerLoop() {
     for (auto& clip : clips_) clip.text.set_value({});
 }
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

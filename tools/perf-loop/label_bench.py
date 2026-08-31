@@ -7,8 +7,8 @@ import sys
 
 import openvino_genai as og
 
-MODEL = r"C:\dev\sotto\models\qwen3.5-9b-int4"
-PROMPT = open(r"C:\dev\sotto\prompts\label.md", encoding="utf-8").read()
+MODEL = r"C:\dev\ambient\models\qwen3.5-9b-int4"
+PROMPT = open(r"C:\dev\ambient\prompts\label.md", encoding="utf-8").read()
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 

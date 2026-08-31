@@ -1,6 +1,6 @@
 {
   "id": "qwen3.5-9b-int4",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/qwen3.5-9b-int4",
   "files": {
     "chat_template.jinja": "a92e1dd97cb1cb175c9b70c0828e146bea4371c2643319b661b777e89811972e",

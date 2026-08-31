@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 const std::vector<float> kAudio(400000, 0.1f);
@@ -111,4 +111,4 @@ TEST(DecodeTurnTexts, ATurnPastTheAudioEndIsBounded) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

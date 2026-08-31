@@ -6,7 +6,7 @@ namespace {
 
 // Real enumeration; a runner with no microphone legitimately lists nothing
 TEST(CaptureDevices, EveryListedDeviceIsWellFormed) {
-    const auto devices = sotto::audio::ListCaptureDevices();
+    const auto devices = ambient::audio::ListCaptureDevices();
     int defaults = 0;
     for (const auto& device : devices) {
         EXPECT_FALSE(device.id.empty());
@@ -24,34 +24,34 @@ TEST(CaptureDevices, EveryListedDeviceIsWellFormed) {
 }
 
 TEST(CaptureDevices, ResolveFindsTheRequestedDevice) {
-    const std::vector<sotto::audio::CaptureDevice> devices{
+    const std::vector<ambient::audio::CaptureDevice> devices{
         {"{aa}", "Array", "Array", true, false},
         {"{bb}", "Headset", "Headset", false, true},
     };
-    EXPECT_EQ(sotto::audio::ResolveMicrophone(devices, "{bb}").id, "{bb}");
+    EXPECT_EQ(ambient::audio::ResolveMicrophone(devices, "{bb}").id, "{bb}");
 }
 
 TEST(CaptureDevices, AGoneChoiceResolvesToTheDefault) {
-    const std::vector<sotto::audio::CaptureDevice> devices{
+    const std::vector<ambient::audio::CaptureDevice> devices{
         {"{aa}", "USB Mic", "USB Mic", false, false},
         {"{bb}", "Array", "Array", true, false},
     };
-    const auto resolved = sotto::audio::ResolveMicrophone(devices, "{unplugged}");
+    const auto resolved = ambient::audio::ResolveMicrophone(devices, "{unplugged}");
     EXPECT_EQ(resolved.id, "{bb}");
     EXPECT_EQ(resolved.name, "Array");
 }
 
 TEST(CaptureDevices, NoDefaultFallsToTheFirstAndEmptyToNothing) {
-    const std::vector<sotto::audio::CaptureDevice> devices{
+    const std::vector<ambient::audio::CaptureDevice> devices{
         {"{aa}", "USB Mic", "USB Mic", false, false},
     };
-    EXPECT_EQ(sotto::audio::ResolveMicrophone(devices, "").id, "{aa}");
-    EXPECT_EQ(sotto::audio::ResolveMicrophone({}, "{any}").id, "");
+    EXPECT_EQ(ambient::audio::ResolveMicrophone(devices, "").id, "{aa}");
+    EXPECT_EQ(ambient::audio::ResolveMicrophone({}, "{any}").id, "");
 }
 
 TEST(CaptureDevices, WideIdRoundTripsAscii) {
-    EXPECT_EQ(sotto::audio::WideId("{0.0.1.00000000}.{abc}"), L"{0.0.1.00000000}.{abc}");
-    EXPECT_TRUE(sotto::audio::WideId("").empty());
+    EXPECT_EQ(ambient::audio::WideId("{0.0.1.00000000}.{abc}"), L"{0.0.1.00000000}.{abc}");
+    EXPECT_TRUE(ambient::audio::WideId("").empty());
 }
 
 }  // namespace

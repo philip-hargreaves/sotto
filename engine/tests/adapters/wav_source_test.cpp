@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 // Every file is built byte by byte in the test, so each malformation is
@@ -71,7 +71,7 @@ struct TempWav {
 
     explicit TempWav(const std::vector<std::uint8_t>& bytes) {
         path = std::filesystem::temp_directory_path() /
-               ("sotto-wav-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+               ("ambient-wav-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
                 "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name() + ".wav");
         std::ofstream out(path, std::ios::binary);
         out.write(reinterpret_cast<const char*>(bytes.data()),
@@ -313,4 +313,4 @@ TEST(WavSource, StopWinsOverPause) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

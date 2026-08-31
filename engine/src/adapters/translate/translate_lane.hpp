@@ -12,7 +12,7 @@
 
 #include "ports/translator.hpp"
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 // Runs one translation at a time off the RPC thread, announcing
 // translate/partial, translate/ready and translate/failed.
@@ -30,9 +30,8 @@ class TranslateLane {
 
     using OnReady = std::function<void(const std::string& translated, const std::string& language)>;
 
-    // False while a previous translation is still running. on_ready runs
-    // before the ready notification, so a reader that reacts to it finds the
-    // translation already stored
+    // on_ready runs before the ready notification, so a reader reacting to it
+    // finds the translation stored
     bool Run(std::string text, std::string language, OnReady on_ready = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (running_.load()) {
@@ -52,7 +51,7 @@ class TranslateLane {
                         if (first) {
                             first = false;
                             std::fprintf(
-                                stderr, "sotto-engine: first translated word in %.1f s\n",
+                                stderr, "ambient-engine: first translated word in %.1f s\n",
                                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
                                     .count());
                         }
@@ -91,4 +90,4 @@ class TranslateLane {
     std::atomic<bool> running_{false};
 };
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

@@ -4,7 +4,7 @@ import os
 import sys
 import time
 
-sys.path.insert(0, r"C:\dev\sotto\tools\perf-loop")
+sys.path.insert(0, r"C:\dev\ambient\tools\perf-loop")
 import perf_loop as pl
 
 

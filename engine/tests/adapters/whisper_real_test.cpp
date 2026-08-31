@@ -12,7 +12,7 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "ports/audio_source.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 namespace {
 
 constexpr const char* kWav =
@@ -43,7 +43,7 @@ struct RecordingSink : ITurnSink {
 
 TEST(WhisperReal, TranscribesRealSpeechWithTimingsInsideTheWindow) {
     const auto frames = First30Seconds(kWav);
-    const models::ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const models::ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
     models::OvRuntime runtime;
 
     WhisperTranscriber transcriber(store, runtime);
@@ -65,4 +65,4 @@ TEST(WhisperReal, TranscribesRealSpeechWithTimingsInsideTheWindow) {
 }
 
 }  // namespace
-}  // namespace sotto::asr
+}  // namespace ambient::asr

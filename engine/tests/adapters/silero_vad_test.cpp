@@ -11,7 +11,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 std::vector<float> FirstSeconds(int seconds) {
@@ -29,7 +29,7 @@ std::vector<float> FirstSeconds(int seconds) {
 
 // Thresholds under test are the validated hysteresis: enter 0.40, exit 0.25
 TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
-    const models::ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const models::ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
     models::OvRuntime runtime;
     SileroVad vad(store, runtime);
 
@@ -64,7 +64,7 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
 }
 
 TEST(SileroVad, ResetClearsTheRecurrentState) {
-    const models::ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const models::ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
     models::OvRuntime runtime;
     SileroVad vad(store, runtime);
 
@@ -80,7 +80,7 @@ TEST(SileroVad, ResetClearsTheRecurrentState) {
 }
 
 TEST(SileroVad, AWrongHopSizeIsRefused) {
-    const models::ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const models::ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
     models::OvRuntime runtime;
     SileroVad vad(store, runtime);
     const std::vector<float> wrong(100, 0.0f);
@@ -88,4 +88,4 @@ TEST(SileroVad, AWrongHopSizeIsRefused) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

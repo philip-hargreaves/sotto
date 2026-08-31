@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Turns WASAPI packet metadata into the port's "frames lost"
 // One instance per stream: positions restart from a new origin on any client rebuild.
@@ -11,9 +11,8 @@ class CaptureTimeline {
     explicit CaptureTimeline(std::uint32_t native_rate, std::uint32_t target_rate = 16000)
         : native_rate_(native_rate), target_rate_(target_rate) {}
 
-    // Frames at the target rate lost before this packet. The first packet
-    // anchors the origin and never reports loss: there is no baseline yet
-    // and the discontinuity flag is undefined there.
+    // Frames lost before this packet; the first packet anchors the origin and
+    // never reports loss
     std::uint64_t OnPacket(std::uint64_t device_position, std::uint32_t frames,
                            bool discontinuity) {
         std::uint64_t lost = 0;
@@ -65,4 +64,4 @@ class CaptureTimeline {
     std::uint64_t discontinuity_flags_ = 0;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

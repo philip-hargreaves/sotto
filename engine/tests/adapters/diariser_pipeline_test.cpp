@@ -10,7 +10,7 @@
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 // Shape checks on the assembled chain over a real consultation. Quality is
@@ -34,9 +34,9 @@ std::vector<float> LoadWav(const char* path) {
 
 TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
     const auto audio = LoadWav(kWav);
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
-    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-pipeline-test";
+    const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-pipeline-test";
     std::filesystem::create_directories(anchor_root);
     SpeakerDiariser diariser(store, runtime, anchor_root);
 
@@ -68,9 +68,9 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
 // reference method produces, and the reuse must actually skip the embed
 TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReusesThem) {
     const auto audio = LoadWav(kWav);
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
-    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-anchor-test";
+    const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-anchor-test";
     std::filesystem::remove_all(anchor_root);
     std::filesystem::create_directories(anchor_root);
     SpeakerDiariser diariser(store, runtime, anchor_root);
@@ -111,9 +111,9 @@ TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReus
 // audio incrementally must change nothing about the diarised output
 TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     const auto audio = LoadWav(kWav);
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
-    const auto root = std::filesystem::temp_directory_path() / "sotto-diar-capture-test";
+    const auto root = std::filesystem::temp_directory_path() / "ambient-diar-capture-test";
     std::filesystem::create_directories(root);
     SpeakerDiariser batch(store, runtime, root / "a");
     SpeakerDiariser fed(store, runtime, root / "b");
@@ -154,4 +154,4 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

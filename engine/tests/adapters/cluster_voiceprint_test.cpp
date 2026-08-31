@@ -11,13 +11,13 @@
 
 #include "adapters/diarisation/anchor_store.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 // Real-audio check of the steady-state naming mechanism: voiceprints built
 // from one speaker's slices must rank nearer an anchor accrued from that
 // speaker than the other speaker's voiceprint does
-constexpr const char* kFixtureDir = SOTTO_DIAR_FIXTURE_DIR;
+constexpr const char* kFixtureDir = AMBIENT_DIAR_FIXTURE_DIR;
 
 std::vector<float> LoadWav(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
@@ -52,7 +52,7 @@ TEST(ClusterVoiceprint, TheAccruedAnchorRanksItsOwnSpeakerNearer) {
                           entry.at("role") == "doctor" ? 0 : 1});
     }
 
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
     SpeakerEmbedder embedder(store, runtime);
 
@@ -62,7 +62,7 @@ TEST(ClusterVoiceprint, TheAccruedAnchorRanksItsOwnSpeakerNearer) {
     ASSERT_EQ(patient.size(), kEmbeddingDims);
 
     const std::filesystem::path tmp =
-        std::filesystem::temp_directory_path() / "sotto-anchor-rank-test";
+        std::filesystem::temp_directory_path() / "ambient-anchor-rank-test";
     std::filesystem::create_directories(tmp);
     AnchorStore anchors(tmp);
     anchors.Clear();
@@ -78,4 +78,4 @@ TEST(ClusterVoiceprint, TheAccruedAnchorRanksItsOwnSpeakerNearer) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

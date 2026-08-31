@@ -1,8 +1,8 @@
 #pragma once
 
-namespace sotto {
+namespace ambient {
 
-inline constexpr const char* kName = "sotto";
+inline constexpr const char* kName = "ambient";
 inline constexpr const char* kVersion = "0.1.0";
 
-}  // namespace sotto
+}  // namespace ambient

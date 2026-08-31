@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <span>
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // 32 ms at 16 kHz, Silero's native hop
 inline constexpr std::size_t kVadHopFrames = 512;
@@ -25,4 +25,4 @@ class IStreamingVad {
     }
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

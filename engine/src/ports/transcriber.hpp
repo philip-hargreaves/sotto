@@ -4,7 +4,7 @@
 #include <span>
 #include <string>
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 struct Turn {
     std::uint64_t first_frame = 0;
@@ -27,9 +27,8 @@ class ITranscriber {
 
     virtual void Begin(ITurnSink& sink) = 0;
 
-    // A window may lead with already-transcribed overlap audio for context;
-    // first_new_frame marks where unheard audio begins (0: all of it is new),
-    // and turns wholly before it are not emitted again
+    // first_new_frame marks where unheard audio begins; turns wholly before
+    // it are not emitted again
     virtual void Submit(std::span<const float> frames, std::uint64_t first_frame,
                         std::uint64_t first_new_frame = 0) = 0;
 
@@ -45,4 +44,4 @@ class ITranscriber {
     virtual void Release() {}
 };
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

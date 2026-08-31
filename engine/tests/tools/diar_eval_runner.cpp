@@ -42,22 +42,22 @@ std::vector<float> LoadWav(const char* path) {
     return frames;
 }
 
-struct CollectingSink : sotto::asr::ITurnSink {
+struct CollectingSink : ambient::asr::ITurnSink {
     std::mutex mutex;
-    std::vector<sotto::asr::Turn> turns;
+    std::vector<ambient::asr::Turn> turns;
 
-    void OnTurn(const sotto::asr::Turn& turn) override {
+    void OnTurn(const ambient::asr::Turn& turn) override {
         const std::lock_guard<std::mutex> lock(mutex);
         turns.push_back(turn);
     }
 };
 
-std::vector<sotto::asr::Turn> Transcribe(const sotto::models::ModelStore& store,
-                                         sotto::models::OvRuntime& runtime,
-                                         sotto::asr::WhisperTranscriber& transcriber,
-                                         const std::vector<float>& audio) {
-    sotto::audio::SileroVad vad(store, runtime);
-    sotto::audio::Endpointer endpointer(vad);
+std::vector<ambient::asr::Turn> Transcribe(const ambient::models::ModelStore& store,
+                                           ambient::models::OvRuntime& runtime,
+                                           ambient::asr::WhisperTranscriber& transcriber,
+                                           const std::vector<float>& audio) {
+    ambient::audio::SileroVad vad(store, runtime);
+    ambient::audio::Endpointer endpointer(vad);
     CollectingSink sink;
     transcriber.Begin(sink);
     for (const auto& window : endpointer.Push(audio)) {
@@ -70,7 +70,7 @@ std::vector<sotto::asr::Turn> Transcribe(const sotto::models::ModelStore& store,
     return sink.turns;
 }
 
-std::string Decode(sotto::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
+std::string Decode(ambient::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
                    std::uint64_t first_frame) {
     CollectingSink sink;
     transcriber.Begin(sink);
@@ -89,20 +89,20 @@ std::string Decode(sotto::asr::WhisperTranscriber& transcriber, std::span<const 
 // fed in five-second steps with the audio and completed turns so far,
 // exactly as the session controller feeds it - then time what a stop pays
 // and verify the output is bit-identical to the batch pass
-void AmortiseProbe(const sotto::models::ModelStore& store, sotto::models::OvRuntime& runtime,
-                   sotto::asr::WhisperTranscriber& whisper, const std::vector<float>& audio,
-                   const std::vector<sotto::asr::Turn>& reconciled,
+void AmortiseProbe(const ambient::models::ModelStore& store, ambient::models::OvRuntime& runtime,
+                   ambient::asr::WhisperTranscriber& whisper, const std::vector<float>& audio,
+                   const std::vector<ambient::asr::Turn>& reconciled,
                    const std::vector<std::uint64_t>& cuts,
-                   const sotto::diar::DiariseResult& batch) {
+                   const ambient::diar::DiariseResult& batch) {
     using Clock = std::chrono::steady_clock;
     const auto seconds = [](Clock::time_point a, Clock::time_point b) {
         return std::chrono::duration<double>(b - a).count();
     };
     constexpr std::uint64_t kStepFrames = 5 * 16000;
 
-    const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-eval-amortise";
+    const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-eval-amortise";
     std::filesystem::create_directories(anchor_root);
-    sotto::diar::SpeakerDiariser fed(store, runtime, anchor_root);
+    ambient::diar::SpeakerDiariser fed(store, runtime, anchor_root);
     std::size_t decodes = 0;
     const auto decode = [&whisper, &decodes](std::span<const float> clip, std::uint64_t first) {
         ++decodes;
@@ -113,7 +113,7 @@ void AmortiseProbe(const sotto::models::ModelStore& store, sotto::models::OvRunt
     double capture_s = 0.0;
     std::size_t ticks = 0;
     for (std::uint64_t upto = kStepFrames; upto < audio.size(); upto += kStepFrames) {
-        std::vector<sotto::asr::Turn> so_far;
+        std::vector<ambient::asr::Turn> so_far;
         for (const auto& turn : reconciled) {
             if (turn.first_frame + turn.frame_count <= upto) so_far.push_back(turn);
         }
@@ -129,21 +129,21 @@ void AmortiseProbe(const sotto::models::ModelStore& store, sotto::models::OvRunt
     const auto stop_start = Clock::now();
     const auto result = fed.Diarise(audio, cuts);
     const auto cache = fed.TakeTurnTexts();
-    const auto turns = sotto::diar::MergeByCluster(result.slices);
+    const auto turns = ambient::diar::MergeByCluster(result.slices);
     std::size_t hits = 0;
-    for (const auto& span : sotto::diar::DecodeSpans(turns, audio.size())) {
+    for (const auto& span : ambient::diar::DecodeSpans(turns, audio.size())) {
         if (cache.contains({span.first_frame, span.end_frame})) ++hits;
     }
-    const auto turn_texts = sotto::diar::DecodeTurnTexts(turns, audio, decode, &cache);
-    std::vector<sotto::diar::RoleTurn> role_turns;
+    const auto turn_texts = ambient::diar::DecodeTurnTexts(turns, audio, decode, &cache);
+    std::vector<ambient::diar::RoleTurn> role_turns;
     for (std::size_t i = 0; i < turns.size(); ++i) {
         role_turns.push_back(
             {turns[i].cluster, turns[i].end_frame - turns[i].first_frame, turn_texts[i]});
     }
-    const auto named = sotto::diar::NameRoles(role_turns, result.cluster_count);
+    const auto named = ambient::diar::NameRoles(role_turns, result.cluster_count);
     const auto vp_start = Clock::now();
     for (int c = 0; c < result.cluster_count && c < 2; ++c) {
-        (void)sotto::diar::ClusterVoiceprint(fed.Embedder(), audio, result.slices, c);
+        (void)ambient::diar::ClusterVoiceprint(fed.Embedder(), audio, result.slices, c);
     }
     const double vp_s = seconds(vp_start, Clock::now());
     const double stop_s = seconds(stop_start, Clock::now());
@@ -217,22 +217,22 @@ int main(int argc, char** argv) {
         }
     }
     try {
-        const sotto::models::ModelStore store{std::filesystem::path(argv[1])};
-        sotto::models::OvRuntime runtime;
+        const ambient::models::ModelStore store{std::filesystem::path(argv[1])};
+        ambient::models::OvRuntime runtime;
         // A throwaway anchor root: evaluation must never touch a real anchor
-        const auto anchor_root = std::filesystem::temp_directory_path() / "sotto-diar-eval";
+        const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-eval";
         std::filesystem::create_directories(anchor_root);
-        sotto::diar::SpeakerDiariser diariser(store, runtime, anchor_root);
+        ambient::diar::SpeakerDiariser diariser(store, runtime, anchor_root);
         const auto audio = LoadWav(argv[2]);
 
-        std::vector<sotto::asr::Turn> turns;
-        std::unique_ptr<sotto::asr::WhisperTranscriber> whisper;
+        std::vector<ambient::asr::Turn> turns;
+        std::unique_ptr<ambient::asr::WhisperTranscriber> whisper;
         if (roles || turn_cuts) {
-            whisper = std::make_unique<sotto::asr::WhisperTranscriber>(store, runtime);
+            whisper = std::make_unique<ambient::asr::WhisperTranscriber>(store, runtime);
             turns = Transcribe(store, runtime, *whisper, audio);
         }
 
-        sotto::diar::ReconcileTurns(turns);
+        ambient::diar::ReconcileTurns(turns);
         std::vector<std::uint64_t> cuts;
         if (turn_cuts || roles) {
             for (const auto& turn : turns) {
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
                 cuts.push_back(turn.first_frame + turn.frame_count);
             }
         }
-        const std::vector<sotto::asr::Turn> reconciled = turns;
+        const std::vector<ambient::asr::Turn> reconciled = turns;
         const auto result = diariser.Diarise(audio, cuts);
 
         if (amortise) {
@@ -258,20 +258,20 @@ int main(int argc, char** argv) {
 
         // The production finalise: each merged turn decodes its own audio
         const auto before = std::chrono::steady_clock::now();
-        const auto pturns = sotto::diar::MergeByCluster(result.slices);
-        const auto turn_texts = sotto::diar::DecodeTurnTexts(
+        const auto pturns = ambient::diar::MergeByCluster(result.slices);
+        const auto turn_texts = ambient::diar::DecodeTurnTexts(
             pturns, audio, [&whisper](std::span<const float> clip, std::uint64_t first) {
                 return Decode(*whisper, clip, first);
             });
         const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - before);
         std::fprintf(stderr, "per-turn: %zu turns decoded in %.1f s\n", pturns.size(),
                      took.count());
-        std::vector<sotto::diar::RoleTurn> role_turns;
+        std::vector<ambient::diar::RoleTurn> role_turns;
         for (std::size_t i = 0; i < pturns.size(); ++i) {
             role_turns.push_back(
                 {pturns[i].cluster, pturns[i].end_frame - pturns[i].first_frame, turn_texts[i]});
         }
-        const auto named = sotto::diar::NameRoles(role_turns, result.cluster_count);
+        const auto named = ambient::diar::NameRoles(role_turns, result.cluster_count);
 
         std::printf("DOCTOR %d\nMARGIN %.4f\n", named.doctor_cluster, named.margin);
         for (std::size_t c = 0; c < named.role_of_cluster.size(); ++c) {
@@ -279,7 +279,7 @@ int main(int argc, char** argv) {
         }
         for (int c = 0; c < result.cluster_count; ++c) {
             const auto voiceprint =
-                sotto::diar::ClusterVoiceprint(diariser.Embedder(), audio, result.slices, c);
+                ambient::diar::ClusterVoiceprint(diariser.Embedder(), audio, result.slices, c);
             if (voiceprint.empty()) continue;
             std::printf("VP %d", c);
             for (const float x : voiceprint) std::printf(" %.6f", x);

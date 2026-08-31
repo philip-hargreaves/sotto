@@ -13,11 +13,10 @@
 #include "adapters/storage/db.hpp"
 #include "ports/session_store.hpp"
 
-namespace sotto::store {
+namespace ambient::store {
 
-// One database (sotto.db) for every session, content sealed per blob under
-// a per-session key held in the same file. Appends buffer in memory; a
-// writer thread commits once per interval. Layout in schema/sotto.sql.
+// One ambient.db, content sealed per blob under per-session keys; a writer
+// thread commits per interval. Layout in schema/ambient.sql
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(
@@ -76,4 +75,4 @@ class SqliteSessionStore : public ISessionStore {
     std::thread writer_;
 };
 
-}  // namespace sotto::store
+}  // namespace ambient::store

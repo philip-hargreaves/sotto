@@ -6,7 +6,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 // How the note is written: structure and length, each a prompt file so a
 // change needs no rebuild. Values are validated at the RPC boundary.
@@ -15,9 +15,8 @@ struct NoteOptions {
     std::string detail = "standard";  // concise | standard | detailed
 };
 
-// Writes the clinical note from the sealed transcript. Write streams
-// partial text through progress and returns the full note; it throws on
-// failure. Cancel interrupts an in-flight Write from another thread.
+// Streams partials, returns the note, throws on failure; Cancel
+// interrupts from another thread
 class INoteWriter {
    public:
     using Progress = std::function<void(const std::string&)>;
@@ -37,9 +36,7 @@ class INoteWriter {
         return {};
     }
 
-    // A list title for the consultation, from the finished note. Empty
-    // means no title - the shell shows the date instead - so a writer
-    // without one, or a generation that fails, is never an error
+    // Empty means no title - the shell shows the date - so failure is never an error
     virtual std::string WriteLabel(const std::string&) {
         return {};
     }
@@ -56,4 +53,4 @@ class INoteWriter {
     virtual void Cancel() {}
 };
 
-}  // namespace sotto::note
+}  // namespace ambient::note

@@ -2,7 +2,7 @@
  "wav": "C:\\dev\\intelliscribe\\bench\\transcription\\mixed\\day1_consultation01_mixed.wav",
  "model": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\eres2netv2-int8.xml",
  "openvino": "2026.2.1-21919-ede283a88e3-releases/2026/2",
- "generator": "bench/diarisation/parity/export_sotto_fixtures.py",
+ "generator": "bench/diarisation/parity/export_ambient_fixtures.py",
  "slices": [
   {
    "file": "doctor_0.features.bin",

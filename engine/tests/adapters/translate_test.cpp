@@ -6,10 +6,10 @@
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/translate/nllb_translator.hpp"
 
-namespace sotto::translate {
+namespace ambient::translate {
 namespace {
 
-const std::filesystem::path kModels = SOTTO_MODELS_DIR;
+const std::filesystem::path kModels = AMBIENT_MODELS_DIR;
 
 constexpr const char* kSheet =
     "Your appointment today\n"
@@ -53,4 +53,4 @@ TEST(NllbTranslator, AnUnknownLanguageIsRefused) {
 }
 
 }  // namespace
-}  // namespace sotto::translate
+}  // namespace ambient::translate

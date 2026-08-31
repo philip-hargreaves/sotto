@@ -10,7 +10,7 @@
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_security.hpp"
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 // One duplex pipe, one client at a time. Construction claims the pipe
 // name so a name already taken is treated as an attack and throws, never retries.
@@ -28,9 +28,8 @@ class PipeServer {
     // Handlers may queue these; each is written to the client right after the reply
     void QueueNotification(const std::string& method, json params);
 
-    // Written immediately, callable from any thread; reads and writes share a
-    // duplex pipe independently, so the serve loop needs no waking. Bounded:
-    // a client that stops draining must never stall the capture thread
+    // Callable from any thread; bounded so a client that stops draining never
+    // stalls the capture thread
     void PushNotification(const std::string& method, json params);
 
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
@@ -50,4 +49,4 @@ class PipeServer {
     bool write_failed_ = false;  // under write_mutex_; a torn frame ends the stream
 };
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

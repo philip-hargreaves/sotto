@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 namespace {
 
 TEST(Framing, RoundTrip) {
@@ -72,4 +72,4 @@ TEST(Framing, MaxSizePayloadAccepted) {
 }
 
 }  // namespace
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

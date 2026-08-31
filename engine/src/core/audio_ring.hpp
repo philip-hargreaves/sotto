@@ -8,12 +8,10 @@
 #include <span>
 #include <vector>
 
-namespace sotto::audio {
+namespace ambient::audio {
 
-// Single-producer single-consumer ring of float frames, in the Lamport style:
-// the producer owns write_, the consumer owns read_, and each acquires the
-// other's index once per call. Indices grow monotonically and are masked on
-// access, so capacity is rounded up to a power of two.
+// SPSC Lamport ring; monotonic indices masked on access, capacity rounded
+// to a power of two
 #pragma warning(push)
 #pragma warning(disable : 4324)  // Padding from alignas is the point
 class AudioRing {
@@ -62,4 +60,4 @@ class AudioRing {
 };
 #pragma warning(pop)
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

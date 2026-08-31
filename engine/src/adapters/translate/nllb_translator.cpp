@@ -15,7 +15,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 namespace {
 
@@ -194,11 +194,8 @@ NllbTranslator::~NllbTranslator() {
     }
 }
 
-// Started while the patient sheet writes; done before the translate button
-// enables. The warm must INFER, not merely load: the CPU plugin pays a
-// large one-time specialisation on the first inference (measured ~12 s),
-// so one throwaway sentence runs through all four models here. A failed
-// warm is retried by the first Translate.
+// The warm must INFER: the CPU plugin's first-inference specialisation
+// measured ~12 s. A failed warm is retried by the first Translate
 void NllbTranslator::Prepare() {
     std::lock_guard<std::mutex> lock(impl_->prepare_mutex);
     if (impl_->loaded || impl_->loader.joinable()) {
@@ -213,10 +210,10 @@ void NllbTranslator::Prepare() {
             const auto target = languages.begin().value().at("id").get<std::int64_t>();
             impl->TranslateSentences("Ready.", target);
             std::fprintf(
-                stderr, "sotto-engine: translator warmed in %.1f s\n",
+                stderr, "ambient-engine: translator warmed in %.1f s\n",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: translator warm failed (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: translator warm failed (%s)\n", e.what());
         }
     });
 }
@@ -269,7 +266,7 @@ std::string NllbTranslator::Translate(const std::string& text, const std::string
         from = end + 1;
     }
 
-    std::fprintf(stderr, "sotto-engine: translated to %s in %.1f s\n", language.c_str(),
+    std::fprintf(stderr, "ambient-engine: translated to %s in %.1f s\n", language.c_str(),
                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
     return translated;
 }
@@ -278,4 +275,4 @@ void NllbTranslator::Cancel() {
     impl_->cancel = true;
 }
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

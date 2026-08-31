@@ -6,11 +6,10 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
-// Plays a wav file through the audio port: PCM16 or float32, mono, 16 kHz,
-// anything else refused. The CI stand-in for a microphone, and the replay
-// source for the demo tray.
+// Plays a mono 16 kHz wav through the audio port; the CI microphone
+// stand-in and the replay source
 class WavSource : public IAudioSource {
    public:
     struct Config {
@@ -36,4 +35,4 @@ class WavSource : public IAudioSource {
     std::atomic<bool> monitor_{false};
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

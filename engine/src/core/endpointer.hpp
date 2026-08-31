@@ -10,7 +10,7 @@
 #include "ports/audio_source.hpp"
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Cuts the capture stream into windows at speech boundaries. Every
 // constant below is the researched, swept configuration - do not retune
@@ -24,11 +24,8 @@ class Endpointer {
     // Core-mode closing profile
     static constexpr std::size_t kPauseCloseFrames = 11200;  // 0.7 s
     static constexpr std::size_t kBreakCloseFrames = 32000;  // 2 s
-    // A 0.7 s pause closes only once this much has accumulated. 4 s was
-    // swept over 57 consults (2026-08-30): finalise -0.4 s on average,
-    // WER and negation errors level, every note reshuffled. Kept at 20 s;
-    // the patch and the method are banked in the research repo's latency
-    // probe record
+    // 4 s was swept over 57 consults (2026-08-30): finalise -0.4 s, quality
+    // level, every note reshuffled. Kept at 20 s; record in the latency probe
     static constexpr std::size_t kPauseGateFrames = 320000;  // 20 s accumulated
     static constexpr std::size_t kSoftCapFrames = 448000;    // 28 s, Whisper's window
     static constexpr std::size_t kBacktrackFrames = 48000;   // quietest hop in last 3 s
@@ -143,9 +140,8 @@ class Endpointer {
         }
     }
 
-    // At the cap, cut at the quietest hop of the last 3 s. The remainder
-    // starts the next window and re-hears the last second, so the boundary
-    // word reaches the decoder whole; the consumer trims re-heard turns
+    // At the cap, cut at the quietest hop of the last 3 s; the next window
+    // re-hears the last second so the boundary word decodes whole
     Window SoftCut() {
         const std::size_t earliest =
             std::max(kMinUtteranceFrames,
@@ -201,4 +197,4 @@ class Endpointer {
     std::uint64_t first_new_frame_ = 0;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

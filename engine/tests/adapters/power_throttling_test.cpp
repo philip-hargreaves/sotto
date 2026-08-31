@@ -2,9 +2,9 @@
 
 #include <gtest/gtest.h>
 
-using sotto::host::Describe;
-using sotto::host::DisableThrottlingOnSelf;
-using sotto::host::ReadThrottling;
+using ambient::host::Describe;
+using ambient::host::DisableThrottlingOnSelf;
+using ambient::host::ReadThrottling;
 
 TEST(PowerThrottling, OptOutReadsBackAsOff) {
     const auto state = DisableThrottlingOnSelf();
