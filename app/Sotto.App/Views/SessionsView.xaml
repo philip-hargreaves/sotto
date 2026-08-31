@@ -62,7 +62,7 @@
                                 Style="{StaticResource ChipBorder}"
                                 Visibility="{x:Bind Edited}">
                                 <TextBlock
-                                    FontSize="10"
+                                    Style="{StaticResource CaptionText}"
                                     Foreground="{ThemeResource CautionBrush}"
                                     Text="{x:Bind EditedLabel}" />
                             </Border>
@@ -103,7 +103,7 @@
                     Style="{StaticResource ChipBorder}"
                     Visibility="{x:Bind ViewModel.Note.Edited, Mode=OneWay}">
                     <TextBlock
-                        FontSize="11"
+                        Style="{StaticResource CaptionText}"
                         Foreground="{ThemeResource CautionBrush}"
                         Text="{x:Bind ViewModel.Note.EditedStamp, Mode=OneWay}" />
                 </Border>

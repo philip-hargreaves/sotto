@@ -15,11 +15,12 @@
                 AutomationProperties.Name="Start recording"
                 Command="{x:Bind ViewModel.StartRecordingCommand}"
                 Style="{StaticResource RecordDisc}">
-                <FontIcon FontSize="28" Glyph="&#xE720;" />
+                <FontIcon FontSize="32" Glyph="&#xE720;" />
             </Button>
+            <!-- The one action on screen carries the one large label -->
             <TextBlock
                 HorizontalAlignment="Center"
-                Style="{StaticResource CaptionText}"
+                Style="{StaticResource SubtitleTextBlockStyle}"
                 Text="Start recording" />
         </StackPanel>
 
@@ -31,7 +32,7 @@
                 AutomationProperties.Name="Stop recording"
                 Command="{x:Bind ViewModel.StopRecordingCommand}"
                 Style="{StaticResource StopDisc}">
-                <FontIcon FontSize="24" Glyph="&#xE71A;" />
+                <FontIcon FontSize="28" Glyph="&#xE71A;" />
             </Button>
             <TextBlock
                 HorizontalAlignment="Center"
@@ -82,7 +83,7 @@
                 IsActive="{x:Bind ViewModel.FinalisingVisible, Mode=OneWay}" />
             <TextBlock
                 HorizontalAlignment="Center"
-                Style="{StaticResource CaptionText}"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
                 Text="{x:Bind ViewModel.FinalisingLabel, Mode=OneWay}" />
             <TextBlock
                 HorizontalAlignment="Center"

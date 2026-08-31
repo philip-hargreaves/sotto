@@ -50,7 +50,6 @@
                             VerticalAlignment="Center"
                             Fill="{x:Bind DotFill(ViewModel.AsrActive), Mode=OneWay}" />
                         <TextBlock
-                            FontSize="11"
                             Foreground="{x:Bind AsrForeground(ViewModel.RealtimeLow), Mode=OneWay}"
                             Style="{StaticResource CaptionText}"
                             Text="{x:Bind ViewModel.AsrChip, Mode=OneWay}"
@@ -68,7 +67,6 @@
                             VerticalAlignment="Center"
                             Fill="{x:Bind DotFill(ViewModel.NoteActive), Mode=OneWay}" />
                         <TextBlock
-                            FontSize="11"
                             Style="{StaticResource CaptionText}"
                             Text="{x:Bind ViewModel.NoteChip, Mode=OneWay}"
                             Typography.NumeralAlignment="Tabular" />
@@ -80,7 +78,6 @@
                     Style="{StaticResource ChipBorder}"
                     Visibility="{x:Bind MemoryChipVisible, Mode=OneWay}">
                     <TextBlock
-                        FontSize="11"
                         Style="{StaticResource CaptionText}"
                         Text="{x:Bind ViewModel.MemoryChip, Mode=OneWay}"
                         Typography.NumeralAlignment="Tabular" />
