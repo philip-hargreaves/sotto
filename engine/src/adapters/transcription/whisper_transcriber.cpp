@@ -23,13 +23,14 @@ std::string Trimmed(const std::string& text) {
 }
 
 DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
-                           const std::string& device_override, metrics::Registry* metrics) {
+                           const std::string& device_override, metrics::Registry* metrics,
+                           const char* role = "asr") {
     const models::ModelInfo& info = store.Resolve("asr", "default");
     store.Verify(info);
     const std::string device =
         runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
-    std::fprintf(stderr, "sotto-engine: asr on %s\n", device.c_str());
-    if (metrics != nullptr) metrics->RecordDevice("asr", device);
+    std::fprintf(stderr, "sotto-engine: %s on %s\n", role, device.c_str());
+    if (metrics != nullptr) metrics->RecordDevice(role, device);
 
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
         info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
@@ -75,17 +76,34 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                                        std::string device_override, metrics::Registry* metrics)
     : WhisperTranscriber(
-          DecodeLoader([&store, &runtime, device = std::move(device_override), metrics] {
+          DecodeLoader([&store, &runtime, device = device_override, metrics] {
               return MakeWhisperDecode(store, runtime, device, metrics);
           }),
-          metrics) {}
+          metrics,
+          // Live off the GPU: clips burst on the manifest device (the GPU,
+          // idle at stop) so finalise never pays the low-power decode rate
+          device_override.empty() || device_override == "GPU"
+              ? DecodeLoader{}
+              : DecodeLoader([&store, &runtime, metrics] {
+                    return MakeWhisperDecode(store, runtime, "", metrics, "asr finalise");
+                })) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
-WhisperTranscriber::WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics)
-    : factory_(loader), loader_(std::move(loader)), metrics_(metrics) {
+WhisperTranscriber::WhisperTranscriber(DecodeFn decode, DecodeFn clip_decode)
+    : decode_(std::move(decode)), clip_decode_(std::move(clip_decode)) {
+    worker_ = std::thread([this] { WorkerLoop(); });
+}
+
+WhisperTranscriber::WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics,
+                                       DecodeLoader clip_loader)
+    : factory_(loader),
+      loader_(std::move(loader)),
+      clip_factory_(clip_loader),
+      clip_loader_(std::move(clip_loader)),
+      metrics_(metrics) {
     worker_ = std::thread([this] { WorkerLoop(); });
 }
 
@@ -170,6 +188,17 @@ void WhisperTranscriber::LoadIfPending() {
         std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
     }
     loader_ = {};
+
+    if (clip_loader_) {
+        try {
+            clip_decode_ = clip_loader_();
+        } catch (const std::exception& e) {
+            // Clips then share the live pipeline: slower, never wrong
+            std::fprintf(stderr, "sotto-engine: finalise stays on the live device (%s)\n",
+                         e.what());
+        }
+        clip_loader_ = {};
+    }
 }
 
 void WhisperTranscriber::WorkerLoop() {
@@ -188,7 +217,9 @@ void WhisperTranscriber::WorkerLoop() {
         // Release only once drained; the next work item reloads
         if (release_requested_ && queue_.empty() && clips_.empty()) {
             decode_ = {};
+            clip_decode_ = {};
             loader_ = factory_;
+            clip_loader_ = clip_factory_;
             release_requested_ = false;
             cv_.notify_all();
             continue;
@@ -207,9 +238,11 @@ void WhisperTranscriber::WorkerLoop() {
             lock.unlock();
             std::string text;
             try {
-                if (decode_) {
+                // The burst pipeline when the live device is the slow one
+                const DecodeFn& decode = clip_decode_ ? clip_decode_ : decode_;
+                if (decode) {
                     const auto t0 = std::chrono::steady_clock::now();
-                    for (const Turn& turn : decode_(clip.frames, clip.first_frame)) {
+                    for (const Turn& turn : decode(clip.frames, clip.first_frame)) {
                         if (turn.text.empty()) continue;
                         if (!text.empty()) text += ' ';
                         text += turn.text;

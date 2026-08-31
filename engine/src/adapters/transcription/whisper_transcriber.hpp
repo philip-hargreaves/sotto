@@ -37,12 +37,17 @@ using DecodeLoader = std::function<DecodeFn()>;
 // Finish waits for it, so a finalised transcript is always complete
 class WhisperTranscriber : public ITranscriber {
    public:
-    // device_override replaces the manifest device
+    // device_override replaces the manifest device for LIVE windows. Clips
+    // (the finalise re-decode) keep the manifest device: on the NPU the
+    // re-decode is the longest stage at ~11x, and the GPU sits idle at stop,
+    // so one burst there converges low-power mode with GPU-mode latency for
+    // seconds of draw - the capture phase keeps every watt it saved
     WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                        std::string device_override = "", metrics::Registry* metrics = nullptr);
     explicit WhisperTranscriber(DecodeFn decode);  // Tests inject the decode
-    explicit WhisperTranscriber(DecodeLoader loader,
-                                metrics::Registry* metrics = nullptr);  // Tests pace the load
+    explicit WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics = nullptr,
+                                DecodeLoader clip_loader = {});  // Tests pace the load
+    WhisperTranscriber(DecodeFn decode, DecodeFn clip_decode);  // Tests split the devices
     ~WhisperTranscriber() override;
 
     void Begin(ITurnSink& sink) override;
@@ -77,6 +82,9 @@ class WhisperTranscriber : public ITranscriber {
     DecodeLoader factory_;  // The reload recipe Release re-arms from
     DecodeLoader loader_;
     DecodeFn decode_;  // Worker-thread only once the loader has run
+    DecodeLoader clip_factory_;
+    DecodeLoader clip_loader_;
+    DecodeFn clip_decode_;  // Empty: clips share the live pipeline
     metrics::Registry* metrics_ = nullptr;
     std::mutex mutex_;
     std::condition_variable cv_;
