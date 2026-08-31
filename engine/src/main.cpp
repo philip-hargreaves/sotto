@@ -20,6 +20,7 @@
 #include <crtdbg.h>
 #endif
 
+#include "adapters/audio/capture_devices.hpp"
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
 #include "adapters/diarisation/deferred_diariser.hpp"
@@ -235,8 +236,8 @@ int main(int argc, char* argv[]) {
         // wav path (CI, scripts) forces every session to replay that file
         sotto::audio::SourceFactory factory =
             [forced = args.size() > 3 ? args[3] : std::string()](
-                const std::optional<sotto::audio::ReplaySpec>& replay)
-            -> std::unique_ptr<sotto::audio::IAudioSource> {
+                const std::optional<sotto::audio::ReplaySpec>& replay,
+                const std::string& mic_id) -> std::unique_ptr<sotto::audio::IAudioSource> {
             if (replay.has_value()) {
                 return std::make_unique<sotto::audio::WavSource>(
                     replay->path, sotto::audio::WavSource::Config{replay->speed, replay->monitor,
@@ -245,7 +246,7 @@ int main(int argc, char* argv[]) {
             if (!forced.empty()) {
                 return std::make_unique<sotto::audio::WavSource>(forced);
             }
-            return std::make_unique<sotto::audio::WasapiCapture>();
+            return std::make_unique<sotto::audio::WasapiCapture>(sotto::audio::WideId(mic_id));
         };
         // The store's contents decide: real transcription when the ASR role
         // is staged, scripted otherwise (CI, fresh installs). Whisper loads
@@ -370,8 +371,10 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no translation (%s)\n", e.what());
         }
+        // 10 s, not 3: a Bluetooth microphone link waking measured 1.6-8.8 s
+        // before first audio; wired mics answer in well under a second either way
         sotto::audio::SessionController controller(
-            std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(3),
+            std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(10),
             diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
 
         sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,

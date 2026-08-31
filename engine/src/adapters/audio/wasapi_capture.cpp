@@ -10,6 +10,10 @@
 #include <mmdeviceapi.h>
 #include <wrl/client.h>
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <span>
 #include <string>
@@ -147,6 +151,19 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return Fail("Activate", hr);
     }
 
+    // Communications category, declared before Initialize: without it
+    // Windows never raises a Bluetooth headset's hands-free microphone
+    // link and the endpoint delivers pure silence (measured: 14.9 s
+    // captured, zero speech, while Voice Recorder heard fine). Side
+    // effect accepted: other apps' audio ducks while recording
+    ComPtr<IAudioClient2> client2;
+    if (SUCCEEDED(client.As(&client2))) {
+        AudioClientProperties properties{};
+        properties.cbSize = sizeof(properties);
+        properties.eCategory = AudioCategory_Communications;
+        client2->SetClientProperties(&properties);  // best effort, never fatal
+    }
+
     WAVEFORMATEX* mix = nullptr;
     hr = client->GetMixFormat(&mix);
     if (FAILED(hr)) {
@@ -163,10 +180,16 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     wanted.nBlockAlign = 4;
     wanted.nAvgBytesPerSec = wanted.nSamplesPerSec * wanted.nBlockAlign;
 
+    const auto t_init = std::chrono::steady_clock::now();
     hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, kStreamFlags, 0, 0, &wanted, nullptr);
     if (FAILED(hr)) {
         return Fail("Initialize", hr);
     }
+    // One line per stream: device rate and open time make a dead or slow
+    // microphone (a Bluetooth link waking is seconds) diagnosable from the log
+    std::fprintf(stderr, "sotto-engine: capture open, native %lu Hz, %.2f s\n",
+                 static_cast<unsigned long>(native_rate),
+                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t_init).count());
 
     OwnedHandle audio_event{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
     if (audio_event.handle == nullptr) {
@@ -197,10 +220,18 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     const StopOnExit stopper{client.Get()};
 
     CaptureTimeline timeline(native_rate);
+    std::uint64_t stream_packets = 0, stream_silent = 0;
+    float stream_peak = 0;
     const HANDLE waits[2] = {static_cast<HANDLE>(stop_event_), audio_event.handle};
     for (;;) {
         const DWORD wake = WaitForMultipleObjects(2, waits, FALSE, 2000);
         if (wake == WAIT_OBJECT_0) {
+            // peak 0.0000 with packets flowing is the LE Audio failure
+            // signature: a healthy-looking stream of unflagged zeros
+            std::fprintf(stderr,
+                         "sotto-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
+                         static_cast<unsigned long long>(stream_packets),
+                         static_cast<unsigned long long>(stream_silent), stream_peak);
             return {SourceEndReason::kStopped, ""};
         }
         if (wake == WAIT_FAILED) {
@@ -238,6 +269,11 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
                 std::memset(packet.data(), 0, frames * sizeof(float));
             } else {
                 std::memcpy(packet.data(), data, frames * sizeof(float));
+            }
+            ++stream_packets;
+            stream_silent += (flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0 ? 1 : 0;
+            for (UINT32 i = 0; i < frames; ++i) {
+                stream_peak = std::max(stream_peak, std::abs(packet[i]));
             }
 
             // Release inside the buffer period; the sink runs after, on our copy

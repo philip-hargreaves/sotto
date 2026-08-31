@@ -85,6 +85,23 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 new { languages = FakeLanguages }));
         }
 
+        if (method == "audio/inputs")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(new
+            {
+                devices = AudioInputs
+                    .Select(d => new
+                    {
+                        id = d.Id,
+                        name = d.Name,
+                        shortName = d.ShortName,
+                        isDefault = d.IsDefault,
+                        bluetooth = d.Bluetooth,
+                    })
+                    .ToArray(),
+            }));
+        }
+
         if (method == "engine/models")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(new
@@ -121,6 +138,8 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
     /// <summary>Served by engine/metrics; healthy by default.</summary>
     public double MetricsRealtimeFactor { get; set; } = 33.4;
+
+    public List<Sotto.App.Core.ViewModels.MicDevice> AudioInputs { get; set; } = [];
 
     /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
     public bool FirstUse { get; set; }

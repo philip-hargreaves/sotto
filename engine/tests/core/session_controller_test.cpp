@@ -231,6 +231,8 @@ struct FakeSessionStore : store::ISessionStore {
         }
         EXPECT_EQ(meta.sample_rate, kSampleRate);
         last_retain = meta.retain;
+        last_device_id = meta.device_id;
+        last_device_name = meta.device_name;
         const auto id = "s" + std::to_string(++begins);
         calls.push_back("begin " + id);
         return id;
@@ -337,6 +339,8 @@ struct FakeSessionStore : store::ISessionStore {
 
     bool refuse_read_turns = false;
     bool last_retain = true;
+    std::string last_device_id;
+    std::string last_device_name;
     std::atomic<int> sweeps{0};  // apart from calls: the sequences there are exact
 
     void EraseUnretained() override {
@@ -439,7 +443,7 @@ struct FakeNoteWriter : note::INoteWriter {
 };
 
 SourceFactory FactoryFor(ScriptedSource::Script script) {
-    return [script](const std::optional<ReplaySpec>&) {
+    return [script](const std::optional<ReplaySpec>&, const std::string&) {
         return std::make_unique<ScriptedSource>(script);
     };
 }
@@ -1231,7 +1235,7 @@ TEST(SessionController, PauseReachesTheSourceAndStopStillWins) {
     asr::ScriptedTranscriber transcriber;
     PassthroughVad vad;
     ScriptedSource* source = nullptr;
-    SourceFactory factory = [&source](const std::optional<ReplaySpec>&) {
+    SourceFactory factory = [&source](const std::optional<ReplaySpec>&, const std::string&) {
         auto s = std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
         source = s.get();
         return s;
@@ -1254,7 +1258,7 @@ TEST(SessionController, MonitorToggleReachesTheSource) {
     asr::ScriptedTranscriber transcriber;
     PassthroughVad vad;
     ScriptedSource* source = nullptr;
-    SourceFactory factory = [&source](const std::optional<ReplaySpec>&) {
+    SourceFactory factory = [&source](const std::optional<ReplaySpec>&, const std::string&) {
         auto s = std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
         source = s.get();
         return s;
@@ -1271,13 +1275,50 @@ TEST(SessionController, MonitorToggleReachesTheSource) {
     EXPECT_FALSE(source->last_monitor.load());
 }
 
+TEST(SessionController, TheChosenMicrophoneIsPinnedAndOnRecord) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    std::string pinned;
+    SourceFactory factory = [&pinned](const std::optional<ReplaySpec>&, const std::string& mic_id) {
+        pinned = mic_id;
+        return std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
+    };
+    SessionController controller(std::move(factory), events, store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start(std::nullopt, {}, true,
+                                 {"{0.0.1}.{aa}", "Microphone Array (Cirrus Logic)"}));
+    controller.Stop();
+
+    EXPECT_EQ(pinned, "{0.0.1}.{aa}");
+    EXPECT_EQ(store.last_device_id, "{0.0.1}.{aa}");
+    EXPECT_EQ(store.last_device_name, "Microphone Array (Cirrus Logic)");
+}
+
+TEST(SessionController, AReplayCarriesNoDeviceSnapshot) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle);
+
+    ASSERT_TRUE(controller.Start(ReplaySpec{"C:/tracks/elbow.wav"}, {}, true,
+                                 {"{0.0.1}.{aa}", "Microphone Array"}));
+    controller.Stop();
+
+    EXPECT_EQ(store.last_device_id, "");
+    EXPECT_EQ(store.last_device_name, "");
+}
+
 TEST(SessionController, AReplaySpecReachesTheFactory) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
     PassthroughVad vad;
     std::optional<ReplaySpec> seen;
-    SourceFactory factory = [&seen](const std::optional<ReplaySpec>& replay) {
+    SourceFactory factory = [&seen](const std::optional<ReplaySpec>& replay, const std::string&) {
         seen = replay;
         return std::make_unique<ScriptedSource>(ScriptedSource::Script::kStreamUntilStopped);
     };

@@ -8,7 +8,8 @@ public sealed class AppPreferences(string path)
     private sealed record Stored(
         bool DemoTrayEnabled, bool NpuTranscription, bool CollectPerformanceData,
         string? NoteStyle = null, string? NoteDetail = null,
-        bool KeepConsultations = false, bool ShowPerformanceMetrics = false);
+        bool KeepConsultations = false, bool ShowPerformanceMetrics = false,
+        string? MicId = null);
 
     public bool DemoTrayEnabled { get; set; }
 
@@ -25,6 +26,9 @@ public sealed class AppPreferences(string path)
     /// <summary>Off by default: the status-bar chips are for testing, not GPs.</summary>
     public bool ShowPerformanceMetrics { get; set; }
 
+    /// <summary>The chosen microphone's endpoint id; empty means the default.</summary>
+    public string MicId { get; set; } = "";
+
     public string NoteStyle { get; set; } = "prose";
 
     public string NoteDetail { get; set; } = "standard";
@@ -40,6 +44,7 @@ public sealed class AppPreferences(string path)
             preferences.CollectPerformanceData = stored?.CollectPerformanceData ?? false;
             preferences.KeepConsultations = stored?.KeepConsultations ?? false;
             preferences.ShowPerformanceMetrics = stored?.ShowPerformanceMetrics ?? false;
+            preferences.MicId = stored?.MicId ?? "";
             // Values the engine would refuse never leave this boundary
             preferences.NoteStyle = stored?.NoteStyle is "prose" or "soap"
                 ? stored.NoteStyle : "prose";
@@ -60,7 +65,7 @@ public sealed class AppPreferences(string path)
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(new Stored(
                 DemoTrayEnabled, NpuTranscription, CollectPerformanceData,
-                NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics)));
+                NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics, MicId)));
         }
         catch (Exception)
         {

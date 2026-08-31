@@ -65,8 +65,16 @@ struct ReplaySpec {
     std::uint64_t start_frame = 0;  // resume: skip audio already captured
 };
 
-using SourceFactory =
-    std::function<std::unique_ptr<IAudioSource>(const std::optional<ReplaySpec>&)>;
+// The clinician's microphone, resolved by the caller before Start: the id
+// pins the capture endpoint (empty pins the communications default) and the
+// name goes into the session's device snapshot
+struct MicSelection {
+    std::string id;
+    std::string name;
+};
+
+using SourceFactory = std::function<std::unique_ptr<IAudioSource>(const std::optional<ReplaySpec>&,
+                                                                  const std::string& mic_id)>;
 
 // One capture session at a time. Every way a session can end has a storage
 // outcome: Stop finalises, Cancel erases, an interruption abandons (kept,
@@ -113,7 +121,8 @@ class SessionController {
     // retain false: the session is erased once the consultation is left
     // (close, the next start, or the next engine start)
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
-               const store::SessionId& resume_from = {}, bool retain = true) {
+               const store::SessionId& resume_from = {}, bool retain = true,
+               const MicSelection& mic = {}) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
@@ -139,6 +148,11 @@ class SessionController {
             }
             store_.EraseUnretained();  // the previous consultation is left
             store::SessionMeta meta{kSampleRate, "", ""};
+            if (!replay.has_value()) {
+                // What was actually opened, so a default fallback is on record
+                meta.device_id = mic.id;
+                meta.device_name = mic.name;
+            }
             meta.retain = retain;
             const store::SessionId id = store_.Begin(meta);
             std::lock_guard<std::mutex> lock(mutex_);
@@ -164,10 +178,10 @@ class SessionController {
                 if (replay.has_value()) {
                     replay->start_frame += resumed_audio.size();
                 }
-                source_ =
-                    std::make_unique<ResumeSource>(std::move(resumed_audio), factory_(replay));
+                source_ = std::make_unique<ResumeSource>(std::move(resumed_audio),
+                                                         factory_(replay, mic.id));
             } else {
-                source_ = factory_(replay);
+                source_ = factory_(replay, mic.id);
             }
         }
         worker_ = std::thread([this] { GuardedRun(); });

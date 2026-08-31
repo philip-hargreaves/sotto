@@ -1,7 +1,21 @@
 {
   "marks": [
-    { "name": "Intel", "light": "intel.png", "dark": "intel-reversed.png", "height": 16 },
-    { "name": "UCL", "light": "ucl.svg", "dark": "ucl-reversed.svg", "height": 16 },
-    { "name": "NHS", "light": "nhs.svg", "height": 14 }
+    {
+      "name": "Intel",
+      "light": "intel.png",
+      "dark": "intel-reversed.png",
+      "height": 18
+    },
+    {
+      "name": "UCL",
+      "light": "ucl.svg",
+      "dark": "ucl-reversed.svg",
+      "height": 18
+    },
+    {
+      "name": "NHS",
+      "light": "nhs.svg",
+      "height": 16
+    }
   ]
 }

@@ -26,7 +26,7 @@
 
             <TextBlock
                 VerticalAlignment="Center"
-                FontSize="11"
+                Style="{StaticResource CaptionText}"
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                 Text="DEMO" />
 

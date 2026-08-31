@@ -77,7 +77,10 @@ public class SessionContractTest
                     }
                 };
 
-                await client.RequestAsync("session/start", null, Timeout);
+                // A stale micId must never stop a session starting: the
+                // engine resolves it against what exists and falls back
+                await client.RequestAsync("session/start", System.Text.Json.JsonSerializer
+                    .SerializeToElement(new { micId = "{unplugged-device}" }), Timeout);
                 await client.RequestAsync("session/cancel", null, Timeout);
                 await client.RequestAsync("session/start", null, Timeout);
                 await client.RequestAsync("session/stop", null, Timeout);
