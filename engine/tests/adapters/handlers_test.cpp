@@ -252,6 +252,29 @@ TEST(Handlers, SessionMethodsRejectAMissingId) {
     }
 }
 
+TEST(Handlers, AudioInputsCarryThePickerFields) {
+    const std::vector<sotto::audio::CaptureDevice> devices{
+        {"{0.0.1}.{aa}", "Microphone Array (Realtek(R) Audio)", "Microphone Array", true, false},
+        {"{0.0.1}.{bb}", "Headset (H800 Hands-Free)", "Headset", false, true},
+    };
+
+    const json result = HandleAudioInputs(devices);
+
+    ASSERT_EQ(result["devices"].size(), 2u);
+    EXPECT_EQ(result["devices"][0]["id"], "{0.0.1}.{aa}");
+    EXPECT_EQ(result["devices"][0]["name"], "Microphone Array (Realtek(R) Audio)");
+    EXPECT_EQ(result["devices"][0]["shortName"], "Microphone Array");
+    EXPECT_EQ(result["devices"][0]["isDefault"], true);
+    EXPECT_EQ(result["devices"][0]["bluetooth"], false);
+    EXPECT_EQ(result["devices"][1]["bluetooth"], true);
+}
+
+TEST(Handlers, NoMicrophonesIsAnEmptyListNotAnError) {
+    const json result = HandleAudioInputs({});
+    EXPECT_TRUE(result["devices"].is_array());
+    EXPECT_TRUE(result["devices"].empty());
+}
+
 TEST(Handlers, AnEmptyModelStoreListsNothing) {
     const sotto::models::ModelStore store(std::filesystem::temp_directory_path() /
                                           "sotto-no-models");

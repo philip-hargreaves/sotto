@@ -46,7 +46,7 @@ add_library(sotto_ipc STATIC
     src/adapters/ipc/pipe_server.cpp)
 target_link_libraries(sotto_ipc
     PUBLIC sotto_core sotto_models nlohmann_json::nlohmann_json
-    PRIVATE sotto_warnings advapi32)
+    PRIVATE sotto_warnings sotto_audio advapi32)
 
 FetchContent_Declare(
     sqlite3
@@ -164,6 +164,7 @@ target_link_libraries(sotto_diarisation
     PRIVATE sotto_warnings crypt32 hclust kaldi-native-fbank-core)
 
 add_library(sotto_audio STATIC
+    src/adapters/audio/capture_devices.cpp
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)

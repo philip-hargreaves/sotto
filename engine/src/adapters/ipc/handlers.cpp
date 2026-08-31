@@ -1,5 +1,6 @@
 #include "adapters/ipc/handlers.hpp"
 
+#include <cstdio>
 #include <memory>
 #include <openvino/core/version.hpp>
 #include <optional>
@@ -25,6 +26,18 @@ std::variant<json, Error> HandleEcho(const json& params) {
         return Error{kInvalidParams, "Invalid params", json("expected payload string")};
     }
     return json{{"payload", params["payload"]}};
+}
+
+json HandleAudioInputs(const std::vector<sotto::audio::CaptureDevice>& devices) {
+    json list = json::array();
+    for (const auto& device : devices) {
+        list.push_back({{"id", device.id},
+                        {"name", device.name},
+                        {"shortName", device.short_name},
+                        {"isDefault", device.is_default},
+                        {"bluetooth", device.bluetooth}});
+    }
+    return json{{"devices", std::move(list)}};
 }
 
 json HandleModels(const sotto::models::ModelStore& models) {
@@ -190,6 +203,11 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         });
     }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
+    // Enumerated fresh per call, so a picker opened after a headset is
+    // plugged in sees it without any notification plumbing
+    server.RegisterMethod("audio/inputs", [](const json&) {
+        return HandleAudioInputs(sotto::audio::ListCaptureDevices());
+    });
     server.RegisterMethod("session/list",
                           [&sessions](const json&) { return HandleSessionList(sessions); });
     server.RegisterMethod("session/transcript", [&sessions](const json& params) {
@@ -283,11 +301,24 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 replay = sotto::audio::ReplaySpec{r["path"].get<std::string>(),
                                                   r.value("speed", 1.0), r.value("monitor", false)};
             }
+            // micId pins the picker's choice; one that has gone falls back
+            // to the default, logged, and the snapshot records the fallback
+            sotto::audio::MicSelection mic;
+            if (!replay.has_value()) {
+                const std::string requested = params.value("micId", "");
+                const auto device =
+                    sotto::audio::ResolveMicrophone(sotto::audio::ListCaptureDevices(), requested);
+                if (!requested.empty() && device.id != requested) {
+                    std::fprintf(stderr, "sotto-engine: chosen microphone gone, using %s\n",
+                                 device.name.empty() ? "the default" : device.name.c_str());
+                }
+                mic = {device.id, device.name};
+            }
             // resume: a crashed session's id; its stored audio replays ahead
             // of the live source into the new session. retain false: the
             // session is erased once the consultation is left
             if (!controller.Start(std::move(replay), params.value("resume", ""),
-                                  params.value("retain", true))) {
+                                  params.value("retain", true), mic)) {
                 return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
             }
             return json{{"sessionId", controller.CurrentSession()}};

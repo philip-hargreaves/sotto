@@ -2,6 +2,7 @@
 
 #include <variant>
 
+#include "adapters/audio/capture_devices.hpp"
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
@@ -23,6 +24,8 @@ std::variant<json, Error> HandleHello(const json& params);
 std::variant<json, Error> HandleEcho(const json& params);
 
 json HandleModels(const sotto::models::ModelStore& models);
+
+json HandleAudioInputs(const std::vector<sotto::audio::CaptureDevice>& devices);
 
 json HandleSessionList(sotto::store::ISessionStore& sessions);
 
