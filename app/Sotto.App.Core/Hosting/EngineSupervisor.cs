@@ -128,7 +128,8 @@ public sealed class EngineSupervisor(
 
         var action = RestartPolicy.Decide(session.ConsultationActive, _crashes, now);
         crashLog.Record(new CrashReport(
-            now, exitCode, now - _launchedAt, _crashes.Count, action, methodInFlight?.Invoke()));
+            now, exitCode, now - _launchedAt, _crashes.Count, action, methodInFlight?.Invoke(),
+            session.SessionPhase));
 
         switch (action)
         {

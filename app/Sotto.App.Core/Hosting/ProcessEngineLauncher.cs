@@ -15,6 +15,7 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
     : IEngineLauncher, IDisposable
 {
     private readonly JobObject _job = new();
+    private bool _rotated;
 
     public IEngineProcess Launch()
     {
@@ -74,12 +75,19 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
     }
 
     // Appended across launches so a crash's last words survive the relaunch;
-    // the handle is marked inheritable for the child
+    // rotated once per app run so old runs stay readable and bounded; the
+    // handle is marked inheritable for the child
     private FileStream? OpenStderr()
     {
         if (stderrPath is null)
         {
             return null;
+        }
+
+        if (!_rotated)
+        {
+            LogRotation.Rotate(stderrPath, keep: 5);
+            _rotated = true;
         }
 
         try

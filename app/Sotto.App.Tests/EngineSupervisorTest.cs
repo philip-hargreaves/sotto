@@ -60,6 +60,8 @@ public class EngineSupervisorTest
     private sealed class FakeSession : ISessionState
     {
         public bool ConsultationActive { get; set; }
+
+        public string SessionPhase { get; set; } = "";
     }
 
     private sealed class TestClock : TimeProvider
@@ -230,6 +232,7 @@ public class EngineSupervisorTest
         h.Host.Start();
         h.Clock.Now += TimeSpan.FromSeconds(90);
         h.InFlight = "session/stop";
+        h.Session.SessionPhase = "Finalising:Note";
 
         h.Current.Crash(-7);
 
@@ -240,6 +243,7 @@ public class EngineSupervisorTest
         Assert.Equal(RecoveryAction.Restart, report.Action);
         Assert.Equal(h.Clock.Now, report.Timestamp);
         Assert.Equal("session/stop", report.MethodInFlight);
+        Assert.Equal("Finalising:Note", report.SessionPhase);
     }
 
     [Fact]
