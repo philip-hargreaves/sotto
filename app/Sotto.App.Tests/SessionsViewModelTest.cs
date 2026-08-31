@@ -1,16 +1,29 @@
 using System.Text.Json;
 using Sotto.App.Core.ViewModels;
-using Sotto.Client;
 
 namespace Sotto.App.Tests;
 
 public class SessionsViewModelTest
 {
-    private sealed class ScriptedEngineClient : IEngineClient
+    private static (SessionsViewModel Sessions, ConsultationViewModel Consultation,
+        RecordingEngineClient Engine, StatusBarViewModel Status) Create()
+    {
+        var engine = new RecordingEngineClient();
+        var note = new NoteViewModel();
+        var status = new StatusBarViewModel();
+        var consultation = new ConsultationViewModel(
+            engine, new InlineDispatcher(), new TranscriptViewModel(), note, status);
+        return (new SessionsViewModel(engine, status, consultation), consultation, engine, status);
+    }
+
+    /// <summary>Scripted responses per method; unscripted methods answer {}.</summary>
+    public sealed class RecordingEngineClient : Sotto.Client.IEngineClient
     {
         public Dictionary<string, object> Responses { get; } = [];
 
-        public List<(string Method, string? Id)> Calls { get; } = [];
+        public List<(string Method, string Params)> Calls { get; } = [];
+
+        public HashSet<string> Failing { get; } = [];
 
         public event Action<string, JsonElement>? NotificationReceived
         {
@@ -30,115 +43,207 @@ public class SessionsViewModelTest
             string method, object? parameters, TimeSpan timeout,
             CancellationToken cancellationToken = default)
         {
-            var id = parameters is null
-                ? null
-                : JsonSerializer.SerializeToElement(parameters).GetProperty("id").GetString();
-            Calls.Add((method, id));
-            if (!Responses.TryGetValue(method, out var response))
+            Calls.Add((method, parameters is null ? "" : JsonSerializer.Serialize(parameters)));
+            if (Failing.Contains(method))
             {
-                throw new InvalidOperationException($"no session {id}");
+                throw new InvalidOperationException($"{method} refused");
             }
 
-            return Task.FromResult(JsonSerializer.SerializeToElement(response));
+            return Task.FromResult(JsonSerializer.SerializeToElement(
+                Responses.TryGetValue(method, out var r) ? r : new { }));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private static ScriptedEngineClient EngineWithOneSession() => new()
+    private static void ScriptOneSession(RecordingEngineClient engine)
     {
-        Responses =
+        engine.Responses["session/list"] = new
         {
-            ["session/list"] = new
+            sessions = new[]
             {
-                sessions = new[]
+                new
                 {
-                    new
-                    {
-                        id = "abc",
-                        startedAt = "2026-08-17T10:15:00Z",
-                        endedAt = "2026-08-17T10:23:41Z",
-                        state = "finalised",
-                        sampleRate = 16000,
-                    },
+                    id = "abc",
+                    startedAt = "2026-08-17T10:15:00Z",
+                    endedAt = "2026-08-17T10:23:41Z",
+                    state = "finalised",
+                    sampleRate = 16000,
+                    label = "Elbow swelling",
+                    editedAt = "2026-08-17T10:31:00Z",
+                    audioSeconds = 542.0,  // a 16x replay: wall clock says 8:41, the audio 9 min
                 },
             },
-            ["session/transcript"] = new
+        };
+        engine.Responses["session/transcript"] = new
+        {
+            turns = new[]
             {
-                turns = new[]
-                {
-                    new { firstFrame = 480000L, frameCount = 48000L, speaker = "", text = "hello" },
-                },
+                new { firstFrame = 480000L, frameCount = 48000L, speaker = "doctor", text = "hello" },
             },
-            ["session/delete"] = new { },
-        },
-    };
+        };
+        engine.Responses["session/note"] = new
+        {
+            text = "the note",
+            style = "soap",
+            detail = "concise",
+            generatedAt = "2026-08-17T10:24:00Z",
+            editedAt = "2026-08-17T10:31:00Z",
+        };
+        engine.Responses["session/patient"] = new
+        {
+            text = "the sheet",
+            language = "en",
+            editedAt = (string?)null,
+            translation = new { language = "pl", text = "arkusz" },
+        };
+    }
 
     [Fact]
-    public async Task RefreshListsSessionsWithFormattedFields()
+    public async Task RefreshListsSessionsWithLabelAndEditStamp()
     {
-        var engine = EngineWithOneSession();
-        var vm = new SessionsViewModel(engine, new StatusBarViewModel());
+        var (vm, _, engine, _) = Create();
+        ScriptOneSession(engine);
 
         await vm.RefreshAsync();
 
         var row = Assert.Single(vm.Sessions);
         Assert.Equal("abc", row.Id);
-        Assert.Equal("08:41", row.Duration);
-        Assert.Equal("finalised", row.State);
+        Assert.Equal("Elbow swelling", row.Title);
+        Assert.Equal("9 min", row.Duration);
+        Assert.True(row.Edited);
+        Assert.StartsWith("Edited ", row.EditedLabel);
     }
 
     [Fact]
-    public async Task SelectingASessionLoadsItsTurns()
+    public async Task AMissingLabelFallsBackToTheDateAndTime()
     {
-        var engine = EngineWithOneSession();
-        var vm = new SessionsViewModel(engine, new StatusBarViewModel());
+        var (vm, _, engine, _) = Create();
+        engine.Responses["session/list"] = new
+        {
+            sessions = new[]
+            {
+                new
+                {
+                    id = "abc",
+                    startedAt = "2026-08-17T10:15:00Z",
+                    endedAt = "2026-08-17T10:23:41Z",
+                    state = "finalised",
+                    sampleRate = 16000,
+                    label = "",
+                    editedAt = (string?)null,
+                },
+            },
+        };
+
+        await vm.RefreshAsync();
+
+        var row = Assert.Single(vm.Sessions);
+        Assert.Equal(row.Started, row.Title);
+        Assert.False(row.Edited);
+    }
+
+    [Fact]
+    public async Task SelectingOpensTheSessionIntoTheSharedPanes()
+    {
+        var (vm, consultation, engine, _) = Create();
+        ScriptOneSession(engine);
         await vm.RefreshAsync();
 
         vm.Selected = vm.Sessions[0];
         await Task.Delay(50);
 
-        var turn = Assert.Single(vm.Turns);
-        Assert.Equal("00:30", turn.Timestamp);
-        Assert.Equal("hello", turn.Text);
-        Assert.Contains(("session/transcript", "abc"), engine.Calls);
+        Assert.True(vm.DetailOpen);
+        Assert.Contains(engine.Calls, c => c.Method == "session/open" && c.Params.Contains("abc"));
+        Assert.Equal(SessionState.Review, consultation.State);
+        Assert.Equal("the note", consultation.Note.ClinicalNoteText);
+        Assert.Equal("the sheet", consultation.Note.PatientInfoText);
+        Assert.Equal("arkusz", consultation.Note.TranslationText);
+        Assert.Equal("pl", consultation.Note.TranslationLanguage);
+        Assert.Equal("pl translation", consultation.Note.TranslationCaption);
+        Assert.Equal("soap", consultation.Note.Style);
+        Assert.True(consultation.Note.Edited);
+        Assert.Single(consultation.Transcript.Turns);
+        Assert.Equal("Elbow swelling", vm.DetailTitle);
+        Assert.Contains("SOAP, concise", vm.DetailMeta);
     }
 
     [Fact]
-    public async Task DeselectingClearsTheTurns()
+    public async Task AnOpenTheEngineRefusesLeavesTheDetailClosed()
     {
-        var engine = EngineWithOneSession();
-        var vm = new SessionsViewModel(engine, new StatusBarViewModel());
+        var (vm, consultation, engine, _) = Create();
+        ScriptOneSession(engine);
+        engine.Failing.Add("session/open");
+        await vm.RefreshAsync();
+
+        vm.Selected = vm.Sessions[0];
+        await Task.Delay(50);
+
+        Assert.False(vm.DetailOpen);
+        Assert.Equal(SessionState.Idle, consultation.State);
+    }
+
+    [Fact]
+    public async Task RenamingSendsTheLabelAndUpdatesTheRow()
+    {
+        var (vm, _, engine, _) = Create();
+        ScriptOneSession(engine);
         await vm.RefreshAsync();
         vm.Selected = vm.Sessions[0];
         await Task.Delay(50);
 
-        vm.Selected = null;
-        await Task.Delay(50);
+        vm.DetailTitle = "Left elbow bursitis";
+        await vm.RenameAsync();
 
-        Assert.Empty(vm.Turns);
+        Assert.Contains(engine.Calls, c => c.Method == "session/label"
+            && c.Params.Contains("Left elbow bursitis"));
+        Assert.Equal("Left elbow bursitis", vm.Sessions[0].Title);
+        Assert.Same(vm.Sessions[0], vm.Selected);
+        Assert.True(vm.DetailOpen, "renaming must not close the open session");
+        Assert.Equal(1, engine.Calls.Count(c => c.Method == "session/open"));
     }
 
     [Fact]
-    public async Task DeleteCallsTheEngineAndRefreshes()
+    public async Task LeavingClosesTheReviewAndSavesEdits()
     {
-        var engine = EngineWithOneSession();
-        var vm = new SessionsViewModel(engine, new StatusBarViewModel());
+        var (vm, consultation, engine, _) = Create();
+        ScriptOneSession(engine);
         await vm.RefreshAsync();
         vm.Selected = vm.Sessions[0];
+        await Task.Delay(50);
+
+        consultation.Note.ClinicalNoteText = "the note, corrected";
+        await vm.LeaveAsync();
+
+        Assert.Contains(engine.Calls, c => c.Method == "note/update"
+            && c.Params.Contains("the note, corrected"));
+        Assert.Contains(engine.Calls, c => c.Method == "session/close");
+        Assert.Equal(SessionState.Idle, consultation.State);
+        Assert.False(vm.DetailOpen);
+    }
+
+    [Fact]
+    public async Task DeleteClosesTheReviewFirstAndRefreshes()
+    {
+        var (vm, _, engine, _) = Create();
+        ScriptOneSession(engine);
+        await vm.RefreshAsync();
+        vm.Selected = vm.Sessions[0];
+        await Task.Delay(50);
 
         await vm.DeleteSelectedAsync();
 
-        Assert.Contains(("session/delete", "abc"), engine.Calls);
+        var close = engine.Calls.FindIndex(c => c.Method == "session/close");
+        var delete = engine.Calls.FindIndex(c => c.Method == "session/delete");
+        Assert.True(close >= 0 && delete > close, "close precedes delete");
         Assert.Equal(2, engine.Calls.Count(c => c.Method == "session/list"));
     }
 
     [Fact]
     public async Task EngineErrorsLandInTheStatusLogNotAsCrashes()
     {
-        var engine = new ScriptedEngineClient();  // every request throws
-        var status = new StatusBarViewModel();
-        var vm = new SessionsViewModel(engine, status);
+        var (vm, _, engine, status) = Create();
+        engine.Failing.Add("session/list");
 
         await vm.RefreshAsync();
 
@@ -149,11 +254,8 @@ public class SessionsViewModelTest
     [Fact]
     public async Task AnEmptyStoreIsAnEmptyListNotAnError()
     {
-        var engine = new ScriptedEngineClient
-        {
-            Responses = { ["session/list"] = new { sessions = Array.Empty<object>() } },
-        };
-        var vm = new SessionsViewModel(engine, new StatusBarViewModel());
+        var (vm, _, engine, _) = Create();
+        engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };
 
         await vm.RefreshAsync();
 

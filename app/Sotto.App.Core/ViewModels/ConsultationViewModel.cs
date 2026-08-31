@@ -207,6 +207,10 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     private string? _finalisedSessionId;
     private string? _recordingSessionId;
 
+    // What the store holds, for autosaving in-place edits on leave
+    private string _loadedNote = "";
+    private string _loadedPatient = "";
+
     // True from a regenerate request until its pipeline settles; keeps the
     // rewrite out of the per-session metrics
     private bool _regenerating;
@@ -262,6 +266,9 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             .ConfigureAwait(true);
         if (saved)
         {
+            _loadedNote = Note.ClinicalNoteText;
+            Note.EditedStamp = EditedStamp.Now();
+            Note.PatientStale = Note.PatientInfoText.Length > 0;
             Status.Append("Note saved");
         }
     }
@@ -278,7 +285,109 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             .ConfigureAwait(true);
         if (saved)
         {
+            _loadedPatient = Note.PatientInfoText;
             Status.Append("Patient note saved");
+        }
+    }
+
+    /// <summary>
+    /// A stored session becomes the review, as if it had just been sealed:
+    /// the same panes, and regenerate, translate and save act on it. Refused
+    /// while recording. Unsaved edits to the previous review are saved first.
+    /// </summary>
+    public async Task<bool> OpenStoredSessionAsync(string id, string startedLabel = "")
+    {
+        if (State is SessionState.Recording or SessionState.Finalising)
+        {
+            return false;
+        }
+
+        await AutosaveReviewAsync().ConfigureAwait(true);
+        if (!await RequestAsync("session/open", new { id }).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        _finalisedSessionId = id;
+        _recordingSessionId = null;
+        _regenerating = false;
+        Note.Reset();
+        await LoadFinalTranscriptAsync(id).ConfigureAwait(true);
+
+        var note = await RequestValueAsync("session/note", null, new { id }).ConfigureAwait(true);
+        var patient = await RequestValueAsync("session/patient", null, new { id })
+            .ConfigureAwait(true);
+        var (translation, translationLanguage) =
+            patient is { ValueKind: JsonValueKind.Object } p
+            && p.TryGetProperty("translation", out var t) && t.ValueKind == JsonValueKind.Object
+                ? (Text(t, "text"), Text(t, "language"))
+                : ("", "");
+        Note.LoadStored(
+            Text(note, "text"), Text(patient, "text"), translation,
+            Text(note, "style"), Text(note, "detail"),
+            EditedStamp.Label(Text(note, "generatedAt"), Text(note, "editedAt")),
+            translationLanguage);
+        _loadedNote = Note.ClinicalNoteText;
+        _loadedPatient = Note.PatientInfoText;
+        // ISO 8601 UTC compares as text: the sheet predates the note edit
+        var noteEdited = Text(note, "editedAt");
+        var sheetWritten = Text(patient, "generatedAt");
+        Note.PatientStale = noteEdited.Length > 0 && sheetWritten.Length > 0
+            && string.CompareOrdinal(noteEdited, sheetWritten) > 0;
+
+        Phase = FinalisePhase.Streaming;  // the panes show, no centre spinner
+        State = SessionState.Review;
+        Status.Append(startedLabel.Length > 0
+            ? $"Reviewing the consultation from {startedLabel}"
+            : "Reviewing a stored consultation");
+        return true;
+
+        static string Text(JsonElement? element, string property) =>
+            element is { ValueKind: JsonValueKind.Object } o
+                && o.TryGetProperty(property, out var value)
+                && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? ""
+                : "";
+    }
+
+    /// <summary>Leaves the review: edits saved, the engine told, panes cleared.</summary>
+    public async Task CloseReviewAsync()
+    {
+        if (State != SessionState.Review)
+        {
+            return;
+        }
+
+        await AutosaveReviewAsync().ConfigureAwait(true);
+        await RequestAsync("session/close").ConfigureAwait(true);
+        Note.Reset();
+        Transcript.Clear();
+        Phase = FinalisePhase.None;
+        _regenerating = false;
+        _finalisedSessionId = null;
+        _loadedNote = "";
+        _loadedPatient = "";
+        State = SessionState.Idle;
+        Status.Append("Ready");
+    }
+
+    // In-place edits persist without a click: whatever differs from the
+    // store when the clinician moves on is saved as their wording
+    private async Task AutosaveReviewAsync()
+    {
+        if (State != SessionState.Review || _finalisedSessionId is null)
+        {
+            return;
+        }
+
+        if (Note.ClinicalNoteText != _loadedNote)
+        {
+            await SaveNoteAsync().ConfigureAwait(true);
+        }
+
+        if (Note.PatientInfoText != _loadedPatient)
+        {
+            await SavePatientAsync().ConfigureAwait(true);
         }
     }
 
@@ -463,20 +572,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Status.Append("Cancelled");
     }
 
-    public void StartNewConsultation()
-    {
-        if (State != SessionState.Review)
-        {
-            return;
-        }
-
-        Note.Reset();
-        Transcript.Clear();
-        Phase = FinalisePhase.None;
-        _regenerating = false;
-        State = SessionState.Idle;
-        Status.Append("Ready");
-    }
+    public void StartNewConsultation() => _ = CloseReviewAsync();
 
     private void HandleNotification(string method, JsonElement parameters)
     {
@@ -522,6 +618,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 }
 
                 Note.Apply(NotePipelineEvent.NoteReady);
+                _loadedNote = Note.ClinicalNoteText;
                 State = SessionState.Review;
                 if (_metrics is not null && !_regenerating)
                 {
@@ -560,6 +657,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 }
 
                 Note.Apply(NotePipelineEvent.PatientInfoReady);
+                _loadedPatient = Note.PatientInfoText;
+                Note.PatientStale = false;  // freshly written from the note
                 Status.Append("Ready for review");
                 _regenerating = false;
                 break;
@@ -573,8 +672,9 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 break;
             case "translate/ready" when parameters.ValueKind == JsonValueKind.Object:
                 Note.TranslationText = parameters.GetProperty("text").GetString() ?? "";
+                Note.TranslationLanguage = parameters.GetProperty("language").GetString() ?? "";
                 Note.TranslationRunning = false;
-                Status.Append($"Translated to {parameters.GetProperty("language").GetString()}");
+                Status.Append($"Translated to {Note.TranslationLanguage}");
                 break;
             case "translate/failed":
                 Note.TranslationRunning = false;

@@ -18,6 +18,16 @@ public sealed partial class NoteViewModel : ObservableObject
     [ObservableProperty]
     public partial string TranslationText { get; set; } = "";
 
+    /// <summary>What the translation is, e.g. "Polish"; heads the output box.</summary>
+    [ObservableProperty]
+    public partial string TranslationLanguage { get; set; } = "";
+
+    public string TranslationCaption =>
+        TranslationLanguage.Length > 0 ? $"{TranslationLanguage} translation" : "Translation";
+
+    partial void OnTranslationLanguageChanged(string value) =>
+        OnPropertyChanged(nameof(TranslationCaption));
+
     /// <summary>Note options as the engine names them: "prose" or "soap".</summary>
     [ObservableProperty]
     public partial string Style { get; set; } = "prose";
@@ -49,6 +59,39 @@ public sealed partial class NoteViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(TranslateCommand))]
     public partial bool TranslationRunning { get; set; }
 
+    /// <summary>"Edited 10:31" when a person changed the stored note; empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string EditedStamp { get; set; } = "";
+
+    /// <summary>
+    /// The note has been edited since the sheet was written from it, so the
+    /// sheet may no longer say what the note says. Cleared when the sheet is
+    /// rewritten; the fix lands with the sheet-grounding work.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool PatientStale { get; set; }
+
+    /// <summary>Open while Regenerate waits for the clinician to confirm losing an edit.</summary>
+    [ObservableProperty]
+    public partial bool RegenerateWarningOpen { get; set; }
+
+    public bool Edited => EditedStamp.Length > 0;
+
+    partial void OnEditedStampChanged(string value) => OnPropertyChanged(nameof(Edited));
+
+    [RelayCommand]
+    private async Task ConfirmRegenerate()
+    {
+        RegenerateWarningOpen = false;
+        if (RegenerateRequested is not null)
+        {
+            await RegenerateRequested().ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand]
+    private void KeepEdits() => RegenerateWarningOpen = false;
+
     [RelayCommand(CanExecute = nameof(CanTranslate))]
     private Task Translate()
     {
@@ -61,8 +104,19 @@ public sealed partial class NoteViewModel : ObservableObject
     private bool CanTranslate() => SelectedLanguage is not null && TranslateRequested is not null
         && PipelineState == NotePipelineState.AllReady && !TranslationRunning;
 
+    // An edited note is the clinician's wording; regenerating replaces it,
+    // so it asks first. An unedited note regenerates straight away.
     [RelayCommand(CanExecute = nameof(CanRegenerate))]
-    private Task Regenerate() => RegenerateRequested!();
+    private Task Regenerate()
+    {
+        if (Edited)
+        {
+            RegenerateWarningOpen = true;
+            return Task.CompletedTask;
+        }
+
+        return RegenerateRequested!();
+    }
 
     // Any settled review state can regenerate, including a failed note -
     // regenerating IS the recovery. The engine refuses what it cannot do.
@@ -93,12 +147,66 @@ public sealed partial class NoteViewModel : ObservableObject
         ClinicalNoteText = "";
         PatientInfoText = "";
         TranslationText = "";
+        TranslationLanguage = "";
         TranslationRunning = false;
+        EditedStamp = "";  // the rewrite replaces the edit
+        PatientStale = false;
     }
 
-    partial void OnStyleChanged(string value) => OptionsChanged?.Invoke();
+    /// <summary>
+    /// A stored session's documents, ready for review. The options show the
+    /// stored values without becoming the clinician's new defaults.
+    /// </summary>
+    public void LoadStored(
+        string note, string patient, string translation,
+        string style, string detail, string editedStamp,
+        string translationLanguage = "")
+    {
+        TranslationLanguage = translationLanguage;
+        _suppressOptionsChanged = true;
+        try
+        {
+            if (style.Length > 0)
+            {
+                Style = style;
+            }
 
-    partial void OnDetailChanged(string value) => OptionsChanged?.Invoke();
+            if (detail.Length > 0)
+            {
+                Detail = detail;
+            }
+        }
+        finally
+        {
+            _suppressOptionsChanged = false;
+        }
+
+        ClinicalNoteText = note;
+        PatientInfoText = patient;
+        TranslationText = translation;
+        TranslationRunning = false;
+        EditedStamp = editedStamp;
+        RegenerateWarningOpen = false;
+        PipelineState = NotePipelineState.AllReady;
+    }
+
+    private bool _suppressOptionsChanged;
+
+    partial void OnStyleChanged(string value)
+    {
+        if (!_suppressOptionsChanged)
+        {
+            OptionsChanged?.Invoke();
+        }
+    }
+
+    partial void OnDetailChanged(string value)
+    {
+        if (!_suppressOptionsChanged)
+        {
+            OptionsChanged?.Invoke();
+        }
+    }
 
     // The panes show a quiet affordance while a document is being prepared
     // and nothing has streamed yet; computed here so it is testable
@@ -196,6 +304,10 @@ public sealed partial class NoteViewModel : ObservableObject
         ClinicalNoteText = "";
         PatientInfoText = "";
         TranslationText = "";
+        TranslationLanguage = "";
         TranslationRunning = false;
+        EditedStamp = "";
+        RegenerateWarningOpen = false;
+        PatientStale = false;
     }
 }
