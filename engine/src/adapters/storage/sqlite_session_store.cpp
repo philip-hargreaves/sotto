@@ -298,6 +298,9 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
         " FROM sessions s"
         " LEFT JOIN session_keys k ON k.session_id = s.id"
         " LEFT JOIN documents l ON l.session_id = s.id AND l.kind = 'label'"
+        // A keep-off session exists only until it is left; history never
+        // shows what is not being kept. Crashed ones stay for recovery
+        " WHERE NOT (s.retain = 0 AND s.state = 'finalised')"
         " ORDER BY s.started_at DESC, s.rowid DESC");
     while (select.Step()) {
         SessionSummary summary{select.ColumnText(0), select.ColumnText(1), select.ColumnText(2),

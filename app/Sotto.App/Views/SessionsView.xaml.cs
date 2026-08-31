@@ -19,7 +19,8 @@ public sealed partial class SessionsView : UserControl
         Loaded += (_, _) => _ = ViewModel.RefreshAsync();
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SessionsViewModel.DetailOpen))
+            if (e.PropertyName is nameof(SessionsViewModel.DetailOpen)
+                or nameof(SessionsViewModel.EmptyBecauseOff))
             {
                 Bindings.Update();
             }
@@ -30,7 +31,7 @@ public sealed partial class SessionsView : UserControl
 
     public ShellViewModel Shell { get; }
 
-    public bool SelectHintVisible => !ViewModel.DetailOpen;
+    public bool SelectHintVisible => !ViewModel.DetailOpen && !ViewModel.EmptyBecauseOff;
 
     // Leaving the page ends the review: edits saved, the engine told
     private async void OnBackClick(object sender, RoutedEventArgs e)

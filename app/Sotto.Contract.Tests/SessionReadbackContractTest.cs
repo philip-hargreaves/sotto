@@ -90,14 +90,19 @@ public class SessionReadbackContractTest
             var after = await client.RequestAsync("session/list", null, Timeout);
             Assert.Equal(0, after.GetProperty("sessions").GetArrayLength());
 
-            // Keep consultations off: readable until the consultation is left
+            // Keep consultations off: readable by id until the consultation
+            // is left, but never in history - and erased at close
             await client.RequestAsync("session/start", new { retain = false }, Timeout);
-            await client.RequestAsync("session/stop", null, Timeout);
+            var unretainedId = (await client.RequestAsync("session/stop", null, Timeout))
+                .GetProperty("sessionId").GetString()!;
             var unretained = await client.RequestAsync("session/list", null, Timeout);
-            Assert.Equal(1, unretained.GetProperty("sessions").GetArrayLength());
+            Assert.Equal(0, unretained.GetProperty("sessions").GetArrayLength());
+            var transcript2 = await client.RequestAsync(
+                "session/transcript", new { id = unretainedId }, Timeout);
+            Assert.True(transcript2.GetProperty("turns").GetArrayLength() > 0);
             await client.RequestAsync("session/close", null, Timeout);
-            var left = await client.RequestAsync("session/list", null, Timeout);
-            Assert.Equal(0, left.GetProperty("sessions").GetArrayLength());
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => client.RequestAsync("session/transcript", new { id = unretainedId }, Timeout));
             Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "sotto.db")));
             Assert.False(Directory.Exists(Path.Combine(engine.StoreRoot, "sessions")));
 

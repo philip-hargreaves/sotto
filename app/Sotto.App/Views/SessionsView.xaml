@@ -162,5 +162,40 @@
                 Style="{StaticResource CaptionText}"
                 Text="Its transcript, note and patient sheet open here." />
         </StackPanel>
+
+        <!-- Keep consultations is off and nothing is stored: the page says
+             so instead of presenting an empty list as a mystery -->
+        <StackPanel
+            Grid.Row="1"
+            Grid.ColumnSpan="2"
+            MaxWidth="420"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="12"
+            Visibility="{x:Bind ViewModel.EmptyBecauseOff, Mode=OneWay}">
+            <FontIcon
+                HorizontalAlignment="Center"
+                FontSize="26"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Glyph="&#xE72E;" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource PaneHeaderText}"
+                Text="Consultations are not being kept" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource CaptionText}"
+                TextAlignment="Center"
+                TextWrapping="Wrap"
+                Text="Each consultation is erased when you leave it. Turn on Save consultation data in Settings to keep the transcript, note and patient sheet on this device." />
+            <Button
+                HorizontalAlignment="Center"
+                Command="{x:Bind Shell.ShowSettingsCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="14" Glyph="&#xE713;" />
+                    <TextBlock Text="Open Settings" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
     </Grid>
 </UserControl>

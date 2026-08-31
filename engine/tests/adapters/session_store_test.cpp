@@ -429,7 +429,11 @@ TEST(SessionStore, TheSweepErasesFinalisedSessionsRecordedWithRetainOff) {
     const SessionId dropped = store.Begin(drop);
     store.AppendTurn(dropped, {0, 16000, "doctor", "dropped"});
     store.Finalise(dropped);
-    ASSERT_EQ(store.ListSessions().size(), 2u) << "readable until the consultation is left";
+    // Readable by id until the consultation is left, but never in history:
+    // the list shows only what is being kept
+    ASSERT_EQ(store.ReadTurns(dropped).size(), 1u);
+    ASSERT_EQ(store.ListSessions().size(), 1u);
+    ASSERT_EQ(store.ListSessions()[0].id, kept);
 
     store.EraseUnretained();
 

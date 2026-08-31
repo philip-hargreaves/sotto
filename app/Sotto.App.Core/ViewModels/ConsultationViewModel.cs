@@ -404,9 +404,15 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         try
         {
             var replay = ActiveReplay;
+            var retain = _preferences?.KeepConsultations ?? true;
             var parameters = replay is null
-                ? (object)new { resume }
-                : new { resume, replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
+                ? (object)new { resume, retain }
+                : new
+                {
+                    resume,
+                    retain,
+                    replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor },
+                };
             // A post-crash resume decrypts the stored audio on a recovering
             // machine; the default timeout is far too tight for it. The raw
             // request is used so that a lost engine is told apart from an
@@ -441,9 +447,15 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             return;
         }
 
+        // Keep consultations off: the engine erases the session once it is left
+        var retain = _preferences?.KeepConsultations ?? true;
         var parameters = replay is null
-            ? null
-            : new { replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor } };
+            ? (object)new { retain }
+            : new
+            {
+                retain,
+                replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor },
+            };
         var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
         if (response is null)
         {

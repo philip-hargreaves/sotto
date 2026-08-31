@@ -7,13 +7,20 @@ public sealed class AppPreferences(string path)
 {
     private sealed record Stored(
         bool DemoTrayEnabled, bool NpuTranscription, bool CollectPerformanceData,
-        string? NoteStyle = null, string? NoteDetail = null);
+        string? NoteStyle = null, string? NoteDetail = null,
+        bool KeepConsultations = false);
 
     public bool DemoTrayEnabled { get; set; }
 
     public bool NpuTranscription { get; set; }
 
     public bool CollectPerformanceData { get; set; }
+
+    /// <summary>
+    /// Off by default: the app saves nothing beyond the consultation unless
+    /// the clinician opts in. Applies to consultations from now on.
+    /// </summary>
+    public bool KeepConsultations { get; set; }
 
     public string NoteStyle { get; set; } = "prose";
 
@@ -28,6 +35,7 @@ public sealed class AppPreferences(string path)
             preferences.DemoTrayEnabled = stored?.DemoTrayEnabled ?? false;
             preferences.NpuTranscription = stored?.NpuTranscription ?? false;
             preferences.CollectPerformanceData = stored?.CollectPerformanceData ?? false;
+            preferences.KeepConsultations = stored?.KeepConsultations ?? false;
             // Values the engine would refuse never leave this boundary
             preferences.NoteStyle = stored?.NoteStyle is "prose" or "soap"
                 ? stored.NoteStyle : "prose";
@@ -48,7 +56,7 @@ public sealed class AppPreferences(string path)
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(new Stored(
                 DemoTrayEnabled, NpuTranscription, CollectPerformanceData,
-                NoteStyle, NoteDetail)));
+                NoteStyle, NoteDetail, KeepConsultations)));
         }
         catch (Exception)
         {

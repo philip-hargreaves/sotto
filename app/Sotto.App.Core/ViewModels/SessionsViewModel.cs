@@ -24,8 +24,17 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly IEngineClient _engine;
     private readonly StatusBarViewModel _status;
     private readonly ConsultationViewModel _consultation;
+    private readonly AppPreferences? _preferences;
 
     public ObservableCollection<SessionRow> Sessions { get; } = [];
+
+    /// <summary>
+    /// Keep consultations is off and nothing is stored: the page explains
+    /// itself instead of showing a bare empty list. Existing history always
+    /// shows; only the clinician empties it.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool EmptyBecauseOff { get; private set; }
 
     [ObservableProperty]
     public partial SessionRow? Selected { get; set; }
@@ -44,11 +53,13 @@ public sealed partial class SessionsViewModel : ObservableObject
     public NoteViewModel Note => _consultation.Note;
 
     public SessionsViewModel(
-        IEngineClient engine, StatusBarViewModel status, ConsultationViewModel consultation)
+        IEngineClient engine, StatusBarViewModel status, ConsultationViewModel consultation,
+        AppPreferences? preferences = null)
     {
         _engine = engine;
         _status = status;
         _consultation = consultation;
+        _preferences = preferences;
     }
 
     // True while a rename swaps the selected row for its retitled copy;
@@ -93,6 +104,9 @@ public sealed partial class SessionsViewModel : ObservableObject
                     FormatDuration(audioSeconds, started, ended),
                     EditedStamp.Label(started, edited)));
             }
+
+            EmptyBecauseOff = Sessions.Count == 0
+                && _preferences is { KeepConsultations: false };
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

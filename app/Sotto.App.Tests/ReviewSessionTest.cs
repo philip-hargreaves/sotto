@@ -1,3 +1,4 @@
+using Sotto.App.Core;
 using Sotto.App.Core.ViewModels;
 
 namespace Sotto.App.Tests;
@@ -67,6 +68,26 @@ public class ReviewSessionTest
 
         note.Style = "prose";  // the clinician's own change still registers
         Assert.Equal(1, optionChanges);
+    }
+
+    [Fact]
+    public async Task StartCarriesTheKeepConsultationsSetting()
+    {
+        var preferences = new AppPreferences(
+            Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+        var (session, engine, _) = TestSession.Create(preferences);
+
+        await session.StartRecordingAsync();
+        Assert.Contains(engine.Requests, r => r.Method == "session/start"
+            && r.Params.Contains("\"retain\":false"));
+        await session.StopRecordingAsync();
+
+        preferences.KeepConsultations = true;
+        engine.RaiseNotification("note/ready");
+        session.StartNewConsultation();
+        await session.StartRecordingAsync();
+        Assert.Contains(engine.Requests, r => r.Method == "session/start"
+            && r.Params.Contains("\"retain\":true"));
     }
 
     [Fact]

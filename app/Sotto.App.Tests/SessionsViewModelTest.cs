@@ -260,5 +260,28 @@ public class SessionsViewModelTest
         await vm.RefreshAsync();
 
         Assert.Empty(vm.Sessions);
+        Assert.False(vm.EmptyBecauseOff, "no preference known: a plain empty list");
+    }
+
+    [Fact]
+    public async Task AnEmptyListExplainsItselfWhenRetentionIsOff()
+    {
+        var preferences = new Sotto.App.Core.AppPreferences(
+            Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+        var engine = new RecordingEngineClient();
+        var status = new StatusBarViewModel();
+        var consultation = new ConsultationViewModel(
+            engine, new InlineDispatcher(), new TranscriptViewModel(), new NoteViewModel(),
+            status);
+        var vm = new SessionsViewModel(engine, status, consultation, preferences);
+        engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };
+
+        await vm.RefreshAsync();
+        Assert.True(vm.EmptyBecauseOff, "keep is off by default and nothing is stored");
+
+        ScriptOneSession(engine);  // history recorded while keep was on still shows
+        await vm.RefreshAsync();
+        Assert.False(vm.EmptyBecauseOff);
+        Assert.Single(vm.Sessions);
     }
 }
