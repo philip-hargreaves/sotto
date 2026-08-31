@@ -202,9 +202,8 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // A failed or dead worker gets one fresh process before the failure is
-    // the session's: the fresh-context retry is the configuration measured
-    // to succeed where every in-process recovery failed
+    // One fresh process before failing: the fresh-context retry is the
+    // configuration measured to work
     std::string Run(const std::string& method, json params, const Progress& progress) {
         try {
             return Attempt(method, params, progress);
@@ -232,10 +231,8 @@ WorkerNoteWriter::~WorkerNoteWriter() {
     impl_->CloseWorker();
 }
 
-// Called at session start and stop; the spawn and the model load both hide
-// inside capture. SOTTO_NOTE_LOAD=stop defers the load to generation time,
-// so the GPU never hosts the model beside live transcription (experiment
-// knob for the co-residency fault). Failure stays quiet and surfaces on Write.
+// Spawn and load hide inside capture; SOTTO_NOTE_LOAD=stop defers the load
+// (co-residency experiment knob). Failure surfaces on Write
 void WorkerNoteWriter::Prepare() {
     static const bool load_at_stop = [] {
         char* value = nullptr;

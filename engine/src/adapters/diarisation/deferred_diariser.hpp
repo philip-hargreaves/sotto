@@ -9,9 +9,7 @@
 
 namespace sotto::diar {
 
-// Diarisation behind a background load. Callers already run off the capture
-// thread (diar thread, finalise), so waiting there is safe; a session that
-// ends before the load has nothing to discard.
+// Diarisation behind a background load; callers already run off the capture thread
 class DeferredDiariser : public IDiariser {
    public:
     explicit DeferredDiariser(std::function<std::unique_ptr<IDiariser>()> build)

@@ -16,8 +16,7 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
-// DEVPKEY_Device_* keys spelled out: the SDK headers that define them fight
-// over initguid, and three constants are smaller than the truce
+// DEVPKEY_Device_* keys spelled out to avoid the SDK initguid clash
 constexpr GUID kDeviceGuid{
     0xa45c254e, 0xdf1c, 0x4efd, {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}};
 constexpr PROPERTYKEY kFriendlyName{kDeviceGuid, 14};    // endpoint (adapter)

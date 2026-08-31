@@ -1,10 +1,7 @@
 namespace Sotto.App.Core.Hosting;
 
-/// <summary>
-/// Shifts engine.log to engine-1.log and so on, newest first, keeping the
-/// last <c>keep</c> files. Called once per app run, so the log a crash was
-/// writing survives the next launch instead of growing forever.
-/// </summary>
+/// <summary>Shifts engine.log to engine-1.log and so on, keeping the last
+/// <c>keep</c>; once per run, so a crash's log survives the next launch.</summary>
 public static class LogRotation
 {
     public static void Rotate(string path, int keep)

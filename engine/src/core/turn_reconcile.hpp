@@ -44,13 +44,9 @@ inline std::string DropTailWords(const std::string& text, std::size_t count) {
 
 }  // namespace detail
 
-// Whisper hears a window boundary twice, and its timestamps are sloppy
-// enough that the time trim can miss the repeat: adjacent turns then carry
-// the same phrase and overlap in time. Fuzzy-match the earlier turn's tail
-// against the later turn's head (word edit distance, so different
-// renderings still match) and drop the matched tail from the EARLIER turn -
-// the later window heard that speech with full context. Spans are clamped
-// afterwards so turns no longer overlap
+// Sloppy timestamps can outlive the time trim: fuzzy-match tail against
+// head and drop from the EARLIER turn - the later window heard that
+// speech with full context
 inline void ReconcileTurns(std::vector<asr::Turn>& turns) {
     for (std::size_t i = 1; i < turns.size(); ++i) {
         auto& prev = turns[i - 1];

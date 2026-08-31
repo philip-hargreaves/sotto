@@ -40,9 +40,8 @@ public sealed partial class SessionsView : UserControl
         Shell.GoBackCommand.Execute(null);
     }
 
-    // The two-way binding also updates on focus loss, but its order against
-    // this handler is not guaranteed - push the text first so the rename
-    // never runs against the previous title
+    // Push the text first: the two-way binding's order against this handler
+    // is not guaranteed
     private async void OnTitleCommitted(object sender, RoutedEventArgs e)
     {
         ViewModel.DetailTitle = ((TextBox)sender).Text;

@@ -8,9 +8,6 @@ namespace Sotto.App.Core.ViewModels;
 /// <summary>A file replayed as the session's audio source.</summary>
 public sealed record ReplayRequest(string Path, double Speed, bool Monitor);
 
-/// <summary>
-/// Owns the session lifecycle.
-/// </summary>
 public sealed partial class ConsultationViewModel : ObservableObject, ISessionState
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
@@ -114,9 +111,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             Status.SetEngineReady(connected);
             if (!connected)
             {
-                // A restarted engine will never answer the in-flight translation.
-                // The host state already reads "Recovering" - an intentional
-                // restart (the NPU switch) must not look like a failure
+                // An intentional restart (the NPU switch) must not read as a failure
                 Note.TranslationRunning = false;
                 Status.Log("connection lost");
             }
@@ -425,10 +420,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                     retain,
                     replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor },
                 };
-            // A post-crash resume decrypts the stored audio on a recovering
-            // machine; the default timeout is far too tight for it. The raw
-            // request is used so that a lost engine is told apart from an
-            // engine that answered - the swallowing wrapper cannot
+            // A post-crash resume decrypts stored audio, far beyond the default
+            // timeout; the raw request tells a lost engine from one that answered
             var response = await _engine.RequestAsync(
                 "session/start", parameters, TimeSpan.FromSeconds(60)).ConfigureAwait(true);
             _recordingSessionId = response.TryGetProperty("sessionId", out var id)
@@ -445,9 +438,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
         catch (Exception)
         {
-            // The engine died again mid-resume; the session stays Recording so
-            // the next reconnect retries, and the UI must not claim a session
-            // that is not running
+            // Died again mid-resume: stay Recording so the next reconnect retries
             Status.Append("Recovering", busy: true);
         }
     }
@@ -470,9 +461,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 retain,
                 replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor },
             };
-        // Longer than the engine's 10 s no-audio deadline: a Bluetooth mic
-        // link waking takes seconds, and a timeout here would abandon a
-        // session the engine went on to start
+        // Beyond the engine's 10 s no-audio deadline: a Bluetooth link wakes in
+        // seconds and a timeout here would abandon a started session
         var response = await RequestValueAsync(
             "session/start", TimeSpan.FromSeconds(30), parameters).ConfigureAwait(true);
         if (response is null)
@@ -619,9 +609,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
-            // Finalise stages advance the phase; the status bar keeps its one
-            // "Finalising". Stages the engine skips never show, and a stage
-            // arriving after the seal cannot move the phase backwards
+            // Stages the engine skips never show; a late stage cannot move the
+            // phase backwards
             case "session/progress" when State == SessionState.Finalising
                 && Phase < FinalisePhase.Note
                 && parameters.ValueKind == JsonValueKind.Object:
@@ -633,10 +622,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                     _ => Phase,
                 };
                 break;
-            // The note pane shows the note being written, then the sealed
-            // text. The status states writing only once tokens actually
-            // stream - a thin recording writes nothing and must never claim
-            // to. Review is included because a regenerate streams there.
+            // Writing is claimed only once tokens stream; Review included because
+            // a regenerate streams there
             case "note/partial" when State is SessionState.Finalising or SessionState.Review
                 && parameters.ValueKind == JsonValueKind.Object:
                 if (Note.ClinicalNoteText.Length == 0)

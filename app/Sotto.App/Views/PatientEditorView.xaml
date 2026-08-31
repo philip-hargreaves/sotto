@@ -24,9 +24,8 @@
                     Style="{StaticResource MicroText}"
                     Text="{x:Bind ViewModel.PatientStateCaption, Mode=OneWay}" />
             </StackPanel>
-            <!-- Honest about consistency: the sheet does not follow note
-                 edits automatically (the rewrite action lands with the
-                 sheet-grounding work) -->
+            <!-- The sheet does not follow note edits; the rewrite lands
+                     with the sheet-grounding work -->
             <StackPanel Orientation="Horizontal" Spacing="8"
                         Visibility="{x:Bind ViewModel.PatientStale, Mode=OneWay}">
                 <FontIcon

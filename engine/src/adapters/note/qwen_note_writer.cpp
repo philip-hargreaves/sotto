@@ -60,11 +60,8 @@ struct QwenNoteWriter::Impl {
         pipeline = std::move(built);
     }
 
-    // One discarded token on the fixed instruction block parks its KV in the
-    // pipeline state; generation then reuses the shared prefix and only the
-    // transcript prefills at stop (measured: 2.1 s -> 1.3 s to first token).
-    // Reuse changes the prefill's numeric path, so notes are equivalent but
-    // not byte-stable across runs.
+    // One discarded token parks the instruction block's KV; only the transcript
+    // prefills at stop (measured 2.1 -> 1.3 s). Notes equivalent, not byte-stable
     void WarmPromptPrefix(ov::genai::LLMPipeline& built) {
         try {
             const auto t0 = std::chrono::steady_clock::now();

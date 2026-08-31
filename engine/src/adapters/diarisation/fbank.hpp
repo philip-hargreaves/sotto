@@ -13,10 +13,8 @@ struct FbankFeatures {
     std::size_t frames = 0;
 };
 
-// The speaker embedder's input feature: kaldi fbank to the researched
-// contract, mean-normalised per slice. Audio must be float32 in [-1, 1]
-// mono 16 kHz - int16-range values break parity in near-silent bins even
-// though the mean subtraction removes the constant shift
+// Kaldi fbank to the researched contract; input must be float32 [-1, 1]
+// mono 16 kHz - int16-range values break parity
 FbankFeatures EmbedderFbank(std::span<const float> audio);
 
 }  // namespace sotto::diar

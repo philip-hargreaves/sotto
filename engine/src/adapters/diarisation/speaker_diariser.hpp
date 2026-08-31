@@ -14,12 +14,9 @@
 
 namespace sotto::diar {
 
-// The assembled batch chain: VAD regions -> seg change points ->
-// refined slices -> overlap-excluded embeddings -> clustering -> labels.
-// Each long-enough overlap span is then emitted as a second turn on the
-// best non-primary centroid, so a backchannel spoken over the dominant
-// speaker is not absorbed. Owns its own VAD instance - Silero is stateful
-// and the capture path has its own - and the clinician anchor
+// The batch chain: VAD -> segmentation -> slices -> embeddings -> clusters,
+// with long overlap spans emitted as second turns. Owns its own VAD
+// (Silero is stateful) and the clinician anchor
 class SpeakerDiariser : public IDiariser {
    public:
     SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,

@@ -7,9 +7,8 @@
 
 namespace sotto::metrics {
 
-// One engine-wide sink for the numbers worth comparing across machines.
-// Any thread records; readers get a copy. Devices and load times persist
-// for the engine's life; the rest resets per session.
+// One engine-wide sink; any thread records, readers get a copy. Devices
+// and load times persist, the rest resets per session
 class Registry {
    public:
     struct Snapshot {

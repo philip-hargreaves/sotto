@@ -74,9 +74,8 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         }
     }
 
-    // Appended across launches so a crash's last words survive the relaunch;
-    // rotated once per app run so old runs stay readable and bounded; the
-    // handle is marked inheritable for the child
+    // Appended across launches, rotated once per run; the handle is marked
+    // inheritable for the child
     private FileStream? OpenStderr()
     {
         if (stderrPath is null)

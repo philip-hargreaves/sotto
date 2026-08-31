@@ -6,7 +6,6 @@
 
 namespace sotto::audio {
 
-// Captures the microphone through WASAPI
 class WasapiCapture : public IAudioSource {
    public:
     // Empty id resolves the default communications microphone at Run

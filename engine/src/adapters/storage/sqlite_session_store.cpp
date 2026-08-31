@@ -78,9 +78,8 @@ Db OpenDatabase(const std::filesystem::path& root) {
     Db db(DatabasePath(root));
     const std::int64_t version = db.UserVersion();
     if (version == 0) {
-        // Incremental vacuum is a creation-time choice: it lets an erase hand
-        // pages back without rewriting the file. The connection's WAL switch
-        // already wrote the header, so the (empty) file is rebuilt to take it
+        // Incremental vacuum is creation-time; the WAL switch already wrote the
+        // header, so the empty file is rebuilt to take it
         db.Exec("PRAGMA auto_vacuum=INCREMENTAL");
         db.Exec("VACUUM");
         Db::Transaction txn(db);
@@ -201,9 +200,8 @@ void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::
     txn.Commit();
 }
 
-// The seal is where the audio goes: the transcript is the record from here
-// on, and the recording only ever existed to resume a crashed session.
-// Pending frames are dropped unwritten; their loss count still lands
+// The seal erases the audio: the transcript is the record; the recording
+// existed only to resume a crash
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
@@ -496,11 +494,8 @@ void SqliteSessionStore::WriterLoop() {
     }
 }
 
-// Layout 1 (releases before sotto #35): main.db catalog beside sessions/<id>.db
-// and <id>.key. Rows move across unchanged - the cipher binds a blob to its
-// domain, session and sequence, never to a table - and the files go once
-// their session is in. A session that fails to import keeps its files and
-// the catalog, so nothing is lost silently.
+// Layout 1 import (pre sotto #35): rows move unchanged; a session that
+// fails to import keeps its files
 void SqliteSessionStore::ImportPerSessionFiles(const std::filesystem::path& root) {
     const std::filesystem::path catalog_path = root / "main.db";
     if (!std::filesystem::exists(catalog_path)) return;

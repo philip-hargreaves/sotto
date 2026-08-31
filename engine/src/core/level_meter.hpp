@@ -16,9 +16,8 @@ struct LevelReading {
     bool clipped = false;
 };
 
-// Mic-activity level from the samples alone: one reading per 100 ms window,
-// RMS on a dBFS scale, instant attack, exponential release. No wall clock,
-// so identical audio gives identical readings at any replay speed.
+// RMS per 100 ms on dBFS, instant attack, exponential release; no wall
+// clock, so replay speed cannot change the readings
 class LevelMeter {
    public:
     static constexpr std::size_t kWindowFrames = static_cast<std::size_t>(kSampleRate) / 10;

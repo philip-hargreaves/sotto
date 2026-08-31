@@ -16,10 +16,8 @@ struct LoadedModel {
     std::chrono::milliseconds load_time{0};
 };
 
-// Compiles store-cleared models for their manifest device. Selection is
-// explicit: "GPU" means the Intel GPU found by vendor name (multi-GPU
-// machines enumerate GPU.0/GPU.1), and an unavailable device is a loud
-// error naming what exists. No fallback of any kind.
+// Compiles cleared models for their manifest device; an unavailable device
+// is a loud error naming what exists, no fallback
 class OvRuntime {
    public:
     LoadedModel Load(const ModelStore& store, std::string_view task, std::string_view tier,

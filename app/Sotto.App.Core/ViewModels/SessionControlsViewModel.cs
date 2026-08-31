@@ -58,16 +58,14 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public bool ReviewVisible => _session.State == SessionState.Review;
 
-    // The mic picker time-shares the header cell with New consultation: one
-    // negation of the SAME expression, so the two can never both appear
+    // One negation of ReviewVisible, so the picker and New consultation
+    // can never both appear
     public bool MicPickerVisible => !ReviewVisible;
 
     /// <summary>Pinned once recording: changes apply to the next consultation.</summary>
     public bool MicPickerEnabled => _session.State == SessionState.Idle;
 
-    // The centre holds until the note streams: an empty document waiting on
-    // the prefill is worse than a spinner that says "Preparing note". The
-    // panes and the centre never coexist.
+    // The centre holds until the note streams; panes and centre never coexist
     public bool CentreStageVisible =>
         _session.State is SessionState.Idle or SessionState.Recording
         || _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;

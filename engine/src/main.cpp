@@ -71,11 +71,8 @@ class WireEvents : public sotto::audio::ISessionEvents {
         server_.PushNotification("session/progress", {{"stage", stage}});
     }
 
-    // Partials are cumulative, so intermediates can drop freely: a ~12 Hz
-    // cap keeps the pipe and the shell's bindings calm at token cadence.
-    // The meter sees EVERY call, before the cap, so tokensPerSecond is the
-    // model's real rate, never the notification cadence (an Intel-requested
-    // figure, used for testing)
+    // Metered before the ~12 Hz notification cap, so tokensPerSecond is the
+    // model's real rate (Intel-requested figure)
     void PushPartial(const std::string& method, nlohmann::json params) {
         const auto now = std::chrono::steady_clock::now();
         double rate = 0;
@@ -94,8 +91,7 @@ class WireEvents : public sotto::audio::ISessionEvents {
         server_.PushNotification(method, std::move(params));
     }
 
-    // The stream's end carries its whole-generation average - the accurate
-    // summary a test can hold the hardware to - and retires the meter
+    // The end event carries the whole-generation average and retires the meter
     void PushStreamEnd(const char* partial_method, const char* method, nlohmann::json params) {
         double average = 0;
         {
@@ -184,9 +180,7 @@ int main(int argc, char* argv[]) {
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
     try {
-        // Flags first, then positional: pipe name, store root, models root,
-        // replay wav; tests pass their own so runs collide with neither the
-        // app nor its stores
+        // Flags first, then positional: pipe name, store root, models root, replay wav
         std::vector<std::string> args(argv + 1, argv + argc);
         const std::string asr_device = sotto::TakeFlag(args, "--asr-device");
         std::fprintf(stderr, "sotto-engine: power throttling %s\n",
@@ -248,10 +242,7 @@ int main(int argc, char* argv[]) {
             }
             return std::make_unique<sotto::audio::WasapiCapture>(sotto::audio::WideId(mic_id));
         };
-        // The store's contents decide: real transcription when the ASR role
-        // is staged, scripted otherwise (CI, fresh installs). Whisper loads
-        // on its worker thread, so the engine serves and records immediately
-        // and queued windows decode once the model is ready
+        // Real transcription when the ASR role is staged, scripted otherwise (CI)
         sotto::models::OvRuntime ov_runtime;
         sotto::metrics::Registry metrics;
         bool first_use = false;
@@ -303,9 +294,8 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception& e) {
             std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
         }
-        // The prompt lives beside the models dir so edits apply per note.
-        // Generation runs in its own supervised process: a GPU driver fault
-        // there costs a respawn, never the engine (measured; see ADR-0027)
+        // Generation runs in its own supervised process: a GPU driver fault there
+        // costs a respawn, never the engine (ADR-0027)
         std::unique_ptr<sotto::note::INoteWriter> note_writer;
         try {
             model_store.Resolve("note", "default");
@@ -316,9 +306,7 @@ int main(int argc, char* argv[]) {
             if (std::filesystem::exists(host)) {
                 note_writer =
                     std::make_unique<sotto::note::WorkerNoteWriter>(host, models_root, prompt);
-                // First use only: the one-off model compile runs now, on an
-                // idle GPU, so it can never land inside a recording. Warm
-                // starts skip this and load at the first diarisation tick.
+                // First use only: the one-off compile runs on an idle GPU, never inside a recording
                 const auto note_dir = model_store.Resolve("note", "default").dir;
                 if (!std::filesystem::exists(note_dir / ".cache")) {
                     first_use = true;
@@ -326,9 +314,7 @@ int main(int argc, char* argv[]) {
                     note_writer->Prepare();
                 }
             } else {
-                // Never write in-process: that is the exact configuration
-                // the driver fault corrupts. No notes is loud; a lost note
-                // in clinic is not
+                // Never write in-process: that is the configuration the driver fault corrupts
                 std::fprintf(stderr, "sotto-engine: note DISABLED, %s is missing\n",
                              host.string().c_str());
             }
@@ -348,7 +334,6 @@ int main(int argc, char* argv[]) {
                     if (method == "translate/partial") {
                         events.PushPartial(method, params);
                     } else {
-                        // The same source-side rate and average as the note
                         if (method == "translate/ready") {
                             events.PushStreamEnd("translate/partial", "translate/ready", params);
                         } else if (method == "translate/failed") {

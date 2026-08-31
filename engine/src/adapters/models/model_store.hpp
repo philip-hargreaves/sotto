@@ -21,10 +21,8 @@ struct ModelInfo {
     std::map<std::string, std::string> file_hashes;  // filename -> sha256 hex
 };
 
-// Enumerates per-model manifest.json directories under one root. Parsing is
-// eager and fail-closed (a corrupt manifest is a broken install); hashing is
-// on demand via Verify, since models run to gigabytes. No OpenVINO here:
-// this class deals in files and hashes, the runtime compiles what it clears.
+// Per-model manifest.json dirs under one root; parsing fail-closed,
+// hashing on demand. No OpenVINO here
 class ModelStore {
    public:
     explicit ModelStore(const std::filesystem::path& root);

@@ -93,7 +93,7 @@ std::unique_ptr<WasapiPlayer> WasapiPlayer::Open() {
 WasapiPlayer::WasapiPlayer(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 
 WasapiPlayer::~WasapiPlayer() {
-    // One line at teardown; silence with no explanation is undiagnosable
+    // Logged so silent playback is diagnosable
     std::fprintf(stderr, "sotto-engine: monitor played %llu frames, dropped %llu\n", impl_->written,
                  impl_->dropped);
     if (impl_->client) impl_->client->Stop();

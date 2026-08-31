@@ -2,12 +2,8 @@ using Microsoft.Win32;
 
 namespace Sotto.App.Core.Hosting;
 
-/// <summary>
-/// Opts the engine processes into Windows Error Reporting local dumps:
-/// per-user registry, no elevation, minidumps only (never full memory - a
-/// full dump could carry consultation audio), a capped count. Idempotent,
-/// re-asserted every launch so a support bundle always has the mechanism.
-/// </summary>
+/// <summary>WER local dumps for the engine processes: per-user, minidumps
+/// only (a full dump could carry audio), capped, re-asserted per launch.</summary>
 public static class CrashDumps
 {
     private const string LocalDumps =

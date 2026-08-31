@@ -56,9 +56,8 @@ inline json IdToJson(const Id& id) {
     return std::get<std::string>(id);
 }
 
-// Checks mirror envelope.schema.json, which is the source of truth. Takes the
-// message by value so params can be moved out: nlohmann's copy recurses one
-// stack frame per nesting level, so a deeply nested params would overflow.
+// Mirrors envelope.schema.json. By value so params move out: nlohmann's
+// copy recurses one frame per nesting level
 inline std::variant<Request, Error> ParseRequest(json j) {
     const auto invalid = [](std::string why) {
         return Error{kInvalidRequest, "Invalid Request", json(std::move(why))};

@@ -5,10 +5,8 @@
 
 namespace sotto::core {
 
-// Tokens per second, measured at the source: one Token() per streamed
-// piece, before any notification throttling, so the figure is the model's
-// real rate. Rate() is a short rolling window for live display; Average()
-// is the whole stream, the number a test can hold the hardware to.
+// Tokens per second at the source, before throttling; Rate() is a rolling
+// window for display, Average() the whole stream
 class ThroughputMeter {
    public:
     explicit ThroughputMeter(double window_seconds = 2.0) : window_(window_seconds) {}

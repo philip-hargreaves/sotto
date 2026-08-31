@@ -16,8 +16,7 @@ public sealed partial class ConsultationView : UserControl
         Mic = mic;
         InitializeComponent();
 
-        // The list is refreshed as the flyout opens: a headset plugged in a
-        // moment ago is the normal case, not an edge one
+        // Refreshed as the flyout opens: a just-plugged headset must appear
         MicFlyout.Opening += async (_, _) =>
         {
             await Mic.RefreshAsync();
@@ -80,7 +79,7 @@ public sealed partial class ConsultationView : UserControl
             MicFlyout.Items.Add(item);
             if (device.Bluetooth)
             {
-                // The hands-free quality cliff, said where the choice is made
+                // Quality warning next to the choice it concerns
                 MicFlyout.Items.Add(new MenuFlyoutItem
                 {
                     Text = "    Bluetooth call mode - reduced recording quality",

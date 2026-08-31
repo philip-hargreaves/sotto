@@ -160,9 +160,8 @@ std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
     return text.get();
 }
 
-// Load off the hot path: the engine serves and sessions record while the
-// pipeline compiles; queued windows decode afterwards. A failed load drains
-// windows without turns, so nothing hangs
+// Load off the hot path; a failed load drains windows without turns, so
+// nothing hangs
 void WhisperTranscriber::RecordDecode(std::size_t frames,
                                       std::chrono::steady_clock::time_point t0) {
     if (metrics_ != nullptr) {
@@ -276,9 +275,7 @@ void WhisperTranscriber::WorkerLoop() {
                 RecordDecode(window.frames.size(), t0);
                 AnchorFirstTurn(turns, window.first_frame);
                 DropReheardTurns(turns, window.first_new_frame);
-                // The dedup backstop acts at the window boundary only: within
-                // a window the decoder never duplicates its own segments, and
-                // stripping there would eat genuine repetition
+                // Boundary-only dedup: within a window, stripping would eat genuine repetition
                 if (!turns.empty() && previous.has_value()) {
                     StripBoundaryDuplicates(*previous, turns.front());
                 }

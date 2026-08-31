@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Sotto.App.Core.ViewModels">
 
-    <!-- The calm centre of the screen holds the one action being taken -->
+    <!-- The centre holds the one action -->
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
         <StackPanel
             HorizontalAlignment="Center"
@@ -39,7 +39,7 @@
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
 
-            <!-- Rolling level history: the room is live, visibly -->
+            <!-- Rolling level history -->
             <ItemsControl HorizontalAlignment="Center" ItemsSource="{x:Bind ViewModel.Meter}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

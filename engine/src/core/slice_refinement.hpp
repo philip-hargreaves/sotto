@@ -37,10 +37,8 @@ inline std::vector<Region> RefineRegions(const std::vector<Region>& regions,
     return slices;
 }
 
-// The frame ranges a slice should embed: overlap-marked frames
-// are excluded when at least 0.5 s of clean audio remains - overlap
-// contamination degrades voiceprints - else the slice embeds whole. Empty
-// means the slice is too short to embed at all
+// Overlap frames excluded when at least 0.5 s of clean audio remains;
+// empty means too short to embed
 inline std::vector<Region> EmbeddingRanges(const Region& slice,
                                            const std::vector<Region>& overlap_spans) {
     std::vector<Region> clean;

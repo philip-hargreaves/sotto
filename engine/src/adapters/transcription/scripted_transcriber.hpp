@@ -6,7 +6,7 @@
 
 namespace sotto::asr {
 
-// Stand-in until the Whisper adapter
+// CI stand-in when no ASR model is staged
 class ScriptedTranscriber : public ITranscriber {
    public:
     void Begin(ITurnSink& sink) override {

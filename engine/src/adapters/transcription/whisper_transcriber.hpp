@@ -30,18 +30,12 @@ using DecodeFn = std::function<std::vector<Turn>(std::span<const float>, std::ui
 
 using DecodeLoader = std::function<DecodeFn()>;
 
-// Whisper behind the transcriber port. Submit only enqueues; one worker
-// thread loads the pipeline, then decodes, so neither startup nor capture
-// ever waits on the GPU. Windows queued while the model loads are decoded
-// once it is ready: at 30x realtime the backlog clears in seconds, and
-// Finish waits for it, so a finalised transcript is always complete
+// Whisper behind the transcriber port: one worker thread loads then
+// decodes, so capture never waits on the GPU; Finish drains the backlog
 class WhisperTranscriber : public ITranscriber {
    public:
-    // device_override replaces the manifest device for LIVE windows. Clips
-    // (the finalise re-decode) keep the manifest device: on the NPU the
-    // re-decode is the longest stage at ~11x, and the GPU sits idle at stop,
-    // so one burst there converges low-power mode with GPU-mode latency for
-    // seconds of draw - the capture phase keeps every watt it saved
+    // device_override applies to LIVE windows only; clips keep the manifest
+    // GPU, so low-power finalise pays GPU rate (the burst)
     WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                        std::string device_override = "", metrics::Registry* metrics = nullptr);
     explicit WhisperTranscriber(DecodeFn decode);  // Tests inject the decode
@@ -55,9 +49,8 @@ class WhisperTranscriber : public ITranscriber {
                 std::uint64_t first_new_frame = 0) override;
     void Finish() override;
 
-    // Rides the same worker queue after any pending live windows, so the one
-    // pipeline is never contended and the live transcript is never delayed.
-    // Blocks until decoded; never touches the sink or the dedup backstop
+    // Same worker queue, after pending windows; blocks until decoded and never
+    // touches the sink
     std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override;
 
     // Frees the pipeline once the queues drain; the next Submit reloads it

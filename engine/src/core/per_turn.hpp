@@ -61,9 +61,8 @@ inline std::vector<LabelledSlice> MergeByCluster(const std::vector<LabelledSlice
     return turns;
 }
 
-// Decode spans double as cache keys. Heads clamp past the previous end; a
-// nested overlap turn clamps to nothing (decoding it returns the louder
-// speaker's words under the wrong name)
+// Spans double as cache keys; heads clamp past the previous end, a nested
+// overlap turn clamps to nothing
 inline std::vector<Region> DecodeSpans(const std::vector<LabelledSlice>& turns,
                                        std::uint64_t audio_frames) {
     std::vector<Region> spans(turns.size());

@@ -10,8 +10,7 @@
 
 namespace sotto::asr {
 
-// Window-boundary quality: the pure steps between a window's decode and
-// its emitted turns. Every constant is the researched, measured
+// Pure steps between a window's decode and its emitted turns; measured
 // configuration - do not retune
 inline constexpr std::uint64_t kAnchorSnapFrames = 24000;  // 1.5 s
 inline constexpr std::uint64_t kAdjacentGapFrames = 4000;  // 0.25 s
@@ -55,10 +54,8 @@ inline std::string WithoutLeadingWords(const std::string& text, std::size_t coun
 
 }  // namespace detail
 
-// Whisper's first-segment start stamp drifts late at window starts
-// (cross-attention timing). The window begins at speech onset by
-// construction and the VAD clock is sample-accurate, so a small drift is
-// snapped back to the window start
+// Whisper's first-segment stamp drifts late at window starts; a small
+// drift snaps back to the sample-accurate window start
 inline void AnchorFirstTurn(std::vector<Turn>& turns, std::uint64_t window_first_frame) {
     if (turns.empty()) return;
     Turn& first = turns.front();
@@ -69,21 +66,17 @@ inline void AnchorFirstTurn(std::vector<Turn>& turns, std::uint64_t window_first
     first.frame_count += drift;
 }
 
-// A turn whose midpoint falls in the re-heard overlap was already emitted
-// by the prior window; dropping by time is robust where text matching is
-// not ("we'll" vs "will")
+// A midpoint in the re-heard overlap was already emitted; dropping by time
+// is robust where text matching is not
 inline void DropReheardTurns(std::vector<Turn>& turns, std::uint64_t first_new_frame) {
     std::erase_if(turns, [first_new_frame](const Turn& turn) {
         return turn.first_frame + turn.frame_count / 2 < first_new_frame;
     });
 }
 
-// A forced mid-word cut can make the decoder emit the boundary word at the
-// end of one turn AND the start of the next. Only a forced cut leaves no
-// silence between turns, so when they are time-contiguous the longest
-// common word run (case/punctuation-insensitive) is stripped from the newer
-// turn; a stripped-empty turn is the caller's to drop. Turns separated by
-// real silence keep genuine repetition
+// A forced mid-word cut can emit the boundary word twice; only forced cuts
+// are time-contiguous, so the longest common word run strips from the
+// newer turn. Real silence keeps genuine repetition
 inline void StripBoundaryDuplicates(const Turn& prev, Turn& next) {
     if (prev.text.empty() || next.text.empty()) return;
     if (next.first_frame > prev.first_frame + prev.frame_count + kAdjacentGapFrames) return;

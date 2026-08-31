@@ -40,11 +40,8 @@ struct DiariseResult {
     DiariseTiming timing;
 };
 
-// Who-spoke-when: speech slices with anonymous cluster labels, plus each
-// cluster's similarity to the accrued clinician anchor. turn_boundaries are
-// extra slice cuts (measured +0.41 pt attribution over 57 consults). Naming
-// is the caller's decision; AccrueDoctor then folds the named doctor's
-// voiceprint into the anchor
+// Slices with anonymous labels plus anchor similarities; turn_boundaries
+// measured +0.41 pt attribution. Naming is the caller's decision
 class IDiariser {
    public:
     virtual ~IDiariser() = default;
@@ -52,12 +49,8 @@ class IDiariser {
     virtual DiariseResult Diarise(std::span<const float> audio,
                                   std::span<const std::uint64_t> turn_boundaries = {}) = 0;
 
-    // Each cluster's similarity to the accrued clinician anchor, one per
-    // cluster; empty when no anchor exists yet. Separate from Diarise so the
-    // caller can overlap the voiceprint embeds with other work; the
-    // voiceprints are kept for AccrueDoctor so the doctor's is embedded once
-    // Pure on purpose: a wrapper that forgot to forward it would silently
-    // name roles without the anchor
+    // Separate from Diarise so the voiceprint embeds can overlap other work;
+    // kept for AccrueDoctor so the doctor's is embedded once
     virtual std::vector<double> AnchorSimilarities(std::span<const float> audio,
                                                    const std::vector<LabelledSlice>& slices,
                                                    int cluster_count) = 0;

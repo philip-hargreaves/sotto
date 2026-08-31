@@ -39,7 +39,6 @@ class ISessionEvents {
 
     virtual void OnTurn(const asr::Turn& turn) = 0;
 
-    // A death mid-session
     virtual void OnInterrupted(SourceEndReason reason, const std::string& detail) = 0;
 
     // Finalise stages as they start ("transcript", "speakers"), on the
@@ -65,9 +64,8 @@ struct ReplaySpec {
     std::uint64_t start_frame = 0;  // resume: skip audio already captured
 };
 
-// The clinician's microphone, resolved by the caller before Start: the id
-// pins the capture endpoint (empty pins the communications default) and the
-// name goes into the session's device snapshot
+// Resolved by the caller: the id pins the endpoint (empty = default), the
+// name goes into the session snapshot
 struct MicSelection {
     std::string id;
     std::string name;
@@ -76,15 +74,12 @@ struct MicSelection {
 using SourceFactory = std::function<std::unique_ptr<IAudioSource>(const std::optional<ReplaySpec>&,
                                                                   const std::string& mic_id)>;
 
-// One capture session at a time. Every way a session can end has a storage
-// outcome: Stop finalises, Cancel erases, an interruption abandons (kept,
-// recoverable), and a failed start erases. A source that completes on its
-// own keeps the session open for the user's Stop or Cancel to decide.
+// One session at a time; every ending has a storage outcome: Stop
+// finalises, Cancel erases, an interruption abandons recoverable
 class SessionController {
    public:
-    // Below this the model writes from its prompt, not the consultation:
-    // measured fabrication on a 14 s recording (an in-prompt example became
-    // the diagnosis). Refusing is the only safe output.
+    // Below this the model writes from its prompt, not the consultation
+    // (measured on 14 s); refusing is the only safe output
     static constexpr std::size_t kMinNoteWords = 25;
 
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
@@ -114,12 +109,8 @@ class SessionController {
     SessionController(const SessionController&) = delete;
     SessionController& operator=(const SessionController&) = delete;
 
-    // True once audio flows; false if the source ended or the deadline
-    // passed first, with the reason left in LastEnd. A resume replays the
-    // crashed session's stored audio ahead of the live source, into a new
-    // session that supersedes the old one at its first storage outcome.
-    // retain false: the session is erased once the consultation is left
-    // (close, the next start, or the next engine start)
+    // True once audio flows. resume replays stored audio ahead of the live
+    // source; retain false erases once the consultation is left
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
                const store::SessionId& resume_from = {}, bool retain = true,
                const MicSelection& mic = {}) {
@@ -230,7 +221,6 @@ class SessionController {
         if (source_ && running_) source_->SetPaused(paused);
     }
 
-    // Toggle audible replay monitoring mid-session
     void SetMonitor(bool monitor) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (source_ && running_) source_->SetMonitor(monitor);
@@ -258,9 +248,8 @@ class SessionController {
         return last_finalised_;
     }
 
-    // A stored session becomes the regenerate target, as if it had just
-    // been sealed. Refused while recording, while a note is being written,
-    // and for a session the store cannot read
+    // Reopens a stored session as the regenerate target; refused while
+    // recording or writing
     bool Open(const store::SessionId& id) {
         if (Running() || note_busy_.load()) {
             return false;
@@ -311,10 +300,8 @@ class SessionController {
         note_options_ = std::move(options);
     }
 
-    // Rewrites the last finalised session's note from its stored transcript
-    // with the given options, streaming and re-saving like the first write.
-    // False when nothing is finalised, a session is live, or a note is
-    // already being written - the RPC thread must never block on the lane.
+    // Rewrites the last finalised session's note; false when busy - the RPC
+    // thread never blocks on the lane
     bool RegenerateNote(note::NoteOptions options) {
         if (note_writer_ == nullptr || Running() || note_busy_.load()) {
             return false;
@@ -423,10 +410,8 @@ class SessionController {
                                end.reason == SourceEndReason::kFailed);
             }
             controller.cv_.notify_all();
-            // Only an interruption decides its own storage outcome: the audio
-            // is gone and the recording must survive for recovery. A stopped
-            // or completed source leaves keep-or-discard to Stop or Cancel;
-            // audio ending is not the user's decision about the recording
+            // Only an interruption decides its own outcome; a stopped source leaves
+            // keep-or-discard to Stop or Cancel
             if (interrupted) {
                 controller.FinishSession(Outcome::kAbandon);
                 controller.events_.OnInterrupted(end.reason, end.detail);
@@ -535,9 +520,8 @@ class SessionController {
         running_ = false;
     }
 
-    // A store failure here is swallowed on purpose: Cancel deletes the key
-    // and file before the catalog row, so the erase holds even if bookkeeping
-    // fails, and a failed finalise leaves the session recoverable
+    // Swallowed on purpose: key and file are gone before the catalog row, so
+    // the erase holds even if bookkeeping fails
     void FinishSession(Outcome outcome) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -564,9 +548,8 @@ class SessionController {
         if (metrics_ != nullptr) {
             metrics_->RecordSession(session_audio_.size() / 16000.0, lost_frames_, diar_ticks_);
         }
-        // The transcript completes before the session seals: the tail window
-        // is transcribed unless the recording is being discarded, and every
-        // turn is stored before the outcome below runs
+        // The tail window is transcribed unless discarding; every turn stores
+        // before the outcome below
         if (outcome == Outcome::kFinalise) {
             events_.OnProgress("transcript");
         }
@@ -600,9 +583,8 @@ class SessionController {
             }
             diar::ReconcileTurns(note_input);
         }
-        // The speaker-attributed transcript supersedes the live turns before
-        // the seal; a diarisation failure keeps the unattributed transcript,
-        // never the session
+        // The attributed transcript supersedes live turns; a diarisation failure
+        // keeps the transcript, never loses the session
         if (outcome == Outcome::kFinalise && diariser_ != nullptr && !session_audio_.empty()) {
             try {
                 std::vector<asr::Turn> transcribed;
@@ -639,10 +621,8 @@ class SessionController {
                 // The re-decode is transcript work again - and on the NPU it
                 // is the longest stage, so the spinner must say so
                 events_.OnProgress("turns");
-                // The anchor voiceprints only feed role naming, which follows
-                // the GPU turn decode: embed them on the CPU meanwhile. The
-                // future's destructor waits, so an exception below cannot leave
-                // the task running over freed state
+                // Anchor voiceprints embed on the CPU alongside the GPU turn decode; the
+                // future's destructor waits, so an exception cannot orphan the task
                 auto voiceprint_seconds = 0.0;
                 auto anchor_similarity =
                     std::async(std::launch::async, [this, &result, &voiceprint_seconds] {
@@ -789,10 +769,8 @@ class SessionController {
         }
     }
 
-    // The list title, asked of the model once the documents are done, so
-    // nobody waits on it. Held to a standard: a title that fails the
-    // sanitiser is not stored, and the list shows the date instead. A
-    // typed label is the clinician's and is never overwritten
+    // Asked once the documents are done; a title failing the sanitiser is not
+    // stored, and a typed label is never overwritten
     void SaveLabel(const store::SessionId& id, const std::string& note_text) {
         try {
             if (!store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {
@@ -822,10 +800,8 @@ class SessionController {
     // a note still writing
     void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
         JoinNoteThread();
-        // The model never sees a transcript this thin - it would write from
-        // its prompt, not the consultation (measured). The engine authors a
-        // plain statement instead, delivered as the note so the panes read
-        // professionally rather than erroring
+        // Too thin: the model would write from its prompt (measured); the engine
+        // authors a plain statement instead
         auto options = CurrentNoteOptions();  // before the lock: same mutex
         if (TranscriptWords(transcript) < min_note_words_) {
             const std::string note =

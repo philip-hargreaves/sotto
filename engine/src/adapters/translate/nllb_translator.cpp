@@ -194,11 +194,8 @@ NllbTranslator::~NllbTranslator() {
     }
 }
 
-// Started while the patient sheet writes; done before the translate button
-// enables. The warm must INFER, not merely load: the CPU plugin pays a
-// large one-time specialisation on the first inference (measured ~12 s),
-// so one throwaway sentence runs through all four models here. A failed
-// warm is retried by the first Translate.
+// The warm must INFER: the CPU plugin's first-inference specialisation
+// measured ~12 s. A failed warm is retried by the first Translate
 void NllbTranslator::Prepare() {
     std::lock_guard<std::mutex> lock(impl_->prepare_mutex);
     if (impl_->loaded || impl_->loader.joinable()) {

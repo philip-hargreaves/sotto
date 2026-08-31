@@ -47,11 +47,8 @@ std::wstring ConsentStoreValue(const std::wstring& subkey) {
     return value;
 }
 
-// Windows records the Settings microphone toggle but does not enforce it
-// against a full-trust process, and CheckAccess reports the unenforced
-// truth: Allowed even under an explicit deny (both measured). The store the
-// Settings page writes is therefore the only signal of what the user chose,
-// so a clinical recorder reads it and enforces it itself.
+// Windows records the mic privacy toggle but does not enforce it for
+// full-trust processes (measured), so the engine enforces it itself
 bool ConsentDenied() {
     const std::wstring store =
         L"Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore"
@@ -110,7 +107,7 @@ void WasapiCapture::RequestStop() {
     }
 }
 
-// OnEnd is the port's one guarantee, so Run funnels every outcome through it
+// Every outcome, success or failure, ends with OnEnd
 void WasapiCapture::Run(IAudioSink& sink) {
     sink.OnEnd(RunToEnd(sink));
 }
@@ -151,11 +148,8 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return Fail("Activate", hr);
     }
 
-    // Communications category, declared before Initialize: without it
-    // Windows never raises a Bluetooth headset's hands-free microphone
-    // link and the endpoint delivers pure silence (measured: 14.9 s
-    // captured, zero speech, while Voice Recorder heard fine). Side
-    // effect accepted: other apps' audio ducks while recording
+    // Without the communications category Windows never wakes a Bluetooth mic
+    // link (measured: silence); other apps' audio ducks while recording
     ComPtr<IAudioClient2> client2;
     if (SUCCEEDED(client.As(&client2))) {
         AudioClientProperties properties{};

@@ -10,9 +10,8 @@
 
 namespace sotto::audio {
 
-// VAD behind a background load. Ready lets the capture path buffer hops
-// instead of blocking; a failed load throws on the first probability, so
-// the session fails loudly rather than staying silent
+// VAD behind a background load; a failed load throws on the first
+// probability, loud rather than silent
 class DeferredVad : public IStreamingVad {
    public:
     explicit DeferredVad(std::function<std::unique_ptr<IStreamingVad>()> build)

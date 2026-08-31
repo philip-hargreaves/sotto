@@ -18,10 +18,8 @@ enum class Domain : std::uint8_t {
     kLabel = 5,
 };
 
-// AES-256-GCM under a per-session key. The IV is domain plus sequence,
-// never reused; domain, session id and sequence are authenticated, so a
-// payload cannot be moved or renumbered undetected. Destroying the key
-// makes every copy of the ciphertext unreadable, which is what cancel means.
+// AES-256-GCM per session; IV = domain + sequence, both authenticated.
+// Destroying the key is the erase
 class ChunkCipher {
    public:
     static ChunkCipher Generate();

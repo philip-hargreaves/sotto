@@ -128,9 +128,8 @@ public sealed class PipeTransport : IEngineClient
     private async Task SendAsync(object message, CancellationToken cancellationToken)
     {
         var frame = Framing.Encode(JsonSerializer.SerializeToUtf8Bytes(message, Protocol.JsonOptions));
-        // The whole send follows one token: the caller's timeout, the caller's
-        // cancellation, and transport closure all abort it. A cancelled write
-        // desyncs the stream, so it is treated as a terminal fault below.
+        // One token governs the send; a cancelled write desyncs the stream, so
+        // it is terminal
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _closed.Token);
         await _writeLock.WaitAsync(linked.Token).ConfigureAwait(false);
@@ -263,8 +262,7 @@ public sealed class PipeTransport : IEngineClient
             // The loop's exit already faulted every pending request
         }
 
-        // _closed and _writeLock are left undisposed on purpose: a request parked
-        // on either would see ObjectDisposedException instead of the clean close.
-        // Neither holds an unmanaged handle, so the GC reclaims them.
+        // Left undisposed on purpose: parked requests must see the clean close,
+        // and neither holds an unmanaged handle
     }
 }

@@ -9,10 +9,8 @@
 
 namespace sotto::note {
 
-// The note model in its own supervised process, so a GPU driver fault in
-// generation can never corrupt or hang the engine. Spawns the host lazily,
-// forwards Prepare so the load still hides inside capture, and streams
-// partials back over a private hardened pipe.
+// The note model in its own supervised process, so a GPU driver fault can
+// never corrupt or hang the engine
 class WorkerNoteWriter : public INoteWriter {
    public:
     WorkerNoteWriter(std::filesystem::path host_exe, std::filesystem::path models_root,

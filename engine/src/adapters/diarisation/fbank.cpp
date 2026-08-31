@@ -6,9 +6,8 @@
 
 namespace sotto::diar {
 
-// Every value is the blessed contract from the research port
-// (torchaudio.compliance.kaldi defaults + the modelscope ERes2NetV2
-// front-end); a mismatch here fails embedder parity by orders of magnitude
+// The blessed research contract (torchaudio kaldi defaults + ERes2NetV2
+// front-end); a mismatch fails embedder parity
 FbankFeatures EmbedderFbank(std::span<const float> audio) {
     knf::FbankOptions opts;
     opts.frame_opts.samp_freq = 16000.0f;

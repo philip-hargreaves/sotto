@@ -314,16 +314,14 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 }
                 mic = {device.id, device.name};
             }
-            // resume: a crashed session's id; its stored audio replays ahead
-            // of the live source into the new session. retain false: the
-            // session is erased once the consultation is left
+            // resume replays the crashed session's stored audio ahead of the live
+            // source; retain false erases on leaving the consultation
             if (!controller.Start(std::move(replay), params.value("resume", ""),
                                   params.value("retain", true), mic)) {
                 return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
             }
             return json{{"sessionId", controller.CurrentSession()}};
         });
-    // Structure and length of the next note; invalid values are refused
     server.RegisterMethod(
         "note/options", [&controller](const json& params) -> std::variant<json, Error> {
             const std::string style = params.value("style", "prose");
@@ -337,7 +335,6 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
             controller.SetNoteOptions({style, detail});
             return json::object();
         });
-    // Rewrite the finalised note with new options; results stream as usual
     server.RegisterMethod(
         "note/regenerate", [&controller](const json& params) -> std::variant<json, Error> {
             const std::string style = params.value("style", "prose");
@@ -354,7 +351,6 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
             }
             return json::object();
         });
-    // The clinician''s edits become the record
     server.RegisterMethod(
         "note/update", [&sessions](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);

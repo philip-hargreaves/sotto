@@ -8,11 +8,8 @@ namespace Sotto.App.Core.ViewModels;
 /// <summary>A capture endpoint as the engine listed it; the id is WASAPI's.</summary>
 public sealed record MicDevice(string Id, string Name, string ShortName, bool IsDefault, bool Bluetooth);
 
-/// <summary>
-/// The microphone picker. The list is the engine's, fetched fresh each time
-/// the flyout opens; the choice is stored by id and falls back to the system
-/// default only when the chosen device is genuinely gone.
-/// </summary>
+/// <summary>The microphone picker: the engine's list, fetched fresh per
+/// open; the choice is stored by id and falls back only while gone.</summary>
 public sealed partial class MicViewModel : ObservableObject
 {
     private readonly IEngineClient _engine;
@@ -24,7 +21,7 @@ public sealed partial class MicViewModel : ObservableObject
         _engine = engine;
         _preferences = preferences;
         SelectedId = preferences?.MicId ?? "";
-        // The label must be right before the picker is ever opened
+        // Refresh at connect so the label is right before the first open
         if (dispatcher is not null)
         {
             engine.ConnectedChanged += connected => dispatcher.Post(() =>
@@ -57,13 +54,8 @@ public sealed partial class MicViewModel : ObservableObject
         ?? Devices.FirstOrDefault(d => d.IsDefault)
         ?? Devices.FirstOrDefault();
 
-    /// <summary>
-    /// Shortened only as far as it can be while still naming ONE device: a
-    /// Bluetooth headset, a USB mic and the built-in array can all report an
-    /// endpoint of "Microphone", and three identical labels would be worse
-    /// than one long one. Windows names endpoints "endpoint on adapter", so
-    /// the steps are endpoint alone, then with the adapter, then the full name.
-    /// </summary>
+    /// <summary>Shortened only while still naming ONE device (several mics
+    /// can all report "Microphone"): endpoint, +adapter, then full name.</summary>
     public string Label
     {
         get
