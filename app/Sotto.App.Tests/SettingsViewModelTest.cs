@@ -42,6 +42,51 @@ public class SettingsViewModelTest
         new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
 
     [Fact]
+    public void KeepConsultationsDefaultsOffAndPersists()
+    {
+        var preferences = TempPreferences();
+        var settings = new SettingsViewModel(preferences);
+        Assert.False(settings.KeepConsultations, "save nothing unless the clinician opts in");
+
+        settings.KeepConsultations = true;  // no confirmer wired: acts directly
+        Assert.True(preferences.KeepConsultations);
+
+        var reopened = new SettingsViewModel(preferences);
+        Assert.True(reopened.KeepConsultations);
+    }
+
+    [Fact]
+    public async Task TurningOnIsConfirmedNeverJustToggled()
+    {
+        var preferences = TempPreferences();
+        var settings = new SettingsViewModel(preferences);
+        var asked = 0;
+        var answer = false;
+        settings.ConfirmKeepConsultations = () =>
+        {
+            asked++;
+            return Task.FromResult(answer);
+        };
+
+        settings.KeepConsultations = true;
+        await Task.Delay(20);
+        Assert.Equal(1, asked);
+        Assert.False(settings.KeepConsultations, "declined: the toggle stays off");
+        Assert.False(preferences.KeepConsultations, "and nothing was persisted");
+
+        answer = true;
+        settings.KeepConsultations = true;
+        await Task.Delay(20);
+        Assert.Equal(2, asked);
+        Assert.True(settings.KeepConsultations);
+        Assert.True(preferences.KeepConsultations);
+
+        settings.KeepConsultations = false;  // off is frictionless
+        Assert.Equal(2, asked);
+        Assert.False(preferences.KeepConsultations);
+    }
+
+    [Fact]
     public void NpuToggleSavesAndRestartsTheEngine()
     {
         var preferences = TempPreferences();

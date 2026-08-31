@@ -17,6 +17,7 @@
 #include "core/endpointer.hpp"
 #include "core/level_meter.hpp"
 #include "core/metrics.hpp"
+#include "core/note_label.hpp"
 #include "core/per_turn.hpp"
 #include "core/resume_source.hpp"
 #include "core/role_naming.hpp"
@@ -109,14 +110,17 @@ class SessionController {
     // passed first, with the reason left in LastEnd. A resume replays the
     // crashed session's stored audio ahead of the live source, into a new
     // session that supersedes the old one at its first storage outcome.
+    // retain false: the session is erased once the consultation is left
+    // (close, the next start, or the next engine start)
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
-               const store::SessionId& resume_from = {}) {
+               const store::SessionId& resume_from = {}, bool retain = true) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (running_) {
                 return false;
             }
             running_ = true;
+            reviewing_ = false;  // Record wins over a review
             got_audio_ = false;
             ended_ = false;
             stop_requested_ = false;
@@ -133,7 +137,10 @@ class SessionController {
                              resume_from.c_str(),
                              static_cast<double>(resumed_audio.size()) / kSampleRate);
             }
-            const store::SessionId id = store_.Begin({kSampleRate, "", ""});
+            store_.EraseUnretained();  // the previous consultation is left
+            store::SessionMeta meta{kSampleRate, "", ""};
+            meta.retain = retain;
+            const store::SessionId id = store_.Begin(meta);
             std::lock_guard<std::mutex> lock(mutex_);
             session_id_ = id;
             resumed_from_ = resume_from;
@@ -237,6 +244,47 @@ class SessionController {
         return last_finalised_;
     }
 
+    // A stored session becomes the regenerate target, as if it had just
+    // been sealed. Refused while recording, while a note is being written,
+    // and for a session the store cannot read
+    bool Open(const store::SessionId& id) {
+        if (Running() || note_busy_.load()) {
+            return false;
+        }
+        try {
+            (void)store_.ReadTurns(id);
+        } catch (...) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        last_finalised_ = id;
+        reviewing_ = true;
+        return true;
+    }
+
+    // Leaving the consultation: ends a review (regenerate refuses until the
+    // next seal or open) and erases what was recorded with retain off
+    void Close() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (reviewing_) {
+                reviewing_ = false;
+                last_finalised_.clear();
+            }
+        }
+        if (!Running()) {
+            try {
+                store_.EraseUnretained();
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+        }
+    }
+
+    bool Reviewing() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return reviewing_;
+    }
+
     // The recording session's id, so the shell can resume it after a crash
     store::SessionId CurrentSession() const {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -254,7 +302,7 @@ class SessionController {
     // False when nothing is finalised, a session is live, or a note is
     // already being written - the RPC thread must never block on the lane.
     bool RegenerateNote(note::NoteOptions options) {
-        if (Running() || note_busy_.load()) {
+        if (note_writer_ == nullptr || Running() || note_busy_.load()) {
             return false;
         }
         store::SessionId id = LastFinalised();
@@ -711,6 +759,48 @@ class SessionController {
         return words;
     }
 
+    // A store refusal never costs the note: the text still reaches the shell
+    void SaveNote(const store::SessionId& id, const std::string& text,
+                  const note::NoteOptions& options) {
+        try {
+            store::Document document;
+            document.text = text;
+            document.style = options.style;
+            document.detail = options.detail;
+            store_.SaveDocument(id, store::DocumentKind::kNote, document);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
+    // The list title, asked of the model once the documents are done, so
+    // nobody waits on it. Held to a standard: a title that fails the
+    // sanitiser is not stored, and the list shows the date instead. A
+    // typed label is the clinician's and is never overwritten
+    void SaveLabel(const store::SessionId& id, const std::string& note_text) {
+        try {
+            if (!store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {
+                return;
+            }
+            const std::string label = core::SanitiseLabel(note_writer_->WriteLabel(note_text));
+            if (label.empty()) {
+                return;
+            }
+            store::Document document;
+            document.text = label;
+            store_.SaveDocument(id, store::DocumentKind::kLabel, document);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
+    void SavePatient(const store::SessionId& id, const std::string& text) {
+        try {
+            store::Document document;
+            document.text = text;
+            store_.SaveDocument(id, store::DocumentKind::kPatient, document);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
     // The note writes after the seal on its own thread; a new stop cancels
     // a note still writing
     void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
@@ -719,28 +809,22 @@ class SessionController {
         // its prompt, not the consultation (measured). The engine authors a
         // plain statement instead, delivered as the note so the panes read
         // professionally rather than erroring
+        auto options = CurrentNoteOptions();  // before the lock: same mutex
         if (TranscriptWords(transcript) < min_note_words_) {
             const std::string note =
                 "The recording was too short or did not contain enough clinical "
                 "information to generate an accurate note.";
-            try {
-                store_.SaveNote(id, note);
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
+            SaveNote(id, note, options);
             events_.OnNoteReady(note);
             if (note_writer_->WritesPatient()) {
                 const std::string patient =
                     "The recording was too short or did not contain enough clinical "
                     "information to generate a patient information sheet.";
-                try {
-                    store_.SavePatient(id, patient);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
-                }
+                SavePatient(id, patient);
                 events_.OnPatientReady(patient);
             }
             return;
         }
-        auto options = CurrentNoteOptions();  // before the lock: same mutex
         std::lock_guard<std::mutex> lock(mutex_);
         note_busy_ = true;
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript),
@@ -766,10 +850,7 @@ class SessionController {
                 note = note_writer_->Write(turns, options, [this](const std::string& partial) {
                     events_.OnNotePartial(partial);
                 });
-                try {
-                    store_.SaveNote(id, note);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
-                }
+                SaveNote(id, note, options);
                 events_.OnNoteReady(note);
             } catch (const std::exception& e) {
                 events_.OnNoteFailed(e.what());
@@ -780,22 +861,22 @@ class SessionController {
             }
             // Patient information follows from the finished note; a failure
             // here leaves the note intact
-            if (!note_writer_->WritesPatient() || note.empty()) {
-                return;
-            }
-            try {
-                const std::string patient = note_writer_->WritePatient(
-                    note,
-                    [this](const std::string& partial) { events_.OnPatientPartial(partial); });
+            if (note_writer_->WritesPatient() && !note.empty()) {
                 try {
-                    store_.SavePatient(id, patient);
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                    const std::string patient = note_writer_->WritePatient(
+                        note,
+                        [this](const std::string& partial) { events_.OnPatientPartial(partial); });
+                    SavePatient(id, patient);
+                    events_.OnPatientReady(patient);
+                } catch (const std::exception& e) {
+                    events_.OnPatientFailed(e.what());
+                } catch (...) {
+                    events_.OnPatientFailed("patient information failed");
                 }
-                events_.OnPatientReady(patient);
-            } catch (const std::exception& e) {
-                events_.OnPatientFailed(e.what());
-            } catch (...) {
-                events_.OnPatientFailed("patient information failed");
+            }
+            // The title comes last: everything the clinician waits for is done
+            if (!note.empty()) {
+                SaveLabel(id, note);
             }
         });
     }
@@ -849,6 +930,7 @@ class SessionController {
     std::atomic<bool> note_abort_{false};
     bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
+    bool reviewing_ = false;  // last_finalised_ came from Open, not a seal
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined
     std::vector<float> session_audio_;

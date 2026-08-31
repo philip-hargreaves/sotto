@@ -152,7 +152,15 @@ std::string QwenNoteWriter::WritePatient(const std::string& note, const Progress
     return Generate(LoadPrompt(impl_->prompt_dir / "patient-info.md") + note + "\n", progress);
 }
 
-std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& progress) {
+std::string QwenNoteWriter::WriteLabel(const std::string& note) {
+    if (note.empty()) {
+        return {};
+    }
+    return Generate(LoadPrompt(impl_->prompt_dir / "label.md") + note + "\n", nullptr, 16);
+}
+
+std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& progress,
+                                     std::size_t max_new_tokens) {
     impl_->cancel = false;
     Prepare();
     impl_->JoinLoader();
@@ -168,7 +176,7 @@ std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& 
     }
 
     ov::genai::GenerationConfig config;
-    config.max_new_tokens = 1024;
+    config.max_new_tokens = max_new_tokens;
     config.do_sample = false;
     config.apply_chat_template = false;
     // The template the prompt was tuned with: user turn, empty think block

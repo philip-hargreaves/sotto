@@ -1,0 +1,11 @@
+{
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+        "text": "Swelling of the left elbow for a week. Not painful, slightly warm, no injury.",
+        "style": "prose",
+        "detail": "standard",
+        "generatedAt": "2026-08-17T10:24:02Z",
+        "editedAt": "2026-08-17T10:31:15Z"
+    }
+}

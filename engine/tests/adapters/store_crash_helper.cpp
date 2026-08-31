@@ -47,7 +47,8 @@ int main(int argc, char* argv[]) {
 
     // A second connection watches the committed count; the acked number is
     // what the test holds recovery to
-    sotto::store::Db reader(root / "sessions" / (id + ".db"));
+    sotto::store::Db reader(root / "sotto.db");
+    const std::string count_sql = "SELECT COUNT(*) FROM chunks WHERE session_id = '" + id + "'";
     std::uint64_t turn = 0;
     for (;;) {
         for (auto& sample : audio) sample = PatternAt(frame++);
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
             id, {frame - audio.size(), audio.size(), "", "turn " + std::to_string(turn++)});
         try {
             std::printf("CHUNKS %lld\n",
-                        static_cast<long long>(reader.QueryInt64("SELECT COUNT(*) FROM chunks")));
+                        static_cast<long long>(reader.QueryInt64(count_sql.c_str())));
             std::fflush(stdout);
         } catch (...) {
         }

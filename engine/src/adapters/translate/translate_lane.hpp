@@ -28,8 +28,12 @@ class TranslateLane {
         Join();
     }
 
-    // False while a previous translation is still running
-    bool Run(std::string text, std::string language) {
+    using OnReady = std::function<void(const std::string& translated, const std::string& language)>;
+
+    // False while a previous translation is still running. on_ready runs
+    // before the ready notification, so a reader that reacts to it finds the
+    // translation already stored
+    bool Run(std::string text, std::string language, OnReady on_ready = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (running_.load()) {
             return false;
@@ -38,7 +42,8 @@ class TranslateLane {
             worker_.join();
         }
         running_ = true;
-        worker_ = std::thread([this, text = std::move(text), language = std::move(language)] {
+        worker_ = std::thread([this, text = std::move(text), language = std::move(language),
+                               on_ready = std::move(on_ready)] {
             try {
                 const auto t0 = std::chrono::steady_clock::now();
                 bool first = true;
@@ -53,6 +58,9 @@ class TranslateLane {
                         }
                         emit_("translate/partial", {{"text", partial}});
                     });
+                if (on_ready) {
+                    on_ready(translated, language);
+                }
                 emit_("translate/ready", {{"text", translated}, {"language", language}});
             } catch (const std::exception& e) {
                 emit_("translate/failed", {{"detail", e.what()}});

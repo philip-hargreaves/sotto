@@ -48,6 +48,11 @@ std::variant<std::string, Error> IdFrom(const json& params) {
     return params["id"].get<std::string>();
 }
 
+// Optional stamps are empty strings in the store and null on the wire
+json NullWhenEmpty(const std::string& value) {
+    return value.empty() ? json(nullptr) : json(value);
+}
+
 }  // namespace
 
 json HandleSessionList(sotto::store::ISessionStore& sessions) {
@@ -57,7 +62,10 @@ json HandleSessionList(sotto::store::ISessionStore& sessions) {
                         {"startedAt", session.started_at},
                         {"endedAt", session.ended_at},
                         {"state", session.state},
-                        {"sampleRate", session.sample_rate}});
+                        {"sampleRate", session.sample_rate},
+                        {"label", session.label},
+                        {"editedAt", NullWhenEmpty(session.edited_at)},
+                        {"audioSeconds", session.audio_seconds}});
     }
     return json{{"sessions", std::move(list)}};
 }
@@ -85,7 +93,38 @@ std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& session
     const auto id = IdFrom(params);
     if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
     try {
-        return json{{"text", sessions.ReadNote(std::get<std::string>(id))}};
+        const auto note =
+            sessions.ReadDocument(std::get<std::string>(id), sotto::store::DocumentKind::kNote);
+        return json{{"text", note.text},
+                    {"style", note.style},
+                    {"detail", note.detail},
+                    {"generatedAt", NullWhenEmpty(note.generated_at)},
+                    {"editedAt", NullWhenEmpty(note.edited_at)}};
+    } catch (const std::exception& e) {
+        return Error{kSessionError, "Session error", json(e.what())};
+    }
+}
+
+std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sessions,
+                                               const json& params) {
+    const auto id = IdFrom(params);
+    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+    try {
+        using sotto::store::DocumentKind;
+        const auto patient =
+            sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kPatient);
+        const auto translation =
+            sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kTranslation);
+        json result{{"text", patient.text},
+                    {"language", patient.language},
+                    {"generatedAt", NullWhenEmpty(patient.generated_at)},
+                    {"editedAt", NullWhenEmpty(patient.edited_at)},
+                    {"translation", nullptr}};
+        if (!translation.text.empty()) {
+            result["translation"] =
+                json{{"language", translation.language}, {"text", translation.text}};
+        }
+        return result;
     } catch (const std::exception& e) {
         return Error{kSessionError, "Session error", json(e.what())};
     }
@@ -159,12 +198,22 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     server.RegisterMethod("session/note", [&sessions](const json& params) {
         return HandleSessionNote(sessions, params);
     });
+    server.RegisterMethod("session/patient", [&sessions](const json& params) {
+        return HandleSessionPatient(sessions, params);
+    });
+    // A typed label outlives regenerations; the note's own first sentence
+    // fills in until then
     server.RegisterMethod(
-        "session/patient", [&sessions](const json& params) -> std::variant<json, Error> {
+        "session/label", [&sessions](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);
             if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            if (!params.contains("text") || !params["text"].is_string()) {
+                return Error{kInvalidParams, "Invalid params", json("text must be a string")};
+            }
             try {
-                return json{{"text", sessions.ReadPatient(std::get<std::string>(id))}};
+                sessions.EditDocument(std::get<std::string>(id), sotto::store::DocumentKind::kLabel,
+                                      params["text"].get<std::string>());
+                return json::object();
             } catch (const std::exception& e) {
                 return Error{kSessionError, "Session error", json(e.what())};
             }
@@ -185,12 +234,30 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                                  json("language must be a string")};
                 }
                 try {
-                    const auto text = sessions.ReadPatient(std::get<std::string>(id));
+                    const auto text = sessions
+                                          .ReadDocument(std::get<std::string>(id),
+                                                        sotto::store::DocumentKind::kPatient)
+                                          .text;
                     if (text.empty()) {
                         return Error{kSessionError, "Session error",
                                      json("no patient information to translate")};
                     }
-                    if (!translate_lane->Run(text, params["language"].get<std::string>())) {
+                    // Stored before translate/ready goes out, so the sheet
+                    // read back after it already carries the translation
+                    const auto session_id = std::get<std::string>(id);
+                    const auto on_ready = [&sessions, session_id](const std::string& translated,
+                                                                  const std::string& language) {
+                        try {
+                            sotto::store::Document document;
+                            document.text = translated;
+                            document.language = language;
+                            sessions.SaveDocument(
+                                session_id, sotto::store::DocumentKind::kTranslation, document);
+                        } catch (...) {  // NOLINT(bugprone-empty-catch)
+                        }
+                    };
+                    if (!translate_lane->Run(text, params["language"].get<std::string>(),
+                                             on_ready)) {
                         return Error{kSessionError, "Session error",
                                      json("a translation is already running")};
                     }
@@ -217,8 +284,10 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                                                   r.value("speed", 1.0), r.value("monitor", false)};
             }
             // resume: a crashed session's id; its stored audio replays ahead
-            // of the live source into the new session
-            if (!controller.Start(std::move(replay), params.value("resume", ""))) {
+            // of the live source into the new session. retain false: the
+            // session is erased once the consultation is left
+            if (!controller.Start(std::move(replay), params.value("resume", ""),
+                                  params.value("retain", true))) {
                 return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
             }
             return json{{"sessionId", controller.CurrentSession()}};
@@ -263,7 +332,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 return Error{kInvalidParams, "Invalid params", json("text must be a string")};
             }
             try {
-                sessions.SaveNote(std::get<std::string>(id), params["text"].get<std::string>());
+                sessions.EditDocument(std::get<std::string>(id), sotto::store::DocumentKind::kNote,
+                                      params["text"].get<std::string>());
                 return json::object();
             } catch (const std::exception& e) {
                 return Error{kSessionError, "Session error", json(e.what())};
@@ -277,7 +347,9 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 return Error{kInvalidParams, "Invalid params", json("text must be a string")};
             }
             try {
-                sessions.SavePatient(std::get<std::string>(id), params["text"].get<std::string>());
+                sessions.EditDocument(std::get<std::string>(id),
+                                      sotto::store::DocumentKind::kPatient,
+                                      params["text"].get<std::string>());
                 return json::object();
             } catch (const std::exception& e) {
                 return Error{kSessionError, "Session error", json(e.what())};
@@ -293,6 +365,22 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     });
     server.RegisterMethod("session/cancel", [&controller](const json&) {
         controller.Cancel();
+        return json::object();
+    });
+    // A past session under review: regenerate and translate act on it as
+    // on a fresh seal; Record closes the review
+    server.RegisterMethod(
+        "session/open", [&controller](const json& params) -> std::variant<json, Error> {
+            const auto id = IdFrom(params);
+            if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+            if (!controller.Open(std::get<std::string>(id))) {
+                return Error{kSessionError, "Session error",
+                             json("recording, a note is being written, or no such session")};
+            }
+            return json::object();
+        });
+    server.RegisterMethod("session/close", [&controller](const json&) {
+        controller.Close();
         return json::object();
     });
     // The note and patient lanes announce themselves when a writer is

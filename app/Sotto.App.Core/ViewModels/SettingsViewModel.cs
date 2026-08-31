@@ -36,6 +36,61 @@ public sealed partial class SettingsViewModel : ObservableObject
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
+        KeepConsultations = preferences?.KeepConsultations ?? false;
+    }
+
+    /// <summary>
+    /// Off by default: a consultation is erased when it is left. On: the
+    /// encrypted history. Applies to consultations from now on; audio is
+    /// never kept either way.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool KeepConsultations { get; set; }
+
+    /// <summary>
+    /// Turning the history ON starts accumulating patient records, so it is
+    /// confirmed, never just toggled; the view supplies the dialog. Off is
+    /// frictionless - reducing retention is never gated.
+    /// </summary>
+    public Func<Task<bool>>? ConfirmKeepConsultations { get; set; }
+
+    partial void OnKeepConsultationsChanged(bool value)
+    {
+        if (_reverting)
+        {
+            return;
+        }
+
+        if (value && ConfirmKeepConsultations is not null)
+        {
+            _reverting = true;
+            KeepConsultations = false;  // holds until the clinician confirms
+            _reverting = false;
+            _ = AskThenEnableAsync();
+            return;
+        }
+
+        PersistKeepConsultations(value);
+    }
+
+    private async Task AskThenEnableAsync()
+    {
+        if (await ConfirmKeepConsultations!().ConfigureAwait(true))
+        {
+            _reverting = true;
+            KeepConsultations = true;
+            _reverting = false;
+            PersistKeepConsultations(true);
+        }
+    }
+
+    private void PersistKeepConsultations(bool value)
+    {
+        if (_preferences is not null)
+        {
+            _preferences.KeepConsultations = value;
+            _preferences.Save();
+        }
     }
 
     [ObservableProperty]

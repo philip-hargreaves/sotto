@@ -183,6 +183,8 @@ int main(int argc, char* argv[]) {
         sotto::ipc::PipeServer server(pipe_name);
         WireEvents events(server);
         sotto::store::SqliteSessionStore session_store(store_root);
+        // A consultation left by closing the app is left all the same
+        session_store.EraseUnretained();
         sotto::models::ModelStore model_store(models_root);
 
         // A replay request plays a wav through the same port; a launch-time

@@ -279,6 +279,19 @@ std::string WorkerNoteWriter::WritePatient(const std::string& note, const Progre
     return impl_->Run("writePatient", {{"note", note}}, progress);
 }
 
+// A failed title is no title, never a failed note: no respawn, no throw
+std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
+    if (note.empty()) {
+        return {};
+    }
+    try {
+        return impl_->Attempt("label", {{"note", note}}, nullptr);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "sotto-engine: no label (%.100s)\n", e.what());
+        return {};
+    }
+}
+
 void WorkerNoteWriter::Cancel() {
     try {
         std::lock_guard<std::mutex> lock(impl_->state_mutex);

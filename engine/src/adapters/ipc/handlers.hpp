@@ -29,6 +29,9 @@ json HandleSessionList(sotto::store::ISessionStore& sessions);
 std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& sessions,
                                             const json& params);
 
+std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sessions,
+                                               const json& params);
+
 std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& sessions,
                                                   const json& params);
 

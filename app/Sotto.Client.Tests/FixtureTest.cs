@@ -83,6 +83,61 @@ public class FixtureTest
     }
 
     [Fact]
+    public void SessionListFixtureCarriesTheLabelAndEditStamp()
+    {
+        var session = LoadFixture("session-list.json").RootElement
+            .GetProperty("result").GetProperty("sessions")[0];
+
+        Assert.Equal("finalised", session.GetProperty("state").GetString());
+        Assert.False(string.IsNullOrEmpty(session.GetProperty("label").GetString()));
+        Assert.Equal(JsonValueKind.Null, session.GetProperty("editedAt").ValueKind);
+    }
+
+    [Fact]
+    public void SessionNoteFixtureCarriesTheRecordFields()
+    {
+        var note = LoadFixture("session-note.json").RootElement.GetProperty("result");
+
+        Assert.False(string.IsNullOrEmpty(note.GetProperty("text").GetString()));
+        Assert.Equal("prose", note.GetProperty("style").GetString());
+        Assert.Equal("standard", note.GetProperty("detail").GetString());
+        Assert.True(DateTimeOffset.TryParse(note.GetProperty("generatedAt").GetString(), out _));
+        Assert.True(DateTimeOffset.TryParse(note.GetProperty("editedAt").GetString(), out _));
+    }
+
+    [Fact]
+    public void SessionPatientFixtureCarriesTheTranslation()
+    {
+        var patient = LoadFixture("session-patient.json").RootElement.GetProperty("result");
+
+        Assert.Equal("en", patient.GetProperty("language").GetString());
+        var translation = patient.GetProperty("translation");
+        Assert.Equal("pl", translation.GetProperty("language").GetString());
+        Assert.Contains("łokcia", translation.GetProperty("text").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SessionLabelFixtureIsARequestWithIdAndText()
+    {
+        var root = LoadFixture("session-label.json").RootElement;
+
+        Assert.Equal("session/label", root.GetProperty("method").GetString());
+        Assert.Equal("Elbow swelling", root.GetProperty("params").GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public void SessionOpenAndCloseFixturesAreRequests()
+    {
+        var open = LoadFixture("session-open.json").RootElement;
+        Assert.Equal("session/open", open.GetProperty("method").GetString());
+        Assert.False(string.IsNullOrEmpty(open.GetProperty("params").GetProperty("id").GetString()));
+
+        var close = LoadFixture("session-close.json").RootElement;
+        Assert.Equal("session/close", close.GetProperty("method").GetString());
+        Assert.Equal(JsonValueKind.Null, close.GetProperty("params").ValueKind);
+    }
+
+    [Fact]
     public void ErrorFixtureCarriesReservedCode()
     {
         var error = LoadFixture("error-method-not-found.json").RootElement.GetProperty("error");

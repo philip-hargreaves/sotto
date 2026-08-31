@@ -34,6 +34,8 @@ class WorkerNoteWriter : public INoteWriter {
 
     std::string WritePatient(const std::string& note, const Progress& progress) override;
 
+    std::string WriteLabel(const std::string& note) override;
+
     void Cancel() override;
 
    private:

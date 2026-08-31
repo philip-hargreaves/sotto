@@ -135,6 +135,16 @@ int main(int argc, char* argv[]) {
                 return json::object();
             });
         server.RegisterMethod(
+            "label", [&writer, &lane](const json& params) -> std::variant<json, Error> {
+                std::string note = params.value("note", "");
+                if (!lane.Run([&writer, note = std::move(note)](const auto&) {
+                        return writer.WriteLabel(note);
+                    })) {
+                    return Error{kSessionError, "Session error", json("a generation is running")};
+                }
+                return json::object();
+            });
+        server.RegisterMethod(
             "writePatient", [&writer, &lane](const json& params) -> std::variant<json, Error> {
                 std::string note = params.value("note", "");
                 if (!lane.Run([&writer, note = std::move(note)](const auto& progress) {
