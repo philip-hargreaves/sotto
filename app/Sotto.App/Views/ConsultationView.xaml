@@ -28,6 +28,25 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
+                <!-- Time-shares the cell with New consultation; while
+                     recording the pin rule makes it read-only, with the why
+                     in the tooltip -->
+                <DropDownButton
+                    x:Name="MicPicker"
+                    IsEnabled="{x:Bind Controls.MicPickerEnabled, Mode=OneWay}"
+                    Style="{StaticResource TrayButton}"
+                    ToolTipService.ToolTip="{x:Bind MicTip, Mode=OneWay}"
+                    Visibility="{x:Bind Controls.MicPickerVisible, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE720;" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind Mic.Label, Mode=OneWay}" />
+                    </StackPanel>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="MicFlyout" Placement="BottomEdgeAlignedLeft" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button
                         VerticalAlignment="Center"

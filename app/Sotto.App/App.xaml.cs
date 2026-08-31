@@ -79,6 +79,7 @@ public partial class App : Application
         services.AddSingleton<TranscriptViewModel>();
         services.AddSingleton<NoteViewModel>();
         services.AddSingleton<StatusBarViewModel>();
+        services.AddSingleton<MicViewModel>();
         services.AddSingleton<ConsultationViewModel>();
         services.AddSingleton<SessionControlsViewModel>();
         services.AddSingleton<ShellViewModel>();

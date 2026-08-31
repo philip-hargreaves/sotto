@@ -462,13 +462,19 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         // Keep consultations off: the engine erases the session once it is left
         var retain = _preferences?.KeepConsultations ?? true;
         var parameters = replay is null
-            ? (object)new { retain }
+            // The engine pins this microphone; empty means the default, and
+            // an id that has gone falls back to the default there, logged
+            ? (object)new { retain, micId = _preferences?.MicId ?? "" }
             : new
             {
                 retain,
                 replay = new { path = replay.Path, speed = replay.Speed, monitor = replay.Monitor },
             };
-        var response = await RequestValueAsync("session/start", null, parameters).ConfigureAwait(true);
+        // Longer than the engine's 10 s no-audio deadline: a Bluetooth mic
+        // link waking takes seconds, and a timeout here would abandon a
+        // session the engine went on to start
+        var response = await RequestValueAsync(
+            "session/start", TimeSpan.FromSeconds(30), parameters).ConfigureAwait(true);
         if (response is null)
         {
             return;

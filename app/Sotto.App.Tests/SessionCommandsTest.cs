@@ -25,6 +25,26 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task MicPickerAndNewConsultationNeverShareTheHeaderCell()
+    {
+        var (session, engine, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+
+        Assert.True(controls.MicPickerVisible);
+        Assert.True(controls.MicPickerEnabled);
+        Assert.False(controls.ReviewVisible);
+
+        await session.StartRecordingAsync();
+        Assert.True(controls.MicPickerVisible, "shown while recording, read-only");
+        Assert.False(controls.MicPickerEnabled, "pinned: changes apply next time");
+
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready");
+        Assert.True(controls.ReviewVisible);
+        Assert.False(controls.MicPickerVisible, "the cell is New consultation's now");
+    }
+
+    [Fact]
     public void RecordingWaitsForTheEngine()
     {
         var (session, engine, _) = TestSession.Create();
