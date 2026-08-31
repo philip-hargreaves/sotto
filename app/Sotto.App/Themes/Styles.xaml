@@ -126,6 +126,28 @@
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
     </Style>
 
+    <!-- One setting per card: title and a one-line description left, the
+         control pinned right -->
+    <Style x:Key="SettingsCard" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,12" />
+    </Style>
+
+    <Style x:Key="SettingsGroupHeader" TargetType="TextBlock"
+           BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+        <Setter Property="Margin" Value="2,12,0,0" />
+    </Style>
+
+    <Style x:Key="SettingsDescription" TargetType="TextBlock"
+           BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource FaintTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
     <!-- Chip base; the role's colours apply at the usage site -->
     <Style x:Key="ChipBorder" TargetType="Border">
         <Setter Property="CornerRadius" Value="10" />
