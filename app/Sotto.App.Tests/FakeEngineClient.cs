@@ -88,7 +88,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
         if (method == "engine/metrics")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
-                new { devices = new { asr = "GPU.0" }, asrRealtimeFactor = 33.4 }));
+                new { devices = new { asr = "GPU.0" }, asrRealtimeFactor = MetricsRealtimeFactor }));
         }
 
         if (method == "session/transcript")
@@ -106,6 +106,9 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
     /// <summary>Turns served by session/transcript after a stop.</summary>
     public List<(string Speaker, string Text)> Transcript { get; } = [];
+
+    /// <summary>Served by engine/metrics; healthy by default.</summary>
+    public double MetricsRealtimeFactor { get; set; } = 33.4;
 
     /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
     public bool FirstUse { get; set; }

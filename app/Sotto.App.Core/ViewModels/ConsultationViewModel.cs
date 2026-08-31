@@ -469,6 +469,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Phase = FinalisePhase.None;
         ActiveReplay = replay;
         State = SessionState.Recording;
+        Status.ResetThroughput();
         Status.SetMicVisible(true);
         Status.Append(replay is null ? "Recording" : "Replaying");
         _metrics?.SessionStarted(
