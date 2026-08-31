@@ -30,8 +30,9 @@ struct SessionSummary {
     std::string ended_at;    // Empty while recording or after a crash
     std::string state;       // recording | finalised
     int sample_rate = 0;
-    std::string label;      // The consultation in a line; empty until a note exists
-    std::string edited_at;  // Latest clinician edit to any document; empty when none
+    std::string label;         // The consultation in a line; empty until a note exists
+    std::string edited_at;     // Latest clinician edit to note or sheet; empty when none
+    double audio_seconds = 0;  // The consultation's audio length, from the sealed turns
 };
 
 // The texts a finalised session holds, one of each; a rewrite replaces

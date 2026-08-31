@@ -290,7 +290,11 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
     std::vector<SessionSummary> sessions;
     Db::Stmt select = db_.Prepare(
         "SELECT s.id, s.started_at, s.ended_at, s.state, s.sample_rate, k.wrapped, l.payload,"
-        " (SELECT max(edited_at) FROM documents d WHERE d.session_id = s.id)"
+        // A retitle is housekeeping, not an edit to the record
+        " (SELECT max(edited_at) FROM documents d WHERE d.session_id = s.id"
+        "  AND d.kind != 'label'),"
+        // The audio's length outlives the audio: the turns' end is plaintext
+        " (SELECT max(first_frame + frame_count) FROM turns t WHERE t.session_id = s.id)"
         " FROM sessions s"
         " LEFT JOIN session_keys k ON k.session_id = s.id"
         " LEFT JOIN documents l ON l.session_id = s.id AND l.kind = 'label'"
@@ -305,6 +309,10 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
             summary.label.assign(plain.begin(), plain.end());
         }
         summary.edited_at = select.ColumnText(7);
+        if (summary.sample_rate > 0) {
+            summary.audio_seconds =
+                static_cast<double>(select.ColumnInt64(8)) / summary.sample_rate;
+        }
         sessions.push_back(std::move(summary));
     }
     return sessions;

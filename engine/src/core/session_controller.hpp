@@ -759,8 +759,7 @@ class SessionController {
         return words;
     }
 
-    // A store refusal never costs the note: the text still reaches the shell.
-    // The label follows the note until the clinician has typed one
+    // A store refusal never costs the note: the text still reaches the shell
     void SaveNote(const store::SessionId& id, const std::string& text,
                   const note::NoteOptions& options) {
         try {
@@ -769,11 +768,26 @@ class SessionController {
             document.style = options.style;
             document.detail = options.detail;
             store_.SaveDocument(id, store::DocumentKind::kNote, document);
-            if (store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {
-                store::Document label;
-                label.text = core::LabelFrom(text);
-                store_.SaveDocument(id, store::DocumentKind::kLabel, label);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+
+    // The list title, asked of the model once the documents are done, so
+    // nobody waits on it. Held to a standard: a title that fails the
+    // sanitiser is not stored, and the list shows the date instead. A
+    // typed label is the clinician's and is never overwritten
+    void SaveLabel(const store::SessionId& id, const std::string& note_text) {
+        try {
+            if (!store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {
+                return;
             }
+            const std::string label = core::SanitiseLabel(note_writer_->WriteLabel(note_text));
+            if (label.empty()) {
+                return;
+            }
+            store::Document document;
+            document.text = label;
+            store_.SaveDocument(id, store::DocumentKind::kLabel, document);
         } catch (...) {  // NOLINT(bugprone-empty-catch)
         }
     }
@@ -847,19 +861,22 @@ class SessionController {
             }
             // Patient information follows from the finished note; a failure
             // here leaves the note intact
-            if (!note_writer_->WritesPatient() || note.empty()) {
-                return;
+            if (note_writer_->WritesPatient() && !note.empty()) {
+                try {
+                    const std::string patient = note_writer_->WritePatient(
+                        note,
+                        [this](const std::string& partial) { events_.OnPatientPartial(partial); });
+                    SavePatient(id, patient);
+                    events_.OnPatientReady(patient);
+                } catch (const std::exception& e) {
+                    events_.OnPatientFailed(e.what());
+                } catch (...) {
+                    events_.OnPatientFailed("patient information failed");
+                }
             }
-            try {
-                const std::string patient = note_writer_->WritePatient(
-                    note,
-                    [this](const std::string& partial) { events_.OnPatientPartial(partial); });
-                SavePatient(id, patient);
-                events_.OnPatientReady(patient);
-            } catch (const std::exception& e) {
-                events_.OnPatientFailed(e.what());
-            } catch (...) {
-                events_.OnPatientFailed("patient information failed");
+            // The title comes last: everything the clinician waits for is done
+            if (!note.empty()) {
+                SaveLabel(id, note);
             }
         });
     }

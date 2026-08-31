@@ -40,4 +40,21 @@ inline std::string LabelFrom(std::string_view note, std::size_t max_chars = 80) 
     return label;
 }
 
+// A model-written title, held to the list's standard: first line only,
+// wrapping quotes and trailing punctuation stripped, whitespace collapsed,
+// capped at a word boundary. Empty when nothing survives - and an empty
+// label means the list shows the date instead, so rejection is safe
+inline std::string SanitiseLabel(std::string_view raw, std::size_t max_chars = 60) {
+    const auto line_end = raw.find('\n');
+    std::string label = LabelFrom(raw.substr(0, line_end), max_chars);
+    while (!label.empty() && (label.front() == '"' || label.front() == '\'')) {
+        label.erase(0, 1);
+    }
+    while (!label.empty() && (label.back() == '"' || label.back() == '\'' || label.back() == '.' ||
+                              label.back() == ',' || label.back() == ':' || label.back() == ' ')) {
+        label.pop_back();
+    }
+    return label;
+}
+
 }  // namespace sotto::core

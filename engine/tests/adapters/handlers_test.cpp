@@ -132,6 +132,8 @@ TEST(Handlers, SessionListAndTranscriptRoundTrip) {
     EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
     EXPECT_EQ(list["sessions"][0]["label"], "") << "no note yet";
     EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null());
+    EXPECT_EQ(list["sessions"][0]["audioSeconds"], 33.0)
+        << "the audio's length from the turns, which outlive the audio";
     // The fixture is the shape both languages agree on
     for (const auto& [key, value] :
          LoadFixture("session-list.json")["result"]["sessions"][0].items()) {
@@ -185,6 +187,7 @@ TEST(Handlers, SessionPatientCarriesTheTranslationWhenStored) {
     json patient = std::get<json>(HandleSessionPatient(*fixture.store, json{{"id", id}}));
     EXPECT_EQ(patient["text"], "You have bursitis.");
     EXPECT_EQ(patient["language"], "en");
+    EXPECT_TRUE(patient["generatedAt"].is_string());
     EXPECT_TRUE(patient["translation"].is_null());
 
     fixture.store->SaveDocument(id, DocumentKind::kTranslation,
@@ -207,6 +210,12 @@ TEST(Handlers, SessionListCarriesTheLabelAndTheLatestEdit) {
     json list = HandleSessionList(*fixture.store);
     EXPECT_EQ(list["sessions"][0]["label"], "Elbow swelling");
     EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null());
+
+    fixture.store->EditDocument(id, DocumentKind::kLabel, "Left elbow bursitis");
+    list = HandleSessionList(*fixture.store);
+    EXPECT_EQ(list["sessions"][0]["label"], "Left elbow bursitis");
+    EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null())
+        << "a retitle is housekeeping, not an edit to the record";
 
     fixture.store->SaveDocument(id, DocumentKind::kPatient, {.text = "sheet"});
     fixture.store->EditDocument(id, DocumentKind::kPatient, "sheet, edited");

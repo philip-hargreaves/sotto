@@ -386,6 +386,13 @@ struct FakeNoteWriter : note::INoteWriter {
     std::vector<std::vector<asr::Turn>> calls;
     note::NoteOptions last_options;
     std::string patient_input;
+    std::string label_result = "  \"Elbow swelling.\"  ";  // sanitises to Elbow swelling
+    std::atomic<int> label_calls{0};
+
+    std::string WriteLabel(const std::string&) override {
+        ++label_calls;
+        return label_result;
+    }
 
     void Prepare() override {
         ++prepares;
@@ -630,8 +637,38 @@ TEST(SessionController, TheNoteBringsItsOptionsAndLabel) {
 
     EXPECT_EQ(store.note_style, "soap");
     EXPECT_EQ(store.note_detail, "concise");
-    EXPECT_EQ(store.label, "the clinical note") << "the note's first sentence names the session";
+    // The title lands after the documents, on the note thread
+    for (int i = 0; i < 500 && store.label.empty(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    EXPECT_EQ(store.label, "Elbow swelling") << "the model's title, sanitised";
+    EXPECT_EQ(writer.label_calls.load(), 1);
     EXPECT_FALSE(store.label_typed);
+}
+
+TEST(SessionController, ARejectedTitleLeavesNoLabel) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.label_result = "  \"...\"  ";  // nothing survives the sanitiser
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    ASSERT_TRUE(controller.Start());
+    for (int i = 0; i < 500 && writer.prepares.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    controller.Stop();
+    ASSERT_TRUE(events.WaitForNote());
+    for (int i = 0; i < 100 && writer.label_calls.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    EXPECT_EQ(writer.label_calls.load(), 1);
+    EXPECT_EQ(store.label, "") << "no title beats a bad title; the list shows the date";
 }
 
 TEST(SessionController, ATypedLabelSurvivesTheNote) {
@@ -652,9 +689,11 @@ TEST(SessionController, ATypedLabelSurvivesTheNote) {
     }
     controller.Stop();
     ASSERT_TRUE(events.WaitForNote());
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // the lane finishes
 
     EXPECT_EQ(store.label, "Elbow swelling");
     EXPECT_TRUE(store.label_typed);
+    EXPECT_EQ(writer.label_calls.load(), 0) << "a typed label is never regenerated";
 }
 
 TEST(SessionController, AnOpenedSessionIsTheRegenerateTarget) {

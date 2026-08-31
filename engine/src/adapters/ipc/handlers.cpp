@@ -64,7 +64,8 @@ json HandleSessionList(sotto::store::ISessionStore& sessions) {
                         {"state", session.state},
                         {"sampleRate", session.sample_rate},
                         {"label", session.label},
-                        {"editedAt", NullWhenEmpty(session.edited_at)}});
+                        {"editedAt", NullWhenEmpty(session.edited_at)},
+                        {"audioSeconds", session.audio_seconds}});
     }
     return json{{"sessions", std::move(list)}};
 }
@@ -116,6 +117,7 @@ std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sess
             sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kTranslation);
         json result{{"text", patient.text},
                     {"language", patient.language},
+                    {"generatedAt", NullWhenEmpty(patient.generated_at)},
                     {"editedAt", NullWhenEmpty(patient.edited_at)},
                     {"translation", nullptr}};
         if (!translation.text.empty()) {

@@ -10,7 +10,8 @@
                 "state": "finalised",
                 "sampleRate": 16000,
                 "label": "Swelling of the left elbow for a week",
-                "editedAt": null
+                "editedAt": null,
+                "audioSeconds": 521.0
             }
         ]
     }

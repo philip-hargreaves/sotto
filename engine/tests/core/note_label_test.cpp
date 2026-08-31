@@ -34,5 +34,21 @@ TEST(NoteLabel, CutsAtAWordUnderTheCap) {
     EXPECT_EQ(LabelFrom("abcdefghij", 5), "abcde") << "no word boundary: hard cut";
 }
 
+TEST(NoteLabel, SanitiseHoldsAModelTitleToTheListStandard) {
+    EXPECT_EQ(SanitiseLabel("Elbow swelling"), "Elbow swelling");
+    EXPECT_EQ(SanitiseLabel("  \"Left elbow swelling.\"  "), "Left elbow swelling");
+    EXPECT_EQ(SanitiseLabel("'Chest pain follow-up',"), "Chest pain follow-up");
+    EXPECT_EQ(SanitiseLabel("Diarrhoea and vomiting\nThe patient also..."),
+              "Diarrhoea and vomiting");
+}
+
+TEST(NoteLabel, SanitiseRejectsWhatDoesNotSurvive) {
+    EXPECT_EQ(SanitiseLabel(""), "");
+    EXPECT_EQ(SanitiseLabel("  \"...\"  "), "");
+    EXPECT_EQ(SanitiseLabel("\n\n"), "");
+    const std::string rambling(200, 'a');
+    EXPECT_LE(SanitiseLabel(rambling).size(), 60u);
+}
+
 }  // namespace
 }  // namespace sotto::core
