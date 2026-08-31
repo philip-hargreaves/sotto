@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Sotto.App.Core.Hosting;
-using Sotto.App.Core.ViewModels;
-using Sotto.Client;
+using Ambient.App.Core.Hosting;
+using Ambient.App.Core.ViewModels;
+using Ambient.Client;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// "Press play" through the whole shell stack against the real engine with
@@ -25,7 +25,7 @@ public class ReplaySessionTest
     [Fact]
     public async Task PlayAfterIdleReplaysAndFinalises()
     {
-        var pipeName = $"LOCAL\\sotto-replay-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-replay-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(directory);
         var wav = SessionContractWav.Write(seconds: 5);
@@ -110,7 +110,7 @@ public class ReplaySessionTest
             return;  // demo tracks not staged on this machine
         }
 
-        var pipeName = $"LOCAL\\sotto-track-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-track-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(directory);
         var models = FindModels();
@@ -118,7 +118,7 @@ public class ReplaySessionTest
             FindEngine(),
             $"{pipeName} \"{Path.Combine(directory, "store")}\""
                 + (models is null ? "" : $" \"{models}\""),
-            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-track-test.log"));
+            stderrPath: Path.Combine(Path.GetTempPath(), "ambient-track-test.log"));
         using var host = new EngineSupervisor(
             launcher, new FakeSession(), TimeProvider.System,
             new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
@@ -212,7 +212,7 @@ public class ReplaySessionTest
             return;  // demo tracks not staged on this machine
         }
 
-        var pipeName = $"LOCAL\\sotto-resume-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-resume-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(directory);
         var models = FindModels();
@@ -220,7 +220,7 @@ public class ReplaySessionTest
             FindEngine(),
             $"{pipeName} \"{Path.Combine(directory, "store")}\""
                 + (models is null ? "" : $" \"{models}\""),
-            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-resume-test.log"));
+            stderrPath: Path.Combine(Path.GetTempPath(), "ambient-resume-test.log"));
         using var host = new EngineSupervisor(
             launcher, new FakeSession(), TimeProvider.System,
             new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
@@ -307,7 +307,7 @@ public class ReplaySessionTest
             return;
         }
 
-        var pipeName = $"LOCAL\\sotto-counters-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-counters-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(directory);
         var models = FindModels();
@@ -315,7 +315,7 @@ public class ReplaySessionTest
             FindEngine(),
             $"{pipeName} \"{Path.Combine(directory, "store")}\""
                 + (models is null ? "" : $" \"{models}\""),
-            stderrPath: Path.Combine(Path.GetTempPath(), "sotto-counters-test.log"));
+            stderrPath: Path.Combine(Path.GetTempPath(), "ambient-counters-test.log"));
         using var host = new EngineSupervisor(
             launcher, new FakeSession(), TimeProvider.System,
             new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
@@ -394,14 +394,14 @@ public class ReplaySessionTest
                 }
             }
 
-            var pipeName = $"LOCAL\\sotto-battery-{Guid.NewGuid():N}";
+            var pipeName = $"LOCAL\\ambient-battery-{Guid.NewGuid():N}";
             var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(directory);
             var crashLog = Path.Combine(directory, "crashes.jsonl");
             using var launcher = new ProcessEngineLauncher(
                 FindEngine(),
                 $"{pipeName} \"{Path.Combine(directory, "store")}\" \"{FindModels()}\"",
-                stderrPath: Path.Combine(Path.GetTempPath(), "sotto-battery-test.log"));
+                stderrPath: Path.Combine(Path.GetTempPath(), "ambient-battery-test.log"));
             using var host = new EngineSupervisor(
                 launcher, new FakeSession(), TimeProvider.System, new FileCrashLog(crashLog));
             await using var connection = new EngineConnection(host, async (pid, ct) =>

@@ -8,7 +8,7 @@
 #include "adapters/models/deferred_load.hpp"
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // VAD behind a background load; a failed load throws on the first
 // probability, loud rather than silent
@@ -36,4 +36,4 @@ class DeferredVad : public IStreamingVad {
     models::DeferredLoad<IStreamingVad> inner_;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Sotto.Fetch;
+namespace Ambient.Fetch;
 
 /// <summary>One release asset; large files are split into several.</summary>
 public sealed record Shard(string Name, long Size, string Sha256);

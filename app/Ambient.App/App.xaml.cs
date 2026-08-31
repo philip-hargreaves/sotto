@@ -1,14 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.Storage;
-using Sotto.App.Core;
-using Sotto.App.Core.Hosting;
-using Sotto.App.Core.ViewModels;
-using Sotto.App.Services;
-using Sotto.App.Views;
-using Sotto.Client;
+using Ambient.App.Core;
+using Ambient.App.Core.Hosting;
+using Ambient.App.Core.ViewModels;
+using Ambient.App.Services;
+using Ambient.App.Views;
+using Ambient.Client;
 
-namespace Sotto.App;
+namespace Ambient.App;
 
 public partial class App : Application
 {
@@ -37,20 +37,21 @@ public partial class App : Application
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IEngineLauncher>(sp => new ProcessEngineLauncher(
-            Path.Combine(AppContext.BaseDirectory, "sotto_engine.exe"),
+            Path.Combine(AppContext.BaseDirectory, "ambient_engine.exe"),
             stderrPath: Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "sotto", "engine.log"),
+                "ambient", "engine.log"),
             extraArguments: () => sp.GetRequiredService<AppPreferences>().NpuTranscription
                 ? "--asr-device NPU" : ""));
         // Identity-free path: unpackaged runs have no ApplicationData
         var localState = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ambient");
+        MigrateFromSotto(localState);
         services.AddSingleton<ICrashLog>(_ => new FileCrashLog(
             Path.Combine(localState, "crashes.jsonl")));
         CrashDumps.Register(
             Microsoft.Win32.Registry.CurrentUser, Path.Combine(localState, "dumps"),
-            "sotto_engine.exe", "sotto_note_host.exe");
+            "ambient_engine.exe", "ambient_note_host.exe");
         services.AddSingleton<ISessionState>(sp => new DeferredSessionState(sp));
         services.AddSingleton<IEngineHost>(sp => new EngineSupervisor(
             sp.GetRequiredService<IEngineLauncher>(),
@@ -101,6 +102,79 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
 
         return services.BuildServiceProvider();
+    }
+
+    // One-time rename migration: sessions, preferences and the anchor move
+    // from the sotto identity. Per item and never overwriting, so a stray
+    // ambient folder (an engine run before the first app launch) cannot
+    // block the real data from carrying over
+    private static void MigrateFromSotto(string localState)
+    {
+        try
+        {
+            var old = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
+            if (Directory.Exists(old))
+            {
+                var oldDb = Path.Combine(old, "store", "sotto.db");
+                if (File.Exists(oldDb))
+                {
+                    foreach (var suffix in new[] { "", "-wal", "-shm" })
+                    {
+                        var source = oldDb + suffix;
+                        if (File.Exists(source))
+                        {
+                            File.Move(source, Path.Combine(old, "store", "ambient.db" + suffix));
+                        }
+                    }
+                }
+
+                Merge(old, localState);
+                if (!Directory.EnumerateFileSystemEntries(old).Any())
+                {
+                    Directory.Delete(old);
+                }
+            }
+
+            foreach (var exe in new[] { "sotto_engine.exe", "sotto_note_host.exe" })
+            {
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(
+                    @"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\" + exe,
+                    throwOnMissingSubKey: false);
+            }
+        }
+        catch (Exception)
+        {
+            // A failed migration starts fresh; whatever remains stays for a retry
+        }
+    }
+
+    private static void Merge(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var entry in Directory.EnumerateFileSystemEntries(from))
+        {
+            var dest = Path.Combine(to, Path.GetFileName(entry));
+            if (Directory.Exists(entry))
+            {
+                if (Directory.Exists(dest))
+                {
+                    Merge(entry, dest);
+                    if (!Directory.EnumerateFileSystemEntries(entry).Any())
+                    {
+                        Directory.Delete(entry);
+                    }
+                }
+                else
+                {
+                    Directory.Move(entry, dest);
+                }
+            }
+            else if (!File.Exists(dest))
+            {
+                File.Move(entry, dest);
+            }
+        }
     }
 
     // The client, the host and the session state form a cycle, so the view

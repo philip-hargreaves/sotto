@@ -1,6 +1,6 @@
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Views;
+namespace Ambient.App.Views;
 
 internal static class ClipboardHelper
 {

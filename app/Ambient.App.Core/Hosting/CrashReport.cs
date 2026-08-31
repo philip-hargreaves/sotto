@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// What is recorded about one engine death: metadata only, never process

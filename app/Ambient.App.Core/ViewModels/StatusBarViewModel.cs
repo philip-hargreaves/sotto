@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Sotto.App.Core.Hosting;
-using Sotto.Client;
+using Ambient.App.Core.Hosting;
+using Ambient.Client;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>One bar of the level history; mutated in place, never replaced.</summary>
 public sealed partial class LevelBar : ObservableObject
@@ -287,7 +287,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         try
         {
             var bytes = Environment.WorkingSet;
-            foreach (var name in new[] { "sotto_engine", "sotto_note_host" })
+            foreach (var name in new[] { "ambient_engine", "ambient_note_host" })
             {
                 foreach (var process in System.Diagnostics.Process.GetProcessesByName(name))
                 {

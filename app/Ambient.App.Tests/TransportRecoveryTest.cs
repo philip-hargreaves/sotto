@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Sotto.App.Core.Hosting;
-using Sotto.Client;
+using Ambient.App.Core.Hosting;
+using Ambient.Client;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// The whole shell stack against the real engine: supervisor, launcher and
@@ -42,7 +42,7 @@ public class TransportRecoveryTest
     [Fact]
     public async Task TheConnectionSurvivesASupervisedRestart()
     {
-        var pipeName = $"LOCAL\\sotto-e2e-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-e2e-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var crashPath = Path.Combine(directory, "crashes.jsonl");
         using var launcher = new ProcessEngineLauncher(FindEngine(), pipeName);

@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace sotto::metrics {
+namespace ambient::metrics {
 namespace {
 
 TEST(Metrics, RecordsAndSnapshots) {
@@ -49,4 +49,4 @@ TEST(Metrics, ANewSessionKeepsDevicesAndLoadsOnly) {
 }
 
 }  // namespace
-}  // namespace sotto::metrics
+}  // namespace ambient::metrics

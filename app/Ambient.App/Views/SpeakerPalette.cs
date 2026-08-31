@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 
-namespace Sotto.App.Views;
+namespace Ambient.App.Views;
 
 /// <summary>Speaker roles to brushes and labels, resolved by the theme in
 /// effect - a plain resource lookup follows the OS theme, not the chosen one.

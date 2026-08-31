@@ -1,15 +1,15 @@
 # core has no deps; OpenVINO and Win32 live in adapters
-add_library(sotto_core INTERFACE)
-target_include_directories(sotto_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_library(ambient_core INTERFACE)
+target_include_directories(ambient_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Toolchain is fetched and pinned by tools/get-openvino.ps1
-if(NOT EXISTS "${sotto_SOURCE_DIR}/external/openvino")
+if(NOT EXISTS "${ambient_SOURCE_DIR}/external/openvino")
     message(FATAL_ERROR "OpenVINO not found: run tools/get-openvino.ps1 first")
 endif()
 find_package(OpenVINOGenAI REQUIRED)
 
 # Archive ships Debug and Release runtimes. Shipping trims this to the minimal set
-set(_ov_root "${sotto_SOURCE_DIR}/external/openvino/runtime")
+set(_ov_root "${ambient_SOURCE_DIR}/external/openvino/runtime")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     file(GLOB _ov_dlls "${_ov_root}/bin/intel64/Debug/*.dll"
          "${_ov_root}/bin/intel64/Debug/cache.json"
@@ -22,7 +22,7 @@ else()
     list(APPEND _ov_dlls ${_tbb_dlls})
 endif()
 # One deployment per output directory; targets there depend on the stamp
-function(sotto_deploy_openvino stamp_target)
+function(ambient_deploy_openvino stamp_target)
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_ov_dlls}
                 "${CMAKE_CURRENT_BINARY_DIR}"
@@ -40,13 +40,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_library(sotto_ipc STATIC
+add_library(ambient_ipc STATIC
     src/adapters/ipc/handlers.cpp
     src/adapters/ipc/pipe_security.cpp
     src/adapters/ipc/pipe_server.cpp)
-target_link_libraries(sotto_ipc
-    PUBLIC sotto_core sotto_models nlohmann_json::nlohmann_json
-    PRIVATE sotto_warnings sotto_audio advapi32)
+target_link_libraries(ambient_ipc
+    PUBLIC ambient_core ambient_models nlohmann_json::nlohmann_json
+    PRIVATE ambient_warnings ambient_audio advapi32)
 
 FetchContent_Declare(
     sqlite3
@@ -69,54 +69,54 @@ set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
 # The schema and its migrations are SQL files, embedded so the engine stays
 # a single binary
-set(sotto_schema_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema)
-file(READ ${sotto_schema_dir}/sotto.sql SOTTO_SCHEMA_SQL)
-file(READ ${sotto_schema_dir}/migrate-2-to-3.sql SOTTO_MIGRATE_2_TO_3_SQL)
+set(ambient_schema_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema)
+file(READ ${ambient_schema_dir}/ambient.sql AMBIENT_SCHEMA_SQL)
+file(READ ${ambient_schema_dir}/migrate-2-to-3.sql AMBIENT_MIGRATE_2_TO_3_SQL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${sotto_schema_dir}/sotto.sql ${sotto_schema_dir}/migrate-2-to-3.sql)
+    ${ambient_schema_dir}/ambient.sql ${ambient_schema_dir}/migrate-2-to-3.sql)
 configure_file(src/adapters/storage/schema.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/adapters/storage/schema.hpp @ONLY)
 
-add_library(sotto_storage STATIC
+add_library(ambient_storage STATIC
     src/adapters/storage/chunk_cipher.cpp
     src/adapters/storage/db.cpp
     src/adapters/storage/sqlite_session_store.cpp)
-target_include_directories(sotto_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(sotto_storage
-    PUBLIC sotto_core
-    PRIVATE sotto_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
+target_include_directories(ambient_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(ambient_storage
+    PUBLIC ambient_core
+    PRIVATE ambient_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
 
-add_library(sotto_models STATIC
+add_library(ambient_models STATIC
     src/adapters/models/model_store.cpp
     src/adapters/models/ov_runtime.cpp)
-target_link_libraries(sotto_models
-    PUBLIC sotto_core nlohmann_json::nlohmann_json openvino::genai
-    PRIVATE sotto_warnings bcrypt)
+target_link_libraries(ambient_models
+    PUBLIC ambient_core nlohmann_json::nlohmann_json openvino::genai
+    PRIVATE ambient_warnings bcrypt)
 
-add_library(sotto_transcription STATIC
+add_library(ambient_transcription STATIC
     src/adapters/transcription/whisper_transcriber.cpp)
-target_link_libraries(sotto_transcription
-    PUBLIC sotto_core
-    PRIVATE sotto_models sotto_warnings openvino::genai)
+target_link_libraries(ambient_transcription
+    PUBLIC ambient_core
+    PRIVATE ambient_models ambient_warnings openvino::genai)
 
-add_library(sotto_note STATIC
+add_library(ambient_note STATIC
     src/adapters/note/qwen_note_writer.cpp
     src/adapters/note/worker_note_writer.cpp)
-target_link_libraries(sotto_note
-    PUBLIC sotto_core
-    PRIVATE sotto_models sotto_warnings nlohmann_json::nlohmann_json openvino::genai)
+target_link_libraries(ambient_note
+    PUBLIC ambient_core
+    PRIVATE ambient_models ambient_warnings nlohmann_json::nlohmann_json openvino::genai)
 
-add_library(sotto_translate STATIC
+add_library(ambient_translate STATIC
     src/adapters/translate/nllb_translator.cpp)
-target_link_libraries(sotto_translate
-    PUBLIC sotto_core nlohmann_json::nlohmann_json
-    PRIVATE sotto_models sotto_warnings openvino::genai)
+target_link_libraries(ambient_translate
+    PUBLIC ambient_core nlohmann_json::nlohmann_json
+    PRIVATE ambient_models ambient_warnings openvino::genai)
 
-add_library(sotto_vad STATIC
+add_library(ambient_vad STATIC
     src/adapters/vad/silero_vad.cpp)
-target_link_libraries(sotto_vad
-    PUBLIC sotto_core
-    PRIVATE sotto_models sotto_warnings openvino::genai)
+target_link_libraries(ambient_vad
+    PUBLIC ambient_core
+    PRIVATE ambient_models ambient_warnings openvino::genai)
 
 # Average-linkage clustering (fastcluster), the implementation the research
 # proved identical to the sklearn reference. No CMake build upstream; the
@@ -149,7 +149,7 @@ FetchContent_MakeAvailable(kaldi_native_fbank)
 # Not ours to keep warning-clean
 set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
-add_library(sotto_diarisation STATIC
+add_library(ambient_diarisation STATIC
     src/adapters/diarisation/anchor_store.cpp
     src/adapters/diarisation/cluster_voiceprint.cpp
     src/adapters/diarisation/diar_worker.cpp
@@ -158,32 +158,32 @@ add_library(sotto_diarisation STATIC
     src/adapters/diarisation/speaker_clustering.cpp
     src/adapters/diarisation/speaker_diariser.cpp
     src/adapters/diarisation/speaker_embedder.cpp)
-target_include_directories(sotto_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
-target_link_libraries(sotto_diarisation
-    PUBLIC sotto_core sotto_models sotto_vad
-    PRIVATE sotto_warnings crypt32 hclust kaldi-native-fbank-core)
+target_include_directories(ambient_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
+target_link_libraries(ambient_diarisation
+    PUBLIC ambient_core ambient_models ambient_vad
+    PRIVATE ambient_warnings crypt32 hclust kaldi-native-fbank-core)
 
-add_library(sotto_audio STATIC
+add_library(ambient_audio STATIC
     src/adapters/audio/capture_devices.cpp
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)
-target_link_libraries(sotto_audio
-    PUBLIC sotto_core
-    PRIVATE sotto_warnings ole32 advapi32)
+target_link_libraries(ambient_audio
+    PUBLIC ambient_core
+    PRIVATE ambient_warnings ole32 advapi32)
 
-add_executable(sotto_engine src/main.cpp)
-target_link_libraries(sotto_engine PRIVATE
-    sotto_ipc sotto_audio sotto_diarisation sotto_note sotto_storage sotto_transcription
-    sotto_translate sotto_vad sotto_warnings)
-sotto_deploy_openvino(ov_engine_runtime)
-add_dependencies(sotto_engine ov_engine_runtime)
+add_executable(ambient_engine src/main.cpp)
+target_link_libraries(ambient_engine PRIVATE
+    ambient_ipc ambient_audio ambient_diarisation ambient_note ambient_storage ambient_transcription
+    ambient_translate ambient_vad ambient_warnings)
+ambient_deploy_openvino(ov_engine_runtime)
+add_dependencies(ambient_engine ov_engine_runtime)
 
 # The note model's own process; deployed beside the engine that spawns it
-add_executable(sotto_note_host src/note_host_main.cpp)
-target_link_libraries(sotto_note_host PRIVATE
-    sotto_ipc sotto_models sotto_note sotto_warnings)
-add_dependencies(sotto_note_host ov_engine_runtime)
-add_dependencies(sotto_engine sotto_note_host)
+add_executable(ambient_note_host src/note_host_main.cpp)
+target_link_libraries(ambient_note_host PRIVATE
+    ambient_ipc ambient_models ambient_note ambient_warnings)
+add_dependencies(ambient_note_host ov_engine_runtime)
+add_dependencies(ambient_engine ambient_note_host)
 
 add_subdirectory(tests)

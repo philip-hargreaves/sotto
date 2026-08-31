@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// The shell's port to the engine process lifecycle. EngineSupervisor is the

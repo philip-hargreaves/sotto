@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Sotto.Client.Tests;
+namespace Ambient.Client.Tests;
 
 public class FramingTest
 {

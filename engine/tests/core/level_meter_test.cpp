@@ -7,7 +7,7 @@
 #include <numbers>
 #include <vector>
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 // 440 Hz fits 44 whole cycles into one window, so the RMS is exact
@@ -137,4 +137,4 @@ TEST(LevelMeter, ChunkingDoesNotChangeTheReadings) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

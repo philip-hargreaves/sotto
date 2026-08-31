@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
-using Sotto.Fetch;
+using Ambient.Fetch;
 
 // fetch <registryDir> <storeRoot>   install every pack that does not verify
 // pack <sourceDir> <id> <baseUrl> <target> <uploadDir>   prepare a release

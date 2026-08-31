@@ -1,7 +1,7 @@
-using Sotto.App.Core;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class MicViewModelTest
 {

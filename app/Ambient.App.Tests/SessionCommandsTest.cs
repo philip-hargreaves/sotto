@@ -1,6 +1,6 @@
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class SessionCommandsTest
 {
@@ -167,7 +167,7 @@ public class SessionCommandsTest
             engine, new InlineDispatcher(), new TranscriptViewModel(), new NoteViewModel(),
             bar, readinessPollInterval: TimeSpan.FromMilliseconds(1));
         var controls = new SessionControlsViewModel(session);
-        bar.SetEngineState(Sotto.App.Core.Hosting.EngineStatus.Running, null);
+        bar.SetEngineState(Ambient.App.Core.Hosting.EngineStatus.Running, null);
         bar.SetEngineReady(true);
 
         Assert.False(session.ModelsReady);
@@ -308,7 +308,7 @@ public class SessionCommandsTest
     public async Task RecordingWarnsWhenTheMachineIsSavingPower(string mode, bool onMains)
     {
         var (session, _, _) = TestSession.Create(
-            powerState: () => new Sotto.App.Core.Metrics.PowerState(mode, onMains));
+            powerState: () => new Ambient.App.Core.Metrics.PowerState(mode, onMains));
         await session.StartRecordingAsync();
 
         Assert.Equal("Recording - saving power, notes will be slower",
@@ -319,7 +319,7 @@ public class SessionCommandsTest
     public async Task RecordingOnMainsPowerCarriesNoWarning()
     {
         var (session, _, _) = TestSession.Create(
-            powerState: () => new Sotto.App.Core.Metrics.PowerState("performance", true));
+            powerState: () => new Ambient.App.Core.Metrics.PowerState("performance", true));
         await session.StartRecordingAsync();
 
         Assert.Equal("Recording", session.Status.LatestActivity);
@@ -332,7 +332,7 @@ public class SessionCommandsTest
         await session.StartRecordingAsync();
 
         engine.FailNext = method => method == "session/start"
-            ? new Sotto.Client.EngineErrorException(-32000, "no stored audio", null) : null;
+            ? new Ambient.Client.EngineErrorException(-32000, "no stored audio", null) : null;
         engine.SetConnected(false);
         engine.SetConnected(true);
 

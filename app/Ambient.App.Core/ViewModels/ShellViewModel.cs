@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>Window-level commands: the routes between the app's surfaces.</summary>
 public sealed partial class ShellViewModel : ObservableObject

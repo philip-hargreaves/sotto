@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.App.Core;
+namespace Ambient.App.Core;
 
 /// <summary>One small json file of app preferences; absent means defaults.</summary>
 public sealed class AppPreferences(string path)

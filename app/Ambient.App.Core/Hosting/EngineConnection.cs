@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// IEngineClient that follows the supervisor: connects when the engine comes
@@ -10,7 +10,7 @@ namespace Sotto.App.Core.Hosting;
 /// </summary>
 public sealed class EngineConnection : IEngineClient
 {
-    private const string ShellName = "sotto-shell";
+    private const string ShellName = "ambient-shell";
     private const string ShellVersion = "0.1.0";
 
     // Generous: the engine binds its pipe before model verification and

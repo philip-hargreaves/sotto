@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// What recovery needs to know about the session: whether an engine death

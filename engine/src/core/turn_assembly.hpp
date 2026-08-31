@@ -8,7 +8,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 // Pure steps between a window's decode and its emitted turns; measured
 // configuration - do not retune
@@ -97,4 +97,4 @@ inline void StripBoundaryDuplicates(const Turn& prev, Turn& next) {
     }
 }
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

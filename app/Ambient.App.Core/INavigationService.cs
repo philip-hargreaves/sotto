@@ -1,4 +1,4 @@
-namespace Sotto.App.Core;
+namespace Ambient.App.Core;
 
 /// <summary>Navigation as a port so view models never touch Frame.</summary>
 public interface INavigationService

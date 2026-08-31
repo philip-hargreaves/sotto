@@ -3,7 +3,7 @@ using System.IO.Pipes;
 using System.Security.Principal;
 using System.Text.Json;
 
-namespace Sotto.Client;
+namespace Ambient.Client;
 
 /// <summary>
 /// JSON-RPC client over the engine's named pipe. One connection, concurrent

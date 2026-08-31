@@ -1,11 +1,11 @@
 using Microsoft.Win32;
-using Sotto.App.Core.Hosting;
+using Ambient.App.Core.Hosting;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public sealed class CrashDumpsTest : IDisposable
 {
-    private const string TestRoot = @"Software\SottoTests";
+    private const string TestRoot = @"Software\AmbientTests";
 
     private readonly string _sub = $@"{TestRoot}\{Guid.NewGuid():N}";
 
@@ -17,9 +17,9 @@ public sealed class CrashDumpsTest : IDisposable
     {
         using var hive = Registry.CurrentUser.CreateSubKey(_sub);
 
-        CrashDumps.Register(hive, @"C:\dumps", "sotto_engine.exe", "sotto_note_host.exe");
+        CrashDumps.Register(hive, @"C:\dumps", "ambient_engine.exe", "ambient_note_host.exe");
 
-        foreach (var exe in new[] { "sotto_engine.exe", "sotto_note_host.exe" })
+        foreach (var exe in new[] { "ambient_engine.exe", "ambient_note_host.exe" })
         {
             using var key = hive.OpenSubKey(
                 $@"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\{exe}");

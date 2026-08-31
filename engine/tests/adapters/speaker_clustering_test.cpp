@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 constexpr std::uint64_t kLong = kFitMinFrames;
@@ -126,4 +126,4 @@ TEST(SpeakerClustering, AllShortSlicesStillCluster) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 // Streams partials, returns the translation, throws on failure; Cancel
 // interrupts from another thread
@@ -26,4 +26,4 @@ class ITranslator {
     virtual void Cancel() {}
 };
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

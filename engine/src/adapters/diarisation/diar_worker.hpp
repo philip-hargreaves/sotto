@@ -12,7 +12,7 @@
 #include "ports/diariser.hpp"
 #include "ports/transcriber.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Decodes per speculation pass; small so a long pass cannot stall the
 // causal stages that keep the settled frontier fresh
@@ -62,4 +62,4 @@ class DiarWorker {
     CaptureDiarisation state_;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

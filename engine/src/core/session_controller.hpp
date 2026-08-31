@@ -28,7 +28,7 @@
 #include "ports/session_store.hpp"
 #include "ports/transcriber.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Session events, delivered on the capture thread
 class ISessionEvents {
@@ -133,7 +133,7 @@ class SessionController {
         try {
             if (!resume_from.empty()) {
                 resumed_audio = store_.ReadAudio(resume_from);
-                std::fprintf(stderr, "sotto-engine: resuming %s with %.1f s of stored audio\n",
+                std::fprintf(stderr, "ambient-engine: resuming %s with %.1f s of stored audio\n",
                              resume_from.c_str(),
                              static_cast<double>(resumed_audio.size()) / kSampleRate);
             }
@@ -157,7 +157,7 @@ class SessionController {
             session_turns_.clear();
             transcriber_.Begin(turn_sink_);
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: session start failed: %s\n", e.what());
+            std::fprintf(stderr, "ambient-engine: session start failed: %s\n", e.what());
             std::lock_guard<std::mutex> lock(mutex_);
             running_ = false;
             end_ = {SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
@@ -536,14 +536,14 @@ class SessionController {
             const double seconds =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - finalise_start)
                     .count();
-            std::fprintf(stderr, "sotto-engine: finalise %s at %.1f s\n", name, seconds);
+            std::fprintf(stderr, "ambient-engine: finalise %s at %.1f s\n", name, seconds);
             if (metrics_ != nullptr) {
                 metrics_->RecordStage(name, seconds);
             }
         };
         JoinDiarThread();
         stage("capture joined");
-        std::fprintf(stderr, "sotto-engine: session audio %.1f s, %d capture ticks\n",
+        std::fprintf(stderr, "ambient-engine: session audio %.1f s, %d capture ticks\n",
                      session_audio_.size() / 16000.0, diar_ticks_);
         if (metrics_ != nullptr) {
             metrics_->RecordSession(session_audio_.size() / 16000.0, lost_frames_, diar_ticks_);
@@ -606,7 +606,7 @@ class SessionController {
                 {
                     const auto& t = result.timing;
                     std::fprintf(stderr,
-                                 "sotto-engine: diarise finish %.2f s, embed %.2f s (%d hits, %d "
+                                 "ambient-engine: diarise finish %.2f s, embed %.2f s (%d hits, %d "
                                  "misses), cluster %.2f s, overlap %.2f s\n",
                                  t.finish_s, t.embed_s, t.embed_hits, t.embed_misses, t.cluster_s,
                                  t.overlap_s);
@@ -658,7 +658,7 @@ class SessionController {
                         longest = std::max(longest, turns[i].end_frame - turns[i].first_frame);
                     }
                     std::fprintf(stderr,
-                                 "sotto-engine: %zu turns, %zu with text, %zu cached, longest "
+                                 "ambient-engine: %zu turns, %zu with text, %zu cached, longest "
                                  "%.1f s, %d clusters\n",
                                  turns.size(), with_text, cache.size(), longest / 16000.0,
                                  result.cluster_count);
@@ -931,4 +931,4 @@ class SessionController {
     SourceEnd end_{};
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

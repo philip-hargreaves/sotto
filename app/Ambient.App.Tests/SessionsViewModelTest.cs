@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class SessionsViewModelTest
 {
@@ -17,7 +17,7 @@ public class SessionsViewModelTest
     }
 
     /// <summary>Scripted responses per method; unscripted methods answer {}.</summary>
-    public sealed class RecordingEngineClient : Sotto.Client.IEngineClient
+    public sealed class RecordingEngineClient : Ambient.Client.IEngineClient
     {
         public Dictionary<string, object> Responses { get; } = [];
 
@@ -266,7 +266,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task AnEmptyListExplainsItselfWhenRetentionIsOff()
     {
-        var preferences = new Sotto.App.Core.AppPreferences(
+        var preferences = new Ambient.App.Core.AppPreferences(
             Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
         var engine = new RecordingEngineClient();
         var status = new StatusBarViewModel();

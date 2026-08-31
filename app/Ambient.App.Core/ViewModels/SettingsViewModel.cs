@@ -1,9 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Sotto.App.Core.Hosting;
-using Sotto.App.Core.Metrics;
+using Ambient.App.Core.Hosting;
+using Ambient.App.Core.Metrics;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -199,7 +199,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             var html = ReportBuilder.Build(
                 _machine.Describe(), File.ReadAllLines(_metrics.Path), DateTimeOffset.UtcNow);
             var path = Path.Combine(_exportDirectory,
-                $"sotto-perf-{Environment.MachineName}-{DateTime.Now:yyyyMMdd}.html");
+                $"ambient-perf-{Environment.MachineName}-{DateTime.Now:yyyyMMdd}.html");
             File.WriteAllText(path, html);
             ExportResult = $"saved {path}";
         }

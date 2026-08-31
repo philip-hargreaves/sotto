@@ -4,7 +4,7 @@
 #include <span>
 #include <string>
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 struct Turn {
     std::uint64_t first_frame = 0;
@@ -44,4 +44,4 @@ class ITranscriber {
     virtual void Release() {}
 };
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

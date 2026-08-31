@@ -10,7 +10,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // (clip, absolute first frame) -> transcribed text
 using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint64_t)>;
@@ -72,4 +72,4 @@ class IDiariser {
     virtual void DiscardCapture() {}
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

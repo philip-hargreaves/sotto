@@ -3,7 +3,7 @@
   "id": 1,
   "method": "engine/hello",
   "params": {
-    "name": "sotto-shell",
+    "name": "ambient-shell",
     "version": "0.1.0",
     "protocolVersion": 1
   }

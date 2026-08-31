@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sotto.App.Core.Metrics;
+using Ambient.App.Core.Metrics;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class PerformanceCollectorTest : IDisposable
 {

@@ -10,7 +10,7 @@
 
 #include "adapters/storage/schema.hpp"
 
-namespace sotto::store {
+namespace ambient::store {
 
 namespace {
 
@@ -70,7 +70,7 @@ bool TableExists(Db& db, const char* table) {
 
 std::filesystem::path DatabasePath(const std::filesystem::path& root) {
     std::filesystem::create_directories(root);
-    return root / "sotto.db";
+    return root / "ambient.db";
 }
 
 // A file created by a newer build is refused, never best-effort read
@@ -494,7 +494,7 @@ void SqliteSessionStore::WriterLoop() {
     }
 }
 
-// Layout 1 import (pre sotto #35): rows move unchanged; a session that
+// Layout 1 import (pre ambient #35): rows move unchanged; a session that
 // fails to import keeps its files
 void SqliteSessionStore::ImportPerSessionFiles(const std::filesystem::path& root) {
     const std::filesystem::path catalog_path = root / "main.db";
@@ -587,7 +587,7 @@ void SqliteSessionStore::ImportPerSessionFiles(const std::filesystem::path& root
             }
             txn.Commit();
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: session %s not imported (%s)\n", row.id.c_str(),
+            std::fprintf(stderr, "ambient-engine: session %s not imported (%s)\n", row.id.c_str(),
                          e.what());
             all_imported = false;
             continue;
@@ -607,4 +607,4 @@ void SqliteSessionStore::ImportPerSessionFiles(const std::filesystem::path& root
     }
 }
 
-}  // namespace sotto::store
+}  // namespace ambient::store

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>One partner mark; Dark falls back to the light artwork.</summary>
 public sealed record CreditMark(string Name, string LightPath, string DarkPath, double Height);

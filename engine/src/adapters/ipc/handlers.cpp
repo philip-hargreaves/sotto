@@ -10,7 +10,7 @@
 #include "adapters/translate/translate_lane.hpp"
 #include "core/version.hpp"
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 std::variant<json, Error> HandleHello(const json& params) {
     const auto peer = PeerInfoFromJson(params);
@@ -18,7 +18,7 @@ std::variant<json, Error> HandleHello(const json& params) {
         return Error{kInvalidParams, "Invalid params",
                      json("expected name, version, protocolVersion")};
     }
-    return ToJson(PeerInfo{sotto::kName, sotto::kVersion, kProtocolVersion});
+    return ToJson(PeerInfo{ambient::kName, ambient::kVersion, kProtocolVersion});
 }
 
 std::variant<json, Error> HandleEcho(const json& params) {
@@ -28,7 +28,7 @@ std::variant<json, Error> HandleEcho(const json& params) {
     return json{{"payload", params["payload"]}};
 }
 
-json HandleAudioInputs(const std::vector<sotto::audio::CaptureDevice>& devices) {
+json HandleAudioInputs(const std::vector<ambient::audio::CaptureDevice>& devices) {
     json list = json::array();
     for (const auto& device : devices) {
         list.push_back({{"id", device.id},
@@ -40,7 +40,7 @@ json HandleAudioInputs(const std::vector<sotto::audio::CaptureDevice>& devices) 
     return json{{"devices", std::move(list)}};
 }
 
-json HandleModels(const sotto::models::ModelStore& models) {
+json HandleModels(const ambient::models::ModelStore& models) {
     json list = json::array();
     for (const auto& model : models.List()) {
         list.push_back({{"id", model.id},
@@ -68,7 +68,7 @@ json NullWhenEmpty(const std::string& value) {
 
 }  // namespace
 
-json HandleSessionList(sotto::store::ISessionStore& sessions) {
+json HandleSessionList(ambient::store::ISessionStore& sessions) {
     json list = json::array();
     for (const auto& session : sessions.ListSessions()) {
         list.push_back({{"id", session.id},
@@ -83,7 +83,7 @@ json HandleSessionList(sotto::store::ISessionStore& sessions) {
     return json{{"sessions", std::move(list)}};
 }
 
-std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionTranscript(ambient::store::ISessionStore& sessions,
                                                   const json& params) {
     const auto id = IdFrom(params);
     if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
@@ -101,13 +101,13 @@ std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& s
     }
 }
 
-std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionNote(ambient::store::ISessionStore& sessions,
                                             const json& params) {
     const auto id = IdFrom(params);
     if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
     try {
         const auto note =
-            sessions.ReadDocument(std::get<std::string>(id), sotto::store::DocumentKind::kNote);
+            sessions.ReadDocument(std::get<std::string>(id), ambient::store::DocumentKind::kNote);
         return json{{"text", note.text},
                     {"style", note.style},
                     {"detail", note.detail},
@@ -118,12 +118,12 @@ std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& session
     }
 }
 
-std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionPatient(ambient::store::ISessionStore& sessions,
                                                const json& params) {
     const auto id = IdFrom(params);
     if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
     try {
-        using sotto::store::DocumentKind;
+        using ambient::store::DocumentKind;
         const auto patient =
             sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kPatient);
         const auto translation =
@@ -143,7 +143,7 @@ std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sess
     }
 }
 
-std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionDelete(ambient::store::ISessionStore& sessions,
                                               const json& params) {
     const auto id = IdFrom(params);
     if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
@@ -155,11 +155,12 @@ std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessi
     }
 }
 
-void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
-                     sotto::metrics::Registry* metrics, sotto::models::OvRuntime* runtime,
-                     sotto::translate::ITranslator* translator,
-                     sotto::translate::TranslateLane* translate_lane, bool first_use) {
+void RegisterMethods(PipeServer& server, ambient::audio::SessionController& controller,
+                     const ambient::models::ModelStore& models,
+                     ambient::store::ISessionStore& sessions, ambient::metrics::Registry* metrics,
+                     ambient::models::OvRuntime* runtime,
+                     ambient::translate::ITranslator* translator,
+                     ambient::translate::TranslateLane* translate_lane, bool first_use) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
     // Ready when every staged model's compile cache exists: OpenVINO writes
@@ -206,7 +207,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     // Enumerated fresh per call, so a picker opened after a headset is
     // plugged in sees it without any notification plumbing
     server.RegisterMethod("audio/inputs", [](const json&) {
-        return HandleAudioInputs(sotto::audio::ListCaptureDevices());
+        return HandleAudioInputs(ambient::audio::ListCaptureDevices());
     });
     server.RegisterMethod("session/list",
                           [&sessions](const json&) { return HandleSessionList(sessions); });
@@ -229,7 +230,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 return Error{kInvalidParams, "Invalid params", json("text must be a string")};
             }
             try {
-                sessions.EditDocument(std::get<std::string>(id), sotto::store::DocumentKind::kLabel,
+                sessions.EditDocument(std::get<std::string>(id),
+                                      ambient::store::DocumentKind::kLabel,
                                       params["text"].get<std::string>());
                 return json::object();
             } catch (const std::exception& e) {
@@ -254,7 +256,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 try {
                     const auto text = sessions
                                           .ReadDocument(std::get<std::string>(id),
-                                                        sotto::store::DocumentKind::kPatient)
+                                                        ambient::store::DocumentKind::kPatient)
                                           .text;
                     if (text.empty()) {
                         return Error{kSessionError, "Session error",
@@ -266,11 +268,11 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                     const auto on_ready = [&sessions, session_id](const std::string& translated,
                                                                   const std::string& language) {
                         try {
-                            sotto::store::Document document;
+                            ambient::store::Document document;
                             document.text = translated;
                             document.language = language;
                             sessions.SaveDocument(
-                                session_id, sotto::store::DocumentKind::kTranslation, document);
+                                session_id, ambient::store::DocumentKind::kTranslation, document);
                         } catch (...) {  // NOLINT(bugprone-empty-catch)
                         }
                     };
@@ -292,24 +294,24 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
         "session/start", [&controller](const json& params) -> std::variant<json, Error> {
             // An optional replay block plays a file through the same
             // pipeline; absent means microphone
-            std::optional<sotto::audio::ReplaySpec> replay;
+            std::optional<ambient::audio::ReplaySpec> replay;
             if (params.contains("replay")) {
                 const auto& r = params["replay"];
                 if (!r.contains("path") || !r["path"].is_string()) {
                     return Error{kInvalidParams, "replay.path is required", {}};
                 }
-                replay = sotto::audio::ReplaySpec{r["path"].get<std::string>(),
-                                                  r.value("speed", 1.0), r.value("monitor", false)};
+                replay = ambient::audio::ReplaySpec{
+                    r["path"].get<std::string>(), r.value("speed", 1.0), r.value("monitor", false)};
             }
             // micId pins the picker's choice; one that has gone falls back
             // to the default, logged, and the snapshot records the fallback
-            sotto::audio::MicSelection mic;
+            ambient::audio::MicSelection mic;
             if (!replay.has_value()) {
                 const std::string requested = params.value("micId", "");
-                const auto device =
-                    sotto::audio::ResolveMicrophone(sotto::audio::ListCaptureDevices(), requested);
+                const auto device = ambient::audio::ResolveMicrophone(
+                    ambient::audio::ListCaptureDevices(), requested);
                 if (!requested.empty() && device.id != requested) {
-                    std::fprintf(stderr, "sotto-engine: chosen microphone gone, using %s\n",
+                    std::fprintf(stderr, "ambient-engine: chosen microphone gone, using %s\n",
                                  device.name.empty() ? "the default" : device.name.c_str());
                 }
                 mic = {device.id, device.name};
@@ -359,7 +361,8 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
                 return Error{kInvalidParams, "Invalid params", json("text must be a string")};
             }
             try {
-                sessions.EditDocument(std::get<std::string>(id), sotto::store::DocumentKind::kNote,
+                sessions.EditDocument(std::get<std::string>(id),
+                                      ambient::store::DocumentKind::kNote,
                                       params["text"].get<std::string>());
                 return json::object();
             } catch (const std::exception& e) {
@@ -375,7 +378,7 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
             }
             try {
                 sessions.EditDocument(std::get<std::string>(id),
-                                      sotto::store::DocumentKind::kPatient,
+                                      ambient::store::DocumentKind::kPatient,
                                       params["text"].get<std::string>());
                 return json::object();
             } catch (const std::exception& e) {
@@ -422,4 +425,4 @@ void RegisterMethods(PipeServer& server, sotto::audio::SessionController& contro
     });
 }
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

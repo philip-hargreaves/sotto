@@ -1,6 +1,6 @@
 {
   "id": "silero-vad",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "models/silero-vad",
   "files": {
     "model.onnx": "7671cd04b004e9076da0d4a7b1a5aec36adf161c39230c1cb94a4fd5db6bbd28"

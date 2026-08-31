@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Sotto.App.Core.Demo;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.Demo;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class DemoTrayViewModelTest
 {

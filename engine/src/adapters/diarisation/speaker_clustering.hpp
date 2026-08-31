@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 inline constexpr int kMaxSpeakers = 4;
 inline constexpr std::uint64_t kFitMinFrames = 32000;  // 2 s: only long slices vote on the count
@@ -19,4 +19,4 @@ struct ClusterResult {
 ClusterResult ClusterSpeakers(const std::vector<std::vector<float>>& embeddings,
                               const std::vector<std::uint64_t>& duration_frames);
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

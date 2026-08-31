@@ -1,9 +1,9 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Sotto.App.Services;
+using Ambient.App.Services;
 using Windows.Graphics;
 
-namespace Sotto.App;
+namespace Ambient.App;
 
 public sealed partial class MainWindow : Window
 {

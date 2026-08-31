@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Sotto.App.Core;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class NoteOptionsTest
 {
@@ -30,7 +30,7 @@ public class NoteOptionsTest
     public void ChangingAnOptionPersistsItAndInformsTheEngine()
     {
         var path = Path.Combine(
-            Path.GetTempPath(), $"sotto-test-{Guid.NewGuid():N}", "preferences.json");
+            Path.GetTempPath(), $"ambient-test-{Guid.NewGuid():N}", "preferences.json");
         var (_, engine, note) = TestSession.Create(new AppPreferences(path));
 
         note.Detail = "concise";
@@ -45,7 +45,7 @@ public class NoteOptionsTest
     public void UnknownStoredValuesFallBackToDefaults()
     {
         var path = Path.Combine(
-            Path.GetTempPath(), $"sotto-test-{Guid.NewGuid():N}", "preferences.json");
+            Path.GetTempPath(), $"ambient-test-{Guid.NewGuid():N}", "preferences.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, """{"NoteStyle":"haiku","NoteDetail":"verbose"}""");
 

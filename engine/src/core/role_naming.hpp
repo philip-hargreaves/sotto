@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Below this lexical margin no one is named. Chosen from the observed
 // margin range, not swept; revisit first if it abstains too often
@@ -195,4 +195,4 @@ inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_coun
     return result;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

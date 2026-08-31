@@ -1,10 +1,10 @@
-using Sotto.App.Core.Hosting;
+using Ambient.App.Core.Hosting;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public sealed class LogRotationTest : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("sotto-logs").FullName;
+    private readonly string _dir = Directory.CreateTempSubdirectory("ambient-logs").FullName;
 
     private string Log(string name) => Path.Combine(_dir, name);
 

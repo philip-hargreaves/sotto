@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::asr {
+namespace ambient::asr {
 namespace {
 
 Turn Make(std::uint64_t first_frame, std::uint64_t count, std::string text) {
@@ -76,4 +76,4 @@ TEST(StripBoundaryDuplicates, AWhollyDuplicatedTurnStripsToEmpty) {
 }
 
 }  // namespace
-}  // namespace sotto::asr
+}  // namespace ambient::asr

@@ -4,7 +4,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 class WasapiCapture : public IAudioSource {
    public:
@@ -24,4 +24,4 @@ class WasapiCapture : public IAudioSource {
     void* stop_event_ = nullptr;  // HANDLE, manual-reset: stopping is terminal
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

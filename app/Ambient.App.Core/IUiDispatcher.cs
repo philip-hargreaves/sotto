@@ -1,4 +1,4 @@
-namespace Sotto.App.Core;
+namespace Ambient.App.Core;
 
 /// <summary>
 /// Runs an action on the UI thread. Bound state can only be touched from the

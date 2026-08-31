@@ -17,7 +17,7 @@
 #include "adapters/host/power_throttling.hpp"
 #include "adapters/ipc/framing.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 using nlohmann::json;
 
@@ -74,7 +74,7 @@ struct WorkerNoteWriter::Impl {
         }
         CloseWorker();
 
-        const std::wstring pipe_path = L"\\\\.\\pipe\\LOCAL\\sotto-note-" +
+        const std::wstring pipe_path = L"\\\\.\\pipe\\LOCAL\\ambient-note-" +
                                        std::to_wstring(GetCurrentProcessId()) + L"-" +
                                        std::to_wstring(++spawn_count);
         std::wstring command = L"\"" + host_exe.wstring() + L"\" \"" + pipe_path + L"\" \"" +
@@ -211,7 +211,7 @@ struct WorkerNoteWriter::Impl {
             {
                 std::lock_guard<std::mutex> lock(state_mutex);
                 if (closing) throw;
-                std::fprintf(stderr, "sotto-engine: note worker failed (%.100s); respawning\n",
+                std::fprintf(stderr, "ambient-engine: note worker failed (%.100s); respawning\n",
                              e.what());
                 CloseWorker();
             }
@@ -231,12 +231,12 @@ WorkerNoteWriter::~WorkerNoteWriter() {
     impl_->CloseWorker();
 }
 
-// Spawn and load hide inside capture; SOTTO_NOTE_LOAD=stop defers the load
+// Spawn and load hide inside capture; AMBIENT_NOTE_LOAD=stop defers the load
 // (co-residency experiment knob). Failure surfaces on Write
 void WorkerNoteWriter::Prepare() {
     static const bool load_at_stop = [] {
         char* value = nullptr;
-        const bool at_stop = _dupenv_s(&value, nullptr, "SOTTO_NOTE_LOAD") == 0 &&
+        const bool at_stop = _dupenv_s(&value, nullptr, "AMBIENT_NOTE_LOAD") == 0 &&
                              value != nullptr && std::string(value) == "stop";
         std::free(value);
         return at_stop;
@@ -247,7 +247,7 @@ void WorkerNoteWriter::Prepare() {
             impl_->Send("prepare", json::object());
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: note worker prepare failed (%s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: note worker prepare failed (%s)\n", e.what());
     }
 }
 
@@ -284,7 +284,7 @@ std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
     try {
         return impl_->Attempt("label", {{"note", note}}, nullptr);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: no label (%.100s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: no label (%.100s)\n", e.what());
         return {};
     }
 }
@@ -299,4 +299,4 @@ void WorkerNoteWriter::Cancel() {
     }
 }
 
-}  // namespace sotto::note
+}  // namespace ambient::note

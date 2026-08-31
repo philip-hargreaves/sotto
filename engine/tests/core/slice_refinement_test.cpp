@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 TEST(RefineRegions, AChangePointInsideARegionSplitsIt) {
@@ -69,4 +69,4 @@ TEST(EmbeddingRanges, NoOverlapMeansTheWholeSliceOneRange) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

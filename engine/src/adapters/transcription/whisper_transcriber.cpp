@@ -12,7 +12,7 @@
 #include "core/turn_assembly.hpp"
 #include "ports/audio_source.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 namespace {
 
@@ -29,7 +29,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     store.Verify(info);
     const std::string device =
         runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
-    std::fprintf(stderr, "sotto-engine: %s on %s\n", role, device.c_str());
+    std::fprintf(stderr, "ambient-engine: %s on %s\n", role, device.c_str());
     if (metrics != nullptr) metrics->RecordDevice(role, device);
 
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
@@ -184,7 +184,7 @@ void WhisperTranscriber::LoadIfPending() {
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: transcription unavailable (%s)\n", e.what());
+        std::fprintf(stderr, "ambient-engine: transcription unavailable (%s)\n", e.what());
     }
     loader_ = {};
 
@@ -193,7 +193,7 @@ void WhisperTranscriber::LoadIfPending() {
             clip_decode_ = clip_loader_();
         } catch (const std::exception& e) {
             // Clips then share the live pipeline: slower, never wrong
-            std::fprintf(stderr, "sotto-engine: finalise stays on the live device (%s)\n",
+            std::fprintf(stderr, "ambient-engine: finalise stays on the live device (%s)\n",
                          e.what());
         }
         clip_loader_ = {};
@@ -297,4 +297,4 @@ void WhisperTranscriber::WorkerLoop() {
     for (auto& clip : clips_) clip.text.set_value({});
 }
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

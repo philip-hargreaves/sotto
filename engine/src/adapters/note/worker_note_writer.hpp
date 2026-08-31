@@ -7,7 +7,7 @@
 
 #include "ports/note_writer.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 // The note model in its own supervised process, so a GPU driver fault can
 // never corrupt or hang the engine
@@ -41,4 +41,4 @@ class WorkerNoteWriter : public INoteWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace sotto::note
+}  // namespace ambient::note

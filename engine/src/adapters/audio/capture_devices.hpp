@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // One active capture endpoint, as the settings picker shows it. The id is
 // WASAPI's, so it is exactly what WasapiCapture pins when passed back
@@ -26,4 +26,4 @@ CaptureDevice ResolveMicrophone(const std::vector<CaptureDevice>& devices,
 // WASAPI wants the endpoint id back in its native encoding
 std::wstring WideId(const std::string& id);
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

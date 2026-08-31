@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// A launched engine as the supervisor sees it. Exited may fire on a

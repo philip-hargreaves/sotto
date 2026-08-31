@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <deque>
 
-namespace sotto::core {
+namespace ambient::core {
 
 // Tokens per second at the source, before throttling; Rate() is a rolling
 // window for display, Average() the whole stream
@@ -59,4 +59,4 @@ class ThroughputMeter {
     double last_ = 0;
 };
 
-}  // namespace sotto::core
+}  // namespace ambient::core

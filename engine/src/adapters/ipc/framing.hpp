@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 // Pipe imposes no size limit; capped to prevent unbounded allocation
 inline constexpr std::uint32_t kMaxFrameBytes = 4u * 1024 * 1024;
@@ -63,4 +63,4 @@ class FrameDecoder {
     bool failed_ = false;
 };
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

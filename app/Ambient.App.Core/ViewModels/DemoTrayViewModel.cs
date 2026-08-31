@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Sotto.App.Core.Demo;
+using Ambient.App.Core.Demo;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>
 /// The dev-only replay transport: bundled tracks, play/pause/stop, speed,

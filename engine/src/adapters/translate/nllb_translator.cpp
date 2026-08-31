@@ -15,7 +15,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 namespace {
 
@@ -210,10 +210,10 @@ void NllbTranslator::Prepare() {
             const auto target = languages.begin().value().at("id").get<std::int64_t>();
             impl->TranslateSentences("Ready.", target);
             std::fprintf(
-                stderr, "sotto-engine: translator warmed in %.1f s\n",
+                stderr, "ambient-engine: translator warmed in %.1f s\n",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: translator warm failed (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: translator warm failed (%s)\n", e.what());
         }
     });
 }
@@ -266,7 +266,7 @@ std::string NllbTranslator::Translate(const std::string& text, const std::string
         from = end + 1;
     }
 
-    std::fprintf(stderr, "sotto-engine: translated to %s in %.1f s\n", language.c_str(),
+    std::fprintf(stderr, "ambient-engine: translated to %s in %.1f s\n", language.c_str(),
                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
     return translated;
 }
@@ -275,4 +275,4 @@ void NllbTranslator::Cancel() {
     impl_->cancel = true;
 }
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

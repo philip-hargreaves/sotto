@@ -11,7 +11,7 @@
 #include <thread>
 #include <utility>
 
-namespace sotto::models {
+namespace ambient::models {
 
 // Builds T on a background thread; Get waits and rethrows a load failure
 template <typename T>
@@ -24,10 +24,10 @@ class DeferredLoad {
             try {
                 built_ = build();
                 std::fprintf(
-                    stderr, "sotto-engine: %s ready in %.1f s\n", name_.c_str(),
+                    stderr, "ambient-engine: %s ready in %.1f s\n", name_.c_str(),
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
             } catch (const std::exception& e) {
-                std::fprintf(stderr, "sotto-engine: %s unavailable (%s)\n", name_.c_str(),
+                std::fprintf(stderr, "ambient-engine: %s unavailable (%s)\n", name_.c_str(),
                              e.what());
                 error_ = std::current_exception();
             } catch (...) {
@@ -75,4 +75,4 @@ class DeferredLoad {
     std::thread loader_;
 };
 
-}  // namespace sotto::models
+}  // namespace ambient::models

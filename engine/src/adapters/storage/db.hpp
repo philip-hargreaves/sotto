@@ -9,7 +9,7 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-namespace sotto::store {
+namespace ambient::store {
 
 class Db {
    public:
@@ -74,4 +74,4 @@ class Db {
     sqlite3* db_ = nullptr;
 };
 
-}  // namespace sotto::store
+}  // namespace ambient::store

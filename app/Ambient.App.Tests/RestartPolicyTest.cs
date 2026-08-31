@@ -1,6 +1,6 @@
-using Sotto.App.Core.Hosting;
+using Ambient.App.Core.Hosting;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class RestartPolicyTest
 {

@@ -5,7 +5,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.JobObjects;
 
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// A Windows Job Object with kill-on-close: disposing it terminates every

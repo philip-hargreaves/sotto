@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sotto.Client\Sotto.Client.csproj" />
+    <ProjectReference Include="..\Ambient.Client\Ambient.Client.csproj" />
   </ItemGroup>
 
   <!-- The engine is built by CMake; EngineProcess locates it under build/<preset>/engine. -->

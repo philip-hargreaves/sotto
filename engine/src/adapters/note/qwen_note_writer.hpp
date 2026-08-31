@@ -7,16 +7,16 @@
 
 #include "ports/note_writer.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 class ModelStore;
 class OvRuntime;
-}  // namespace sotto::models
+}  // namespace ambient::models
 
-namespace sotto::metrics {
+namespace ambient::metrics {
 class Registry;
-}  // namespace sotto::metrics
+}  // namespace ambient::metrics
 
-namespace sotto::note {
+namespace ambient::note {
 
 // Qwen behind the note port: one background load, resident pipeline,
 // prompts re-read per note
@@ -50,4 +50,4 @@ class QwenNoteWriter : public INoteWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace sotto::note
+}  // namespace ambient::note

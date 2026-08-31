@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace Sotto.Fetch;
+namespace Ambient.Fetch;
 
 public static class Hashing
 {

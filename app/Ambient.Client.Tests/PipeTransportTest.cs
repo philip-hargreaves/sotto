@@ -2,11 +2,11 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 
-namespace Sotto.Client.Tests;
+namespace Ambient.Client.Tests;
 
 public class PipeTransportTest
 {
-    private static string UniquePipeName() => $"LOCAL\\sotto-test-{Guid.NewGuid():N}";
+    private static string UniquePipeName() => $"LOCAL\\ambient-test-{Guid.NewGuid():N}";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 

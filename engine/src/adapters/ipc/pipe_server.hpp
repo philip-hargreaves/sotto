@@ -10,7 +10,7 @@
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_security.hpp"
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 // One duplex pipe, one client at a time. Construction claims the pipe
 // name so a name already taken is treated as an attack and throws, never retries.
@@ -49,4 +49,4 @@ class PipeServer {
     bool write_failed_ = false;  // under write_mutex_; a torn frame ends the stream
 };
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

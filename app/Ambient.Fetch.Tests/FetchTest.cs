@@ -1,7 +1,7 @@
 using System.Net;
-using Sotto.Fetch;
+using Ambient.Fetch;
 
-namespace Sotto.Fetch.Tests;
+namespace Ambient.Fetch.Tests;
 
 /// <summary>Serves a directory over loopback HTTP with range support.</summary>
 public sealed class AssetServer : IDisposable

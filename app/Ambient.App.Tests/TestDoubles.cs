@@ -1,7 +1,7 @@
-using Sotto.App.Core;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>Runs posted work immediately; tests have no UI thread.</summary>
 internal sealed class InlineDispatcher : IUiDispatcher

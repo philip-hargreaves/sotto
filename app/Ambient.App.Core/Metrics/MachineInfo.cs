@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace Sotto.App.Core.Metrics;
+namespace Ambient.App.Core.Metrics;
 
 public sealed record GpuInfo(string Name, string Driver);
 

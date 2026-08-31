@@ -11,7 +11,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 namespace {
 
@@ -84,7 +84,7 @@ struct WasapiPlayer::Impl {
 std::unique_ptr<WasapiPlayer> WasapiPlayer::Open() {
     auto impl = std::make_unique<Impl>();
     if (!impl->Open()) {
-        std::fprintf(stderr, "sotto-engine: no render endpoint - replay is silent\n");
+        std::fprintf(stderr, "ambient-engine: no render endpoint - replay is silent\n");
         return nullptr;
     }
     return std::unique_ptr<WasapiPlayer>(new WasapiPlayer(std::move(impl)));
@@ -94,8 +94,8 @@ WasapiPlayer::WasapiPlayer(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) 
 
 WasapiPlayer::~WasapiPlayer() {
     // Logged so silent playback is diagnosable
-    std::fprintf(stderr, "sotto-engine: monitor played %llu frames, dropped %llu\n", impl_->written,
-                 impl_->dropped);
+    std::fprintf(stderr, "ambient-engine: monitor played %llu frames, dropped %llu\n",
+                 impl_->written, impl_->dropped);
     if (impl_->client) impl_->client->Stop();
 }
 
@@ -118,4 +118,4 @@ void WasapiPlayer::Write(std::span<const float> frames) {
     if (frames.size() > take) s.dropped += frames.size() - take;
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

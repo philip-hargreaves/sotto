@@ -10,7 +10,7 @@
 
 #include "adapters/ipc/framing.hpp"
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 namespace {
 
@@ -72,11 +72,11 @@ void PipeServer::PushNotification(const std::string& method, json params) {
     constexpr unsigned kNotifyTimeoutMs = 2000;
     const std::string payload = Serialize(MakeNotification(method, std::move(params)));
     if (payload.size() > kMaxFrameBytes) {
-        std::fputs("sotto-engine: pushed notification exceeded frame cap, dropped\n", stderr);
+        std::fputs("ambient-engine: pushed notification exceeded frame cap, dropped\n", stderr);
         return;
     }
     if (!WriteFrame(payload, kNotifyTimeoutMs)) {
-        std::fputs("sotto-engine: notification push failed, client gone\n", stderr);
+        std::fputs("ambient-engine: notification push failed, client gone\n", stderr);
     }
 }
 
@@ -121,13 +121,13 @@ void PipeServer::HandleFrame(const std::string& payload) {
         message = json::parse(payload);
     } catch (const json::parse_error&) {
         // No trustworthy id to answer with, so log and drop
-        std::fputs("sotto-engine: dropped unparseable frame\n", stderr);
+        std::fputs("ambient-engine: dropped unparseable frame\n", stderr);
         return;
     }
 
     auto parsed = ParseRequest(std::move(message));
     if (std::holds_alternative<Error>(parsed)) {
-        std::fputs("sotto-engine: dropped invalid request\n", stderr);
+        std::fputs("ambient-engine: dropped invalid request\n", stderr);
         return;
     }
     const auto& request = std::get<Request>(parsed);
@@ -146,7 +146,7 @@ void PipeServer::HandleFrame(const std::string& payload) {
             Reply(request.id, MakeResult(request.id, std::get<json>(outcome)));
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: handler failed: %s\n", e.what());
+        std::fprintf(stderr, "ambient-engine: handler failed: %s\n", e.what());
         Reply(request.id, MakeError(request.id, Error{kInternalError, "Internal error"}));
     }
     FlushNotifications();
@@ -156,11 +156,11 @@ void PipeServer::FlushNotifications() {
     for (const auto& notification : notifications_) {
         const std::string payload = Serialize(notification);
         if (payload.size() > kMaxFrameBytes) {
-            std::fputs("sotto-engine: notification exceeded frame cap, dropped\n", stderr);
+            std::fputs("ambient-engine: notification exceeded frame cap, dropped\n", stderr);
             continue;
         }
         if (!WriteFrame(payload)) {
-            std::fputs("sotto-engine: notification write failed, client gone\n", stderr);
+            std::fputs("ambient-engine: notification write failed, client gone\n", stderr);
             break;
         }
     }
@@ -170,11 +170,11 @@ void PipeServer::FlushNotifications() {
 void PipeServer::Reply(const Id& id, const json& envelope) {
     std::string payload = Serialize(envelope);
     if (payload.size() > kMaxFrameBytes) {
-        std::fputs("sotto-engine: reply exceeded frame cap, sent internal error\n", stderr);
+        std::fputs("ambient-engine: reply exceeded frame cap, sent internal error\n", stderr);
         payload = Serialize(MakeError(id, Error{kInternalError, "Internal error"}));
     }
     if (!WriteFrame(payload)) {
-        std::fputs("sotto-engine: reply write failed, client gone\n", stderr);
+        std::fputs("ambient-engine: reply write failed, client gone\n", stderr);
     }
 }
 
@@ -206,4 +206,4 @@ bool PipeServer::WriteFrame(const std::string& payload, unsigned timeout_ms) {
     return true;
 }
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

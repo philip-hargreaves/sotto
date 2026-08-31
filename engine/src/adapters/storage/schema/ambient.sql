@@ -1,4 +1,4 @@
--- Sotto session store. One database, one writer thread.
+-- Ambient session store. One database, one writer thread.
 --
 -- Content (audio, transcript text, documents) is AES-256-GCM ciphertext under
 -- a per-session key; the cipher authenticates the sealing domain, the session

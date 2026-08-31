@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.App.Core.Demo;
+namespace Ambient.App.Core.Demo;
 
 /// <summary>A bundled replay recording: name, wav path, "name (m:ss)" label.</summary>
 public sealed record DemoTrack(string Name, string Path)

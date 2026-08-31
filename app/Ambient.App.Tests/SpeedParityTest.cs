@@ -1,7 +1,7 @@
-using Sotto.App.Core.Hosting;
-using Sotto.Client;
+using Ambient.App.Core.Hosting;
+using Ambient.Client;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// Replay speed must not change the sealed transcript: same audio in, same
@@ -40,7 +40,7 @@ public class SpeedParityTest
 
     private static async Task<List<string>> ReplayAsync(string track, double speed, int waitSeconds)
     {
-        var pipeName = $"LOCAL\\sotto-parity-{Guid.NewGuid():N}";
+        var pipeName = $"LOCAL\\ambient-parity-{Guid.NewGuid():N}";
         var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(directory);
         var models = FindModels();

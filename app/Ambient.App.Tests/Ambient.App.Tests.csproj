@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sotto.App.Core\Sotto.App.Core.csproj" />
+    <ProjectReference Include="..\Ambient.App.Core\Ambient.App.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,7 +5,7 @@
 #include <mutex>
 #include <string>
 
-namespace sotto::metrics {
+namespace ambient::metrics {
 
 // One engine-wide sink; any thread records, readers get a copy. Devices
 // and load times persist, the rest resets per session
@@ -80,4 +80,4 @@ class Registry {
     Snapshot data_;
 };
 
-}  // namespace sotto::metrics
+}  // namespace ambient::metrics

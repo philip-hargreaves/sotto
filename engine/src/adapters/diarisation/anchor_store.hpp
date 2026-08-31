@@ -6,7 +6,7 @@
 #include <span>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // The clinician's accrued voiceprint, DPAPI-protected; a corrupt file
 // resets to empty and rebuilds
@@ -30,4 +30,4 @@ class AnchorStore {
     std::uint64_t count_ = 0;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

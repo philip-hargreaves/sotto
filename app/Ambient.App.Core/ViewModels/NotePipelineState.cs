@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>
 /// Generation is sequential, so the pipeline has exactly these states; a

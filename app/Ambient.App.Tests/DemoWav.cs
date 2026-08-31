@@ -1,4 +1,4 @@
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>Writes a temp 16 kHz mono PCM16 silence wav.</summary>
 internal static class SessionContractWav
@@ -25,7 +25,7 @@ internal static class SessionContractWav
         Tag(36, "data");
         U32(40, (uint)(frames * 2));
 
-        var path = Path.Combine(Path.GetTempPath(), $"sotto-demo-{Guid.NewGuid():N}.wav");
+        var path = Path.Combine(Path.GetTempPath(), $"ambient-demo-{Guid.NewGuid():N}.wav");
         File.WriteAllBytes(path, bytes);
         return path;
     }

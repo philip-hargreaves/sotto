@@ -7,7 +7,7 @@
 #include "adapters/models/deferred_load.hpp"
 #include "ports/diariser.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Diarisation behind a background load; callers already run off the capture thread
 class DeferredDiariser : public IDiariser {
@@ -50,4 +50,4 @@ class DeferredDiariser : public IDiariser {
     models::DeferredLoad<IDiariser> inner_;
 };
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

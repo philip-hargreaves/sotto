@@ -9,7 +9,7 @@
 #include <aclapi.h>
 #include <windows.h>
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 namespace {
 
@@ -100,4 +100,4 @@ void* PipeSecurity::Attributes() const {
     return &impl_->attributes;
 }
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

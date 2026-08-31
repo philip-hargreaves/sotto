@@ -15,7 +15,7 @@
 #include "adapters/note/note_prompt.hpp"
 #include "core/metrics.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 namespace {
 
@@ -49,7 +49,7 @@ struct QwenNoteWriter::Impl {
             info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
         const double seconds =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "sotto-engine: note on %s, loaded in %.1f s\n", device.c_str(),
+        std::fprintf(stderr, "ambient-engine: note on %s, loaded in %.1f s\n", device.c_str(),
                      seconds);
         if (metrics != nullptr) {
             metrics->RecordDevice("note", device);
@@ -72,10 +72,10 @@ struct QwenNoteWriter::Impl {
             built.generate("<|im_start|>user\n" + LoadPrompt(prompt_dir / "note-narrative.md"),
                            config);
             std::fprintf(
-                stderr, "sotto-engine: note prefix warmed in %.1f s\n",
+                stderr, "ambient-engine: note prefix warmed in %.1f s\n",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: note prefix warm failed (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: note prefix warm failed (%s)\n", e.what());
         }
     }
 
@@ -201,4 +201,4 @@ void QwenNoteWriter::Cancel() {
     impl_->cancel = true;
 }
 
-}  // namespace sotto::note
+}  // namespace ambient::note

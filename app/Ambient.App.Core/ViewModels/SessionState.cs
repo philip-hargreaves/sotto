@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 public enum SessionState
 {

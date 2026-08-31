@@ -5,7 +5,7 @@
 
 #include "core/diar_regions.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 inline constexpr std::uint64_t kSplitEdgeMarginFrames =
     800;  // 50 ms: a cut this near an edge is the edge
@@ -62,4 +62,4 @@ inline std::vector<Region> EmbeddingRanges(const Region& slice,
     return {};
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

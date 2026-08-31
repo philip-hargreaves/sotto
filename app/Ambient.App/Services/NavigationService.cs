@@ -1,10 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Sotto.App.Core;
-using Sotto.App.Views;
+using Ambient.App.Core;
+using Ambient.App.Views;
 
-namespace Sotto.App.Services;
+namespace Ambient.App.Services;
 
 /// <summary>
 /// Swaps the host's content between DI-resolved views, keeping a back stack of

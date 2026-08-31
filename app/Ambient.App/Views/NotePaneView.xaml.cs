@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Views;
+namespace Ambient.App.Views;
 
 /// <summary>
 /// The consultation's right pane: the two editors in tabs. The editors are

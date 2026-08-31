@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Sotto.App.Core.ViewModels;
-using Sotto.Client;
+using Ambient.App.Core.ViewModels;
+using Ambient.Client;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class SessionStateMachineTest
 {

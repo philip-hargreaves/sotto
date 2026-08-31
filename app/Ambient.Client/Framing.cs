@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Sotto.Client;
+namespace Ambient.Client;
 
 /// <summary>Length-prefixed framing: 4-byte little-endian payload length, then the payload.</summary>
 public static class Framing

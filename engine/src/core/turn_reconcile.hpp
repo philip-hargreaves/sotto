@@ -9,7 +9,7 @@
 #include "core/role_naming.hpp"
 #include "ports/transcriber.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 inline constexpr std::uint64_t kReconcileGapFrames = 24000;  // 1.5 s: beyond this is no boundary
 inline constexpr double kReconcileMinSimilarity = 0.66;
@@ -83,4 +83,4 @@ inline void ReconcileTurns(std::vector<asr::Turn>& turns) {
     }
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

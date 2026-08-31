@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>WER local dumps for the engine processes: per-user, minidumps
 /// only (a full dump could carry audio), capped, re-asserted per launch.</summary>

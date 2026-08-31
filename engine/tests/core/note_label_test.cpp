@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace sotto::core {
+namespace ambient::core {
 namespace {
 
 TEST(NoteLabel, TakesTheFirstSentence) {
@@ -51,4 +51,4 @@ TEST(NoteLabel, SanitiseRejectsWhatDoesNotSurvive) {
 }
 
 }  // namespace
-}  // namespace sotto::core
+}  // namespace ambient::core

@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>One transcript row; live turns carry no speaker until the seal.</summary>
 public sealed record TranscriptTurnItem(string Speaker, string TimeLabel, string Text);

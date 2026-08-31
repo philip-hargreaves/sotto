@@ -6,7 +6,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 namespace hresults {
 inline constexpr std::uint32_t kDeviceInvalidated = 0x88890004;
@@ -36,4 +36,4 @@ inline SourceEnd EndForCaptureError(const char* call, std::uint32_t hr) {
     }
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

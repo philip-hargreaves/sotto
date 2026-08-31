@@ -1,8 +1,8 @@
-using Sotto.App.Core;
-using Sotto.App.Core.Hosting;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core;
+using Ambient.App.Core.Hosting;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class SettingsViewModelTest
 {
@@ -149,9 +149,9 @@ public class SettingsViewModelTest
         Assert.True(settings.DemoTrayEnabled);
     }
 
-    private sealed class FixedMachine : Sotto.App.Core.Metrics.IMachineInfoProvider
+    private sealed class FixedMachine : Ambient.App.Core.Metrics.IMachineInfoProvider
     {
-        public Sotto.App.Core.Metrics.MachineInfo Describe() =>
+        public Ambient.App.Core.Metrics.MachineInfo Describe() =>
             new("TestCpu", 32, "TestOs", [], null);
     }
 
@@ -160,7 +160,7 @@ public class SettingsViewModelTest
     {
         var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(dir);
-        var collector = new Sotto.App.Core.Metrics.PerformanceCollector(
+        var collector = new Ambient.App.Core.Metrics.PerformanceCollector(
             new FakeEngineClient(), () => true, () => null, Path.Combine(dir, "metrics.jsonl"));
         collector.SessionStarted("mic", 0, null);
         collector.StopRequested();
@@ -171,7 +171,7 @@ public class SettingsViewModelTest
         settings.ExportPerformanceReportCommand.Execute(null);
 
         Assert.StartsWith("saved ", settings.ExportResult);
-        var report = Directory.GetFiles(dir, "sotto-perf-*.html").Single();
+        var report = Directory.GetFiles(dir, "ambient-perf-*.html").Single();
         Assert.Contains("TestCpu", File.ReadAllText(report));
         Directory.Delete(dir, recursive: true);
     }

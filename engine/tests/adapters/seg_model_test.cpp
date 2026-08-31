@@ -11,7 +11,7 @@
 
 #include "adapters/diarisation/segmenter.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 // Research check D: per-frame powerset argmax agreement is the faithfulness
@@ -19,7 +19,7 @@ namespace {
 // log-probs carry harmless bi-LSTM float noise. The decode gate then holds
 // our change points and overlap spans against the reference decode of the
 // same windows, tolerant to one ~17 ms frame of drift
-constexpr const char* kFixtureDir = SOTTO_DIAR_FIXTURE_DIR;
+constexpr const char* kFixtureDir = AMBIENT_DIAR_FIXTURE_DIR;
 constexpr std::uint64_t kFrameTolerance = 300;  // one seg frame is ~272 samples
 
 std::vector<float> LoadWav(const std::string& path) {
@@ -55,7 +55,7 @@ TEST(SegModel, StagedExportMatchesTheResearchArgmax) {
              static_cast<std::streamsize>(reference.size()));
     ASSERT_TRUE(bin.good());
 
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
     auto loaded = runtime.Load(store, "segmentation", "default", "model.onnx");
     EXPECT_EQ(loaded.device, "CPU");
@@ -90,7 +90,7 @@ TEST(SegModel, TheDecodeReproducesTheReferenceChangePointsAndOverlap) {
     const auto meta = LoadMeta();
     const auto audio = LoadWav(meta.at("wav"));
 
-    const models::ModelStore store{std::filesystem::path(SOTTO_MODELS_DIR)};
+    const models::ModelStore store{std::filesystem::path(AMBIENT_MODELS_DIR)};
     models::OvRuntime runtime;
     Segmenter segmenter(store, runtime);
     const auto result = segmenter.Run(audio);
@@ -115,4 +115,4 @@ TEST(SegModel, TheDecodeReproducesTheReferenceChangePointsAndOverlap) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

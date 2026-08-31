@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// Starts one engine process, already bound so it cannot outlive the app.

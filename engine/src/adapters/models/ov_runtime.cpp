@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace sotto::models {
+namespace ambient::models {
 
 std::string OvRuntime::ResolveDevice(const std::string& requested) {
     if (requested == "CPU") {
@@ -64,4 +64,4 @@ LoadedModel OvRuntime::Load(const ModelStore& store, std::string_view task, std:
     return loaded;
 }
 
-}  // namespace sotto::models
+}  // namespace ambient::models

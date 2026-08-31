@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>A capture endpoint as the engine listed it; the id is WASAPI's.</summary>
 public sealed record MicDevice(string Id, string Name, string ShortName, bool IsDefault, bool Bluetooth);

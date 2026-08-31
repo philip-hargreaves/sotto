@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>
 /// Tokens per second over a short rolling window, one Token() per streamed

@@ -8,7 +8,7 @@
 
 // EcoQoS throttling measured finalise 4.0 -> 6.3 s; engine, note host and
 // shell all opt out, so the state never depends on one call
-namespace sotto::host {
+namespace ambient::host {
 
 struct ThrottlingState {
     bool known = false;      // read-back succeeded
@@ -50,4 +50,4 @@ inline std::string Describe(const ThrottlingState& state) {
     return "default";
 }
 
-}  // namespace sotto::host
+}  // namespace ambient::host

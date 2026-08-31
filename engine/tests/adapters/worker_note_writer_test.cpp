@@ -10,15 +10,15 @@
 
 #include "adapters/note/worker_note_writer.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 namespace {
 
-const std::filesystem::path kModels = SOTTO_MODELS_DIR;
+const std::filesystem::path kModels = AMBIENT_MODELS_DIR;
 
 std::filesystem::path HostExe() {
     wchar_t path[MAX_PATH]{};
     GetModuleFileNameW(nullptr, path, MAX_PATH);
-    return std::filesystem::path(path).parent_path().parent_path() / "sotto_note_host.exe";
+    return std::filesystem::path(path).parent_path().parent_path() / "ambient_note_host.exe";
 }
 
 std::filesystem::path PromptPath() {
@@ -88,7 +88,7 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
             // The first streamed words prove generation is mid-flight; then
             // the worker dies under it
             if (partial.size() > 20 && !killed.exchange(true)) {
-                std::system("taskkill /IM sotto_note_host.exe /F >nul 2>&1");
+                std::system("taskkill /IM ambient_note_host.exe /F >nul 2>&1");
             }
         });
 
@@ -98,7 +98,7 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
 }
 
 TEST(WorkerNoteWriter, AMissingHostFailsLoudly) {
-    WorkerNoteWriter writer("C:/nowhere/sotto_note_host.exe", kModels, PromptPath());
+    WorkerNoteWriter writer("C:/nowhere/ambient_note_host.exe", kModels, PromptPath());
     EXPECT_THROW(writer.Write(ElbowTranscript(), {}, nullptr), std::runtime_error);
 }
 
@@ -108,4 +108,4 @@ TEST(WorkerNoteWriter, AnEmptyTranscriptRefusesToWrite) {
 }
 
 }  // namespace
-}  // namespace sotto::note
+}  // namespace ambient::note

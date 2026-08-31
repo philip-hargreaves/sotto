@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 asr::Turn Spoken(std::uint64_t first, std::uint64_t count, std::string text) {
@@ -80,4 +80,4 @@ TEST(ReconcileTurns, SingleWordEchoesAreBelowTheFloor) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

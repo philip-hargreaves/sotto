@@ -1,4 +1,4 @@
-namespace Sotto.Contract.Tests;
+namespace Ambient.Contract.Tests;
 
 /// <summary>
 /// The session methods and the notifications they produce, against the real
@@ -40,7 +40,7 @@ public class SessionContractTest
         U32(40, (uint)(frames * 2));
 
         var path = Path.Combine(
-            Path.GetTempPath(), $"sotto-silence-{Guid.NewGuid():N}.wav");
+            Path.GetTempPath(), $"ambient-silence-{Guid.NewGuid():N}.wav");
         File.WriteAllBytes(path, bytes);
         return path;
     }
@@ -52,7 +52,7 @@ public class SessionContractTest
         try
         {
             await using var engine =
-                EngineProcess.Start($"LOCAL\\sotto-session-{Guid.NewGuid():N}", wav);
+                EngineProcess.Start($"LOCAL\\ambient-session-{Guid.NewGuid():N}", wav);
             var notifications = new List<string>();
             var turnTexts = new List<string>();
             var patientReady = new TaskCompletionSource(
@@ -107,7 +107,7 @@ public class SessionContractTest
 
             // Two sessions ran: the cancelled one left nothing, the stopped one
             // is in the one database; the readback test checks its contents
-            Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "sotto.db")));
+            Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "ambient.db")));
             Assert.False(Directory.Exists(Path.Combine(engine.StoreRoot, "sessions")));
         }
         finally

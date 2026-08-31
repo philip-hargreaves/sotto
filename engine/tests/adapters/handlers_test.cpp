@@ -10,12 +10,12 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "core/version.hpp"
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 namespace {
 
 json HelloParams() {
     return json{
-        {"name", "sotto-shell"}, {"version", "0.1.0"}, {"protocolVersion", kProtocolVersion}};
+        {"name", "ambient-shell"}, {"version", "0.1.0"}, {"protocolVersion", kProtocolVersion}};
 }
 
 const json& ResultOf(const std::variant<json, Error>& outcome) {
@@ -27,8 +27,8 @@ TEST(Handlers, HelloAnswersWithTheEngineIdentity) {
 
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
     const auto& result = ResultOf(outcome);
-    EXPECT_EQ(result["name"], sotto::kName);
-    EXPECT_EQ(result["version"], sotto::kVersion);
+    EXPECT_EQ(result["name"], ambient::kName);
+    EXPECT_EQ(result["version"], ambient::kVersion);
     EXPECT_EQ(result["protocolVersion"], kProtocolVersion);
 }
 
@@ -58,8 +58,8 @@ TEST(Handlers, HelloIgnoresWhatThePeerClaimsAboutItself) {
         json{{"name", "impostor"}, {"version", "9.9.9"}, {"protocolVersion", kProtocolVersion}});
 
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
-    EXPECT_EQ(ResultOf(outcome)["name"], sotto::kName);
-    EXPECT_EQ(ResultOf(outcome)["version"], sotto::kVersion);
+    EXPECT_EQ(ResultOf(outcome)["name"], ambient::kName);
+    EXPECT_EQ(ResultOf(outcome)["version"], ambient::kVersion);
 }
 
 TEST(Handlers, EchoReturnsThePayload) {
@@ -79,13 +79,13 @@ TEST(Handlers, EchoPreservesClinicalNonAscii) {
 }
 
 json LoadFixture(const std::string& name) {
-    std::ifstream in(std::string(SOTTO_FIXTURE_DIR) + "/" + name);
+    std::ifstream in(std::string(AMBIENT_FIXTURE_DIR) + "/" + name);
     if (!in.is_open()) throw std::runtime_error("missing fixture: " + name);
     return json::parse(in);
 }
 
 TEST(Handlers, ModelsListMatchesTheFixture) {
-    const auto root = std::filesystem::temp_directory_path() / "sotto-handlers-models";
+    const auto root = std::filesystem::temp_directory_path() / "ambient-handlers-models";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "whisper-turbo-int8");
     std::ofstream(root / "whisper-turbo-int8" / "manifest.json")
@@ -93,7 +93,7 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
         << R"( "tier": "default", "licence": "MIT", "runtime": {"device": "GPU"},)"
         << R"( "files": {"model.xml": "00"}})";
 
-    const sotto::models::ModelStore store(root);
+    const ambient::models::ModelStore store(root);
     const json built = MakeResult(std::int64_t{7}, HandleModels(store));
     EXPECT_EQ(built, LoadFixture("models-list.json"));
     std::filesystem::remove_all(root);
@@ -101,14 +101,14 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
 
 struct SessionStoreFixture {
     std::filesystem::path root;
-    std::unique_ptr<sotto::store::SqliteSessionStore> store;
+    std::unique_ptr<ambient::store::SqliteSessionStore> store;
 
     SessionStoreFixture() {
         root = std::filesystem::temp_directory_path() /
-               ("sotto-handlers-sessions-" +
+               ("ambient-handlers-sessions-" +
                 std::to_string(::testing::UnitTest::GetInstance()->random_seed()) + "-" +
                 ::testing::UnitTest::GetInstance()->current_test_info()->name());
-        store = std::make_unique<sotto::store::SqliteSessionStore>(root, std::chrono::hours(1));
+        store = std::make_unique<ambient::store::SqliteSessionStore>(root, std::chrono::hours(1));
     }
 
     ~SessionStoreFixture() {
@@ -152,7 +152,7 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
     SessionStoreFixture fixture;
     const auto id = fixture.store->Begin({16000, "", ""});
     fixture.store->Finalise(id);
-    fixture.store->SaveDocument(id, sotto::store::DocumentKind::kNote,
+    fixture.store->SaveDocument(id, ambient::store::DocumentKind::kNote,
                                 {.text = "The patient presents with a swollen left elbow.",
                                  .style = "soap",
                                  .detail = "concise"});
@@ -170,7 +170,7 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
         EXPECT_TRUE(note.contains(key)) << key;
     }
 
-    fixture.store->EditDocument(id, sotto::store::DocumentKind::kNote, "edited");
+    fixture.store->EditDocument(id, ambient::store::DocumentKind::kNote, "edited");
     const json edited = std::get<json>(HandleSessionNote(*fixture.store, json{{"id", id}}));
     EXPECT_EQ(edited["text"], "edited");
     EXPECT_TRUE(edited["editedAt"].is_string());
@@ -180,7 +180,7 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
 }
 
 TEST(Handlers, SessionPatientCarriesTheTranslationWhenStored) {
-    using sotto::store::DocumentKind;
+    using ambient::store::DocumentKind;
     SessionStoreFixture fixture;
     const auto id = fixture.store->Begin({16000, "", ""});
     fixture.store->Finalise(id);
@@ -204,7 +204,7 @@ TEST(Handlers, SessionPatientCarriesTheTranslationWhenStored) {
 }
 
 TEST(Handlers, SessionListCarriesTheLabelAndTheLatestEdit) {
-    using sotto::store::DocumentKind;
+    using ambient::store::DocumentKind;
     SessionStoreFixture fixture;
     const auto id = fixture.store->Begin({16000, "", ""});
     fixture.store->Finalise(id);
@@ -253,7 +253,7 @@ TEST(Handlers, SessionMethodsRejectAMissingId) {
 }
 
 TEST(Handlers, AudioInputsCarryThePickerFields) {
-    const std::vector<sotto::audio::CaptureDevice> devices{
+    const std::vector<ambient::audio::CaptureDevice> devices{
         {"{0.0.1}.{aa}", "Microphone Array (Realtek(R) Audio)", "Microphone Array", true, false},
         {"{0.0.1}.{bb}", "Headset (H800 Hands-Free)", "Headset", false, true},
     };
@@ -276,8 +276,8 @@ TEST(Handlers, NoMicrophonesIsAnEmptyListNotAnError) {
 }
 
 TEST(Handlers, AnEmptyModelStoreListsNothing) {
-    const sotto::models::ModelStore store(std::filesystem::temp_directory_path() /
-                                          "sotto-no-models");
+    const ambient::models::ModelStore store(std::filesystem::temp_directory_path() /
+                                            "ambient-no-models");
     const json result = HandleModels(store);
     EXPECT_TRUE(result["models"].is_array());
     EXPECT_TRUE(result["models"].empty());
@@ -299,4 +299,4 @@ TEST(Handlers, EchoRejectsAMissingOrNonStringPayload) {
 }
 
 }  // namespace
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

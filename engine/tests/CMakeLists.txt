@@ -55,32 +55,32 @@ add_executable(engine_tests
     adapters/wav_source_test.cpp
     adapters/whisper_worker_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
-    SOTTO_CMAKE_VERSION="${sotto_VERSION}"
-    SOTTO_FIXTURE_DIR="${sotto_SOURCE_DIR}/schema/fixtures"
-    SOTTO_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
+    AMBIENT_CMAKE_VERSION="${ambient_VERSION}"
+    AMBIENT_FIXTURE_DIR="${ambient_SOURCE_DIR}/schema/fixtures"
+    AMBIENT_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
 
 # The recovery test's kill victim
 add_executable(store_crash_helper
     adapters/store_crash_helper.cpp)
-target_link_libraries(store_crash_helper PRIVATE sotto_storage sotto_warnings)
+target_link_libraries(store_crash_helper PRIVATE ambient_storage ambient_warnings)
 add_dependencies(engine_tests store_crash_helper)
 target_link_libraries(engine_tests PRIVATE
-    sotto_ipc sotto_audio sotto_diarisation sotto_models sotto_storage sotto_transcription
-    sotto_warnings openvino::genai GTest::gtest_main)
+    ambient_ipc ambient_audio ambient_diarisation ambient_models ambient_storage ambient_transcription
+    ambient_warnings openvino::genai GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute
 add_executable(capture_tests
     adapters/wasapi_capture_test.cpp)
 target_link_libraries(capture_tests PRIVATE
-    sotto_audio sotto_warnings GTest::gtest_main)
+    ambient_audio ambient_warnings GTest::gtest_main)
 
 # Same mechanism for tests needing the Intel GPU
 add_executable(gpu_tests
     adapters/ov_device_test.cpp
     adapters/ov_runtime_test.cpp)
 target_link_libraries(gpu_tests PRIVATE
-    sotto_models sotto_warnings openvino::genai GTest::gtest_main)
+    ambient_models ambient_warnings openvino::genai GTest::gtest_main)
 
 # And for tests needing staged model weights
 add_executable(models_tests
@@ -98,21 +98,21 @@ add_executable(models_tests
     adapters/whisper_real_test.cpp
     adapters/worker_note_writer_test.cpp)
 target_compile_definitions(models_tests PRIVATE
-    SOTTO_MODELS_DIR="${sotto_SOURCE_DIR}/models"
-    SOTTO_DIAR_FIXTURE_DIR="${sotto_SOURCE_DIR}/engine/tests/fixtures/diarisation")
+    AMBIENT_MODELS_DIR="${ambient_SOURCE_DIR}/models"
+    AMBIENT_DIAR_FIXTURE_DIR="${ambient_SOURCE_DIR}/engine/tests/fixtures/diarisation")
 target_link_libraries(models_tests PRIVATE
-    sotto_diarisation sotto_models sotto_note sotto_transcription sotto_translate sotto_vad
-    sotto_warnings nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
+    ambient_diarisation ambient_models ambient_note ambient_transcription ambient_translate ambient_vad
+    ambient_warnings nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
 # Dev evaluation tool for the research acceptance scorer; never shipped
 add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
-target_link_libraries(diar_eval_runner PRIVATE sotto_diarisation sotto_transcription sotto_warnings)
+target_link_libraries(diar_eval_runner PRIVATE ambient_diarisation ambient_transcription ambient_warnings)
 
-sotto_deploy_openvino(ov_test_runtime)
+ambient_deploy_openvino(ov_test_runtime)
 add_dependencies(diar_eval_runner ov_test_runtime)
 add_dependencies(engine_tests ov_test_runtime)
 add_dependencies(gpu_tests ov_test_runtime)
-add_dependencies(models_tests ov_test_runtime sotto_note_host)
+add_dependencies(models_tests ov_test_runtime ambient_note_host)
 
 include(GoogleTest)
 # Cold CI runners can take >5 s (the default) just to start a fresh exe

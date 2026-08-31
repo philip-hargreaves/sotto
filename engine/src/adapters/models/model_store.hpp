@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace sotto::models {
+namespace ambient::models {
 
 // Streaming SHA-256, lowercase hex; shared by verification and test tooling
 std::string Sha256File(const std::filesystem::path& path);
@@ -41,4 +41,4 @@ class ModelStore {
     std::vector<ModelInfo> models_;
 };
 
-}  // namespace sotto::models
+}  // namespace ambient::models

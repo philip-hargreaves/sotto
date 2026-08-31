@@ -17,8 +17,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sotto.Client\Sotto.Client.csproj" />
-    <ProjectReference Include="..\Sotto.App.Core\Sotto.App.Core.csproj" />
+    <ProjectReference Include="..\Ambient.Client\Ambient.Client.csproj" />
+    <ProjectReference Include="..\Ambient.App.Core\Ambient.App.Core.csproj" />
   </ItemGroup>
 
   <!-- Ship the engine beside the app when it has been built; F5 works without it.
@@ -26,12 +26,12 @@
        models and makes every timing observation misleading -->
   <PropertyGroup>
     <EnginePreset>release</EnginePreset>
-    <EngineBinary>..\..\build\$(EnginePreset)\engine\sotto_engine.exe</EngineBinary>
+    <EngineBinary>..\..\build\$(EnginePreset)\engine\ambient_engine.exe</EngineBinary>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(EngineBinary)')">
-    <Content Include="$(EngineBinary)" Link="sotto_engine.exe" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(EngineBinary)" Link="ambient_engine.exe" CopyToOutputDirectory="PreserveNewest" />
     <!-- The note worker; without it the engine writes notes in-process -->
-    <Content Include="..\..\build\$(EnginePreset)\engine\sotto_note_host.exe" Link="sotto_note_host.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\build\$(EnginePreset)\engine\sotto_note_host.exe')" />
+    <Content Include="..\..\build\$(EnginePreset)\engine\ambient_note_host.exe" Link="ambient_note_host.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\build\$(EnginePreset)\engine\ambient_note_host.exe')" />
     <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build -->
     <Content Include="..\..\build\$(EnginePreset)\engine\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\build\$(EnginePreset)\engine\cache.json" Link="cache.json" CopyToOutputDirectory="PreserveNewest" />

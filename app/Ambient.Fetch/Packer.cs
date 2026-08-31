@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.Fetch;
+namespace Ambient.Fetch;
 
 /// <summary>
 /// Prepares one pack for publishing: shards files over the asset cap into

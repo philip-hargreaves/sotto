@@ -8,47 +8,48 @@
 #include "adapters/models/model_store.hpp"
 #include "core/session_controller.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 class OvRuntime;
-}  // namespace sotto::models
+}  // namespace ambient::models
 
-namespace sotto::translate {
+namespace ambient::translate {
 class ITranslator;
 class TranslateLane;
-}  // namespace sotto::translate
+}  // namespace ambient::translate
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 std::variant<json, Error> HandleHello(const json& params);
 
 std::variant<json, Error> HandleEcho(const json& params);
 
-json HandleModels(const sotto::models::ModelStore& models);
+json HandleModels(const ambient::models::ModelStore& models);
 
-json HandleAudioInputs(const std::vector<sotto::audio::CaptureDevice>& devices);
+json HandleAudioInputs(const std::vector<ambient::audio::CaptureDevice>& devices);
 
-json HandleSessionList(sotto::store::ISessionStore& sessions);
+json HandleSessionList(ambient::store::ISessionStore& sessions);
 
-std::variant<json, Error> HandleSessionNote(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionNote(ambient::store::ISessionStore& sessions,
                                             const json& params);
 
-std::variant<json, Error> HandleSessionPatient(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionPatient(ambient::store::ISessionStore& sessions,
                                                const json& params);
 
-std::variant<json, Error> HandleSessionTranscript(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionTranscript(ambient::store::ISessionStore& sessions,
                                                   const json& params);
 
-std::variant<json, Error> HandleSessionDelete(sotto::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionDelete(ambient::store::ISessionStore& sessions,
                                               const json& params);
 
 // Every method the engine serves. first_use: model caches were cold at
 // launch, so the one-off compiles are running and readiness reports them.
-void RegisterMethods(PipeServer& server, sotto::audio::SessionController& controller,
-                     const sotto::models::ModelStore& models, sotto::store::ISessionStore& sessions,
-                     sotto::metrics::Registry* metrics = nullptr,
-                     sotto::models::OvRuntime* runtime = nullptr,
-                     sotto::translate::ITranslator* translator = nullptr,
-                     sotto::translate::TranslateLane* translate_lane = nullptr,
+void RegisterMethods(PipeServer& server, ambient::audio::SessionController& controller,
+                     const ambient::models::ModelStore& models,
+                     ambient::store::ISessionStore& sessions,
+                     ambient::metrics::Registry* metrics = nullptr,
+                     ambient::models::OvRuntime* runtime = nullptr,
+                     ambient::translate::ITranslator* translator = nullptr,
+                     ambient::translate::TranslateLane* translate_lane = nullptr,
                      bool first_use = false);
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

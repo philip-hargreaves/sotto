@@ -2,7 +2,7 @@
  "wav": "C:\\dev\\intelliscribe\\bench\\transcription\\mixed\\day1_consultation01_mixed.wav",
  "model": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\pyannote-seg3.onnx",
  "openvino": "2026.2.1-21919-ede283a88e3-releases/2026/2",
- "generator": "bench/diarisation/parity/export_sotto_seg_fixtures.py",
+ "generator": "bench/diarisation/parity/export_ambient_seg_fixtures.py",
  "windows": 46,
  "frames_per_window": 589,
  "classes_file": "seg_classes.bin",

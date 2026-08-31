@@ -23,7 +23,7 @@
 #include "adapters/audio/capture_errors.hpp"
 #include "adapters/audio/capture_timeline.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 namespace {
 
@@ -181,7 +181,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     }
     // One line per stream: device rate and open time make a dead or slow
     // microphone (a Bluetooth link waking is seconds) diagnosable from the log
-    std::fprintf(stderr, "sotto-engine: capture open, native %lu Hz, %.2f s\n",
+    std::fprintf(stderr, "ambient-engine: capture open, native %lu Hz, %.2f s\n",
                  static_cast<unsigned long>(native_rate),
                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t_init).count());
 
@@ -223,7 +223,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
             // peak 0.0000 with packets flowing is the LE Audio failure
             // signature: a healthy-looking stream of unflagged zeros
             std::fprintf(stderr,
-                         "sotto-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
+                         "ambient-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
                          static_cast<unsigned long long>(stream_packets),
                          static_cast<unsigned long long>(stream_silent), stream_peak);
             return {SourceEndReason::kStopped, ""};
@@ -280,4 +280,4 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     }
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

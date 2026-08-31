@@ -6,7 +6,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Plays a mono 16 kHz wav through the audio port; the CI microphone
 // stand-in and the replay source
@@ -35,4 +35,4 @@ class WavSource : public IAudioSource {
     std::atomic<bool> monitor_{false};
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

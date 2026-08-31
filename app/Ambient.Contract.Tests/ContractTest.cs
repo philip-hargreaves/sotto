@@ -1,8 +1,8 @@
 using System.IO.Pipes;
 using System.Text.Json;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.Contract.Tests;
+namespace Ambient.Contract.Tests;
 
 /// <summary>
 /// The real shell client against the real engine process. This is the evidence
@@ -21,7 +21,7 @@ public class ContractTest
 
         var result = await client.RequestAsync(
             "engine/hello",
-            new { name = "sotto-shell", version = "0.1.0", protocolVersion = Protocol.ProtocolVersion },
+            new { name = "ambient-shell", version = "0.1.0", protocolVersion = Protocol.ProtocolVersion },
             Timeout);
         var peer = result.Deserialize<PeerInfo>(Protocol.JsonOptions);
 
@@ -62,7 +62,7 @@ public class ContractTest
     {
         await using var engine = EngineProcess.Start();
         using var raw = new NamedPipeClientStream(
-            ".", "LOCAL\\sotto-engine", PipeAccessRights.ReadData | PipeAccessRights.WriteData
+            ".", "LOCAL\\ambient-engine", PipeAccessRights.ReadData | PipeAccessRights.WriteData
                 | PipeAccessRights.ReadAttributes | PipeAccessRights.WriteAttributes
                 | PipeAccessRights.ReadPermissions,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,

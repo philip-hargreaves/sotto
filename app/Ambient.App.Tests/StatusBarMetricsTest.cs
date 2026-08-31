@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>The live numbers behind the status bar's model chips.</summary>
 public class StatusBarMetricsTest

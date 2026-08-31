@@ -9,7 +9,7 @@
 #include "core/per_turn.hpp"
 #include "core/slice_refinement.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 DiarWorker::DiarWorker(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder)
     : vad_(vad), segmenter_(segmenter), embedder_(embedder) {
@@ -167,4 +167,4 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
     }
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

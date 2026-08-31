@@ -1,9 +1,9 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Sotto.App.Core.Hosting;
-using Sotto.Client;
+using Ambient.App.Core.Hosting;
+using Ambient.Client;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>A file replayed as the session's audio source.</summary>
 public sealed record ReplayRequest(string Path, double Speed, bool Monitor);

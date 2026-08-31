@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sotto.Fetch\Sotto.Fetch.csproj" />
+    <ProjectReference Include="..\Ambient.Fetch\Ambient.Fetch.csproj" />
   </ItemGroup>
 
 </Project>

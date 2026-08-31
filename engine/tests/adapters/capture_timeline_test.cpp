@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 // 48 kHz native, 16 kHz target, 10 ms packets
@@ -109,4 +109,4 @@ TEST(CaptureTimeline, FlagsAreCountedIndependentlyOfPositions) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

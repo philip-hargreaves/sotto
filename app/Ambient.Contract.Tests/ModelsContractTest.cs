@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.Contract.Tests;
+namespace Ambient.Contract.Tests;
 
 /// <summary>
 /// The engine/models method against the real engine.
@@ -12,7 +12,7 @@ public class ModelsContractTest
     [Fact]
     public async Task AnEmptyStoreListsNothing()
     {
-        await using var engine = EngineProcess.Start($"LOCAL\\sotto-models-{Guid.NewGuid():N}");
+        await using var engine = EngineProcess.Start($"LOCAL\\ambient-models-{Guid.NewGuid():N}");
         await using var client = await engine.ConnectAsync();
 
         var result = await client.RequestAsync("engine/models", null, Timeout);
@@ -24,7 +24,7 @@ public class ModelsContractTest
     [Fact]
     public async Task AStagedManifestIsListedWithItsRole()
     {
-        var modelsRoot = Path.Combine(Path.GetTempPath(), $"sotto-models-{Guid.NewGuid():N}");
+        var modelsRoot = Path.Combine(Path.GetTempPath(), $"ambient-models-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path.Combine(modelsRoot, "silero-vad"));
         await File.WriteAllTextAsync(
             Path.Combine(modelsRoot, "silero-vad", "manifest.json"),
@@ -35,7 +35,7 @@ public class ModelsContractTest
         try
         {
             await using var engine = EngineProcess.Start(
-                $"LOCAL\\sotto-models-{Guid.NewGuid():N}", null, modelsRoot);
+                $"LOCAL\\ambient-models-{Guid.NewGuid():N}", null, modelsRoot);
             await using var client = await engine.ConnectAsync();
 
             var result = await client.RequestAsync("engine/models", null, Timeout);

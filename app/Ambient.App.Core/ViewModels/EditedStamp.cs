@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>
 /// "Edited 10:31" when the edit fell on the consultation's own day,

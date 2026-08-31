@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using Sotto.App.Core.Hosting;
+using Ambient.App.Core.Hosting;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// The assembled supervision loop on real processes: a stand-in engine is

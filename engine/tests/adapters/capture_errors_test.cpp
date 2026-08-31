@@ -7,7 +7,7 @@
 #include <audioclient.h>
 #include <windows.h>
 
-namespace sotto::audio {
+namespace ambient::audio {
 namespace {
 
 // The header's constants must be the SDK's, proven at compile time
@@ -52,4 +52,4 @@ TEST(CaptureErrors, AnythingElseCarriesTheCallAndCode) {
 }
 
 }  // namespace
-}  // namespace sotto::audio
+}  // namespace ambient::audio

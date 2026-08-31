@@ -2,7 +2,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 
-namespace Sotto.Client.Tests;
+namespace Ambient.Client.Tests;
 
 /// <summary>In-process pipe server driven by a per-request script.</summary>
 internal sealed class FakeEngine : IAsyncDisposable

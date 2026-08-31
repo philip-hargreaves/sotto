@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Window
-    x:Class="Sotto.App.MainWindow"
+    x:Class="Ambient.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Sotto">
+    Title="Ambient">
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
@@ -14,7 +14,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="Sotto" />
+        <TitleBar x:Name="AppTitleBar" Title="Ambient" />
 
         <ContentControl
             x:Name="NavHost"

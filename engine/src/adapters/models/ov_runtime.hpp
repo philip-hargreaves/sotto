@@ -8,7 +8,7 @@
 
 #include "adapters/models/model_store.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 
 struct LoadedModel {
     ov::CompiledModel model;
@@ -32,4 +32,4 @@ class OvRuntime {
     ov::Core core_;
 };
 
-}  // namespace sotto::models
+}  // namespace ambient::models

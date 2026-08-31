@@ -12,7 +12,7 @@
 
 #include "ports/translator.hpp"
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 // Runs one translation at a time off the RPC thread, announcing
 // translate/partial, translate/ready and translate/failed.
@@ -51,7 +51,7 @@ class TranslateLane {
                         if (first) {
                             first = false;
                             std::fprintf(
-                                stderr, "sotto-engine: first translated word in %.1f s\n",
+                                stderr, "ambient-engine: first translated word in %.1f s\n",
                                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
                                     .count());
                         }
@@ -90,4 +90,4 @@ class TranslateLane {
     std::atomic<bool> running_{false};
 };
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

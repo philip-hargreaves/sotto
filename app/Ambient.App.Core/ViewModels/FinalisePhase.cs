@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 /// <summary>
 /// The stages of a stop, in order. The engine reports Transcript and

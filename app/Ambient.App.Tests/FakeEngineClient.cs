@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// Test-double engine. After session/stop it pushes note/ready then
@@ -139,7 +139,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
     /// <summary>Served by engine/metrics; healthy by default.</summary>
     public double MetricsRealtimeFactor { get; set; } = 33.4;
 
-    public List<Sotto.App.Core.ViewModels.MicDevice> AudioInputs { get; set; } = [];
+    public List<Ambient.App.Core.ViewModels.MicDevice> AudioInputs { get; set; } = [];
 
     /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
     public bool FirstUse { get; set; }

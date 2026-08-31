@@ -13,7 +13,7 @@
 #include "adapters/storage/db.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 
-namespace sotto::store {
+namespace ambient::store {
 namespace {
 
 using namespace std::chrono_literals;
@@ -26,9 +26,10 @@ struct TempRoot {
     std::filesystem::path path;
 
     TempRoot() {
-        path = std::filesystem::temp_directory_path() /
-               ("sotto-store-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
-                "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
+        path =
+            std::filesystem::temp_directory_path() /
+            ("ambient-store-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+             "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
     }
 
     ~TempRoot() {
@@ -37,7 +38,7 @@ struct TempRoot {
     }
 
     std::filesystem::path DbPath() const {
-        return path / "sotto.db";
+        return path / "ambient.db";
     }
 
     // The first layout's per-session files, for the import test
@@ -808,4 +809,4 @@ TEST(SessionStore, RefusesAStoreFromANewerBuild) {
 }
 
 }  // namespace
-}  // namespace sotto::store
+}  // namespace ambient::store

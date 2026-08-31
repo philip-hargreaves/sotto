@@ -10,7 +10,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Replays a crashed session's stored audio at full speed, then hands the
 // sink to the live source; downstream sees one continuous capture stream
@@ -63,4 +63,4 @@ class ResumeSource : public IAudioSource {
     std::atomic<bool> paused_{false};
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

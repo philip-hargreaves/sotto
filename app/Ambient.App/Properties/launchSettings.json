@@ -1,9 +1,9 @@
 {
   "profiles": {
-    "Sotto.App (Unpackaged)": {
+    "Ambient.App (Unpackaged)": {
       "commandName": "Project"
     },
-    "Sotto.App (Package)": {
+    "Ambient.App (Package)": {
       "commandName": "MsixPackage"
     }
   }

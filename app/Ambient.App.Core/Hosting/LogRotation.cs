@@ -1,4 +1,4 @@
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>Shifts engine.log to engine-1.log and so on, keeping the last
 /// <c>keep</c>; once per run, so a crash's log survives the next launch.</summary>

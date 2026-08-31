@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     const std::filesystem::path root = argv[1];
     const bool cancel_mode = argc > 2 && std::strcmp(argv[2], "cancel") == 0;
 
-    sotto::store::SqliteSessionStore store(root, std::chrono::milliseconds(20));
+    ambient::store::SqliteSessionStore store(root, std::chrono::milliseconds(20));
     const auto id = store.Begin({16000, "", ""});
     std::printf("SESSION %s\n", id.c_str());
     std::fflush(stdout);
@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
 
     // A second connection watches the committed count; the acked number is
     // what the test holds recovery to
-    sotto::store::Db reader(root / "sotto.db");
+    ambient::store::Db reader(root / "ambient.db");
     const std::string count_sql = "SELECT COUNT(*) FROM chunks WHERE session_id = '" + id + "'";
     std::uint64_t turn = 0;
     for (;;) {

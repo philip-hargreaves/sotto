@@ -1,8 +1,8 @@
 using System.Collections.Specialized;
 using Microsoft.UI.Xaml.Controls;
-using Sotto.App.Core.ViewModels;
+using Ambient.App.Core.ViewModels;
 
-namespace Sotto.App.Views;
+namespace Ambient.App.Views;
 
 public sealed partial class TranscriptPaneView : UserControl
 {

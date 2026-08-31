@@ -4,7 +4,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 // CI stand-in when no ASR model is staged
 class ScriptedTranscriber : public ITranscriber {
@@ -36,4 +36,4 @@ class ScriptedTranscriber : public ITranscriber {
     int turns_ = 0;
 };
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

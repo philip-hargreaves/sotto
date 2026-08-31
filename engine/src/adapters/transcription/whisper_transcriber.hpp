@@ -15,16 +15,16 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 class ModelStore;
 class OvRuntime;
-}  // namespace sotto::models
+}  // namespace ambient::models
 
-namespace sotto::metrics {
+namespace ambient::metrics {
 class Registry;
-}  // namespace sotto::metrics
+}  // namespace ambient::metrics
 
-namespace sotto::asr {
+namespace ambient::asr {
 
 using DecodeFn = std::function<std::vector<Turn>(std::span<const float>, std::uint64_t)>;
 
@@ -91,4 +91,4 @@ class WhisperTranscriber : public ITranscriber {
     std::thread worker_;
 };
 
-}  // namespace sotto::asr
+}  // namespace ambient::asr

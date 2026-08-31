@@ -1,6 +1,6 @@
 {
   "id": "demo-tracks",
-  "baseUrl": "https://github.com/philip-hargreaves/sotto/releases/download/weights-v1",
+  "baseUrl": "https://github.com/philip-hargreaves/ambient/releases/download/weights-v1",
   "target": "demo",
   "files": {
     "day1_consultation01_mixed.wav": "40caebae31e53da130d3c61b2a03c86802ad93f0e08730e922cf504fcea03c2b",

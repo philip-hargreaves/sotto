@@ -6,7 +6,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::note {
+namespace ambient::note {
 
 // How the note is written: structure and length, each a prompt file so a
 // change needs no rebuild. Values are validated at the RPC boundary.
@@ -53,4 +53,4 @@ class INoteWriter {
     virtual void Cancel() {}
 };
 
-}  // namespace sotto::note
+}  // namespace ambient::note

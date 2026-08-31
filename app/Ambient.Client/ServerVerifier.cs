@@ -1,7 +1,7 @@
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 
-namespace Sotto.Client;
+namespace Ambient.Client;
 
 /// <summary>
 /// Reads the pid of the process serving a named pipe. The spawner knows which

@@ -8,7 +8,7 @@
 
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // Batch Silero over the whole recording, cut finer than the endpointer;
 // validated configuration - do not retune
@@ -72,4 +72,4 @@ inline std::vector<Region> SpeechRegions(std::span<const float> probabilities,
     return regions;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

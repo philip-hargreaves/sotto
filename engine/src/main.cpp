@@ -46,23 +46,23 @@
 
 namespace {
 
-class WireEvents : public sotto::audio::ISessionEvents {
+class WireEvents : public ambient::audio::ISessionEvents {
    public:
-    explicit WireEvents(sotto::ipc::PipeServer& server) : server_(server) {}
+    explicit WireEvents(ambient::ipc::PipeServer& server) : server_(server) {}
 
-    void OnLevel(const sotto::audio::LevelReading& reading) override {
+    void OnLevel(const ambient::audio::LevelReading& reading) override {
         server_.PushNotification("audio.level",
                                  {{"level", reading.level}, {"clipped", reading.clipped}});
     }
 
-    void OnTurn(const sotto::asr::Turn& turn) override {
+    void OnTurn(const ambient::asr::Turn& turn) override {
         server_.PushNotification("transcript.turn", {{"firstFrame", turn.first_frame},
                                                      {"frameCount", turn.frame_count},
                                                      {"speaker", turn.speaker},
                                                      {"text", turn.text}});
     }
 
-    void OnInterrupted(sotto::audio::SourceEndReason reason, const std::string& detail) override {
+    void OnInterrupted(ambient::audio::SourceEndReason reason, const std::string& detail) override {
         server_.PushNotification("session/interrupted",
                                  {{"reason", ReasonName(reason)}, {"detail", detail}});
     }
@@ -125,7 +125,7 @@ class WireEvents : public sotto::audio::ISessionEvents {
         }
     }
 
-    void SetTranslator(sotto::translate::ITranslator* translator) {
+    void SetTranslator(ambient::translate::ITranslator* translator) {
         translator_ = translator;
     }
 
@@ -148,8 +148,8 @@ class WireEvents : public sotto::audio::ISessionEvents {
     }
 
    private:
-    static const char* ReasonName(sotto::audio::SourceEndReason reason) {
-        return reason == sotto::audio::SourceEndReason::kDeviceLost ? "deviceLost" : "failed";
+    static const char* ReasonName(ambient::audio::SourceEndReason reason) {
+        return reason == ambient::audio::SourceEndReason::kDeviceLost ? "deviceLost" : "failed";
     }
 
     double Seconds(std::chrono::steady_clock::time_point now) const {
@@ -160,11 +160,11 @@ class WireEvents : public sotto::audio::ISessionEvents {
         return std::round(rate * 10.0) / 10.0;
     }
 
-    sotto::ipc::PipeServer& server_;
-    sotto::translate::ITranslator* translator_ = nullptr;
+    ambient::ipc::PipeServer& server_;
+    ambient::translate::ITranslator* translator_ = nullptr;
     std::mutex throttle_mutex_;
     std::map<std::string, std::chrono::steady_clock::time_point> last_partial_;
-    std::map<std::string, sotto::core::ThroughputMeter> meters_;
+    std::map<std::string, ambient::core::ThroughputMeter> meters_;
     const std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
 };
 
@@ -182,11 +182,11 @@ int main(int argc, char* argv[]) {
     try {
         // Flags first, then positional: pipe name, store root, models root, replay wav
         std::vector<std::string> args(argv + 1, argv + argc);
-        const std::string asr_device = sotto::TakeFlag(args, "--asr-device");
-        std::fprintf(stderr, "sotto-engine: power throttling %s\n",
-                     sotto::host::Describe(sotto::host::DisableThrottlingOnSelf()).c_str());
+        const std::string asr_device = ambient::TakeFlag(args, "--asr-device");
+        std::fprintf(stderr, "ambient-engine: power throttling %s\n",
+                     ambient::host::Describe(ambient::host::DisableThrottlingOnSelf()).c_str());
 
-        std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\sotto-engine";
+        std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\ambient-engine";
         if (args.size() > 0) {
             pipe_name = L"\\\\.\\pipe\\" + std::wstring(args[0].begin(), args[0].end());
         }
@@ -200,7 +200,7 @@ int main(int argc, char* argv[]) {
                 local_app_data == nullptr) {
                 throw std::runtime_error("LOCALAPPDATA is not set and no store root was given");
             }
-            store_root = std::filesystem::path(local_app_data) / "sotto" / "store";
+            store_root = std::filesystem::path(local_app_data) / "ambient" / "store";
             std::free(local_app_data);
         }
 
@@ -219,116 +219,117 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        sotto::ipc::PipeServer server(pipe_name);
+        ambient::ipc::PipeServer server(pipe_name);
         WireEvents events(server);
-        sotto::store::SqliteSessionStore session_store(store_root);
+        ambient::store::SqliteSessionStore session_store(store_root);
         // A consultation left by closing the app is left all the same
         session_store.EraseUnretained();
-        sotto::models::ModelStore model_store(models_root);
+        ambient::models::ModelStore model_store(models_root);
 
         // A replay request plays a wav through the same port; a launch-time
         // wav path (CI, scripts) forces every session to replay that file
-        sotto::audio::SourceFactory factory =
+        ambient::audio::SourceFactory factory =
             [forced = args.size() > 3 ? args[3] : std::string()](
-                const std::optional<sotto::audio::ReplaySpec>& replay,
-                const std::string& mic_id) -> std::unique_ptr<sotto::audio::IAudioSource> {
+                const std::optional<ambient::audio::ReplaySpec>& replay,
+                const std::string& mic_id) -> std::unique_ptr<ambient::audio::IAudioSource> {
             if (replay.has_value()) {
-                return std::make_unique<sotto::audio::WavSource>(
-                    replay->path, sotto::audio::WavSource::Config{replay->speed, replay->monitor,
-                                                                  replay->start_frame});
+                return std::make_unique<ambient::audio::WavSource>(
+                    replay->path, ambient::audio::WavSource::Config{replay->speed, replay->monitor,
+                                                                    replay->start_frame});
             }
             if (!forced.empty()) {
-                return std::make_unique<sotto::audio::WavSource>(forced);
+                return std::make_unique<ambient::audio::WavSource>(forced);
             }
-            return std::make_unique<sotto::audio::WasapiCapture>(sotto::audio::WideId(mic_id));
+            return std::make_unique<ambient::audio::WasapiCapture>(ambient::audio::WideId(mic_id));
         };
         // Real transcription when the ASR role is staged, scripted otherwise (CI)
-        sotto::models::OvRuntime ov_runtime;
-        sotto::metrics::Registry metrics;
+        ambient::models::OvRuntime ov_runtime;
+        ambient::metrics::Registry metrics;
         bool first_use = false;
-        std::unique_ptr<sotto::asr::ITranscriber> transcriber;
+        std::unique_ptr<ambient::asr::ITranscriber> transcriber;
         try {
             model_store.Resolve("asr", "default");
             first_use =
                 !std::filesystem::exists(model_store.Resolve("asr", "default").dir / ".cache");
-            transcriber = std::make_unique<sotto::asr::WhisperTranscriber>(model_store, ov_runtime,
-                                                                           asr_device, &metrics);
+            transcriber = std::make_unique<ambient::asr::WhisperTranscriber>(
+                model_store, ov_runtime, asr_device, &metrics);
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: scripted transcripts (%s)\n", e.what());
-            transcriber = std::make_unique<sotto::asr::ScriptedTranscriber>();
+            std::fprintf(stderr, "ambient-engine: scripted transcripts (%s)\n", e.what());
+            transcriber = std::make_unique<ambient::asr::ScriptedTranscriber>();
         }
         // Same pattern for the VAD: real endpointing when staged. Compiles
         // behind the serve loop; session/start waits on it, hello does not
-        std::unique_ptr<sotto::audio::IStreamingVad> vad;
+        std::unique_ptr<ambient::audio::IStreamingVad> vad;
         try {
             model_store.Resolve("vad", "default");
-            vad = std::make_unique<sotto::audio::DeferredVad>([&model_store, &ov_runtime,
-                                                               &metrics] {
+            vad = std::make_unique<ambient::audio::DeferredVad>([&model_store, &ov_runtime,
+                                                                 &metrics] {
                 const auto t0 = std::chrono::steady_clock::now();
-                auto built = std::make_unique<sotto::audio::SileroVad>(model_store, ov_runtime);
+                auto built = std::make_unique<ambient::audio::SileroVad>(model_store, ov_runtime);
                 metrics.RecordLoad(
                     "vad",
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
                 return built;
             });
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: capped windows (%s)\n", e.what());
-            vad = std::make_unique<sotto::audio::PassthroughVad>();
+            std::fprintf(stderr, "ambient-engine: capped windows (%s)\n", e.what());
+            vad = std::make_unique<ambient::audio::PassthroughVad>();
         }
         // Diarisation needs both its models; without them turns simply keep
         // an empty speaker
-        std::unique_ptr<sotto::diar::IDiariser> diariser;
+        std::unique_ptr<ambient::diar::IDiariser> diariser;
         try {
             model_store.Resolve("diarisation", "default");
             model_store.Resolve("segmentation", "default");
-            diariser = std::make_unique<sotto::diar::DeferredDiariser>([&model_store, &ov_runtime,
-                                                                        store_root, &metrics] {
+            diariser = std::make_unique<ambient::diar::DeferredDiariser>([&model_store, &ov_runtime,
+                                                                          store_root, &metrics] {
                 const auto t0 = std::chrono::steady_clock::now();
-                auto built = std::make_unique<sotto::diar::SpeakerDiariser>(model_store, ov_runtime,
-                                                                            store_root);
+                auto built = std::make_unique<ambient::diar::SpeakerDiariser>(
+                    model_store, ov_runtime, store_root);
                 metrics.RecordLoad(
                     "diarisation",
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
                 return built;
             });
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: no speaker labels (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: no speaker labels (%s)\n", e.what());
         }
         // Generation runs in its own supervised process: a GPU driver fault there
         // costs a respawn, never the engine (ADR-0027)
-        std::unique_ptr<sotto::note::INoteWriter> note_writer;
+        std::unique_ptr<ambient::note::INoteWriter> note_writer;
         try {
             model_store.Resolve("note", "default");
             const auto prompt = models_root.parent_path() / "prompts";
             wchar_t exe_path[MAX_PATH]{};
             GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-            const auto host = std::filesystem::path(exe_path).parent_path() / "sotto_note_host.exe";
+            const auto host =
+                std::filesystem::path(exe_path).parent_path() / "ambient_note_host.exe";
             if (std::filesystem::exists(host)) {
                 note_writer =
-                    std::make_unique<sotto::note::WorkerNoteWriter>(host, models_root, prompt);
+                    std::make_unique<ambient::note::WorkerNoteWriter>(host, models_root, prompt);
                 // First use only: the one-off compile runs on an idle GPU, never inside a recording
                 const auto note_dir = model_store.Resolve("note", "default").dir;
                 if (!std::filesystem::exists(note_dir / ".cache")) {
                     first_use = true;
-                    std::fprintf(stderr, "sotto-engine: first use, compiling the note model\n");
+                    std::fprintf(stderr, "ambient-engine: first use, compiling the note model\n");
                     note_writer->Prepare();
                 }
             } else {
                 // Never write in-process: that is the configuration the driver fault corrupts
-                std::fprintf(stderr, "sotto-engine: note DISABLED, %s is missing\n",
+                std::fprintf(stderr, "ambient-engine: note DISABLED, %s is missing\n",
                              host.string().c_str());
             }
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: stub note (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: stub note (%s)\n", e.what());
         }
         // Translation runs on the CPU, so it never contends with the GPU
-        std::unique_ptr<sotto::translate::NllbTranslator> translator;
-        std::unique_ptr<sotto::translate::TranslateLane> translate_lane;
+        std::unique_ptr<ambient::translate::NllbTranslator> translator;
+        std::unique_ptr<ambient::translate::TranslateLane> translate_lane;
         try {
             model_store.Resolve("translation", "default");
             translator =
-                std::make_unique<sotto::translate::NllbTranslator>(model_store, ov_runtime);
-            translate_lane = std::make_unique<sotto::translate::TranslateLane>(
+                std::make_unique<ambient::translate::NllbTranslator>(model_store, ov_runtime);
+            translate_lane = std::make_unique<ambient::translate::TranslateLane>(
                 *translator,
                 [&server, &events](const std::string& method, const nlohmann::json& params) {
                     if (method == "translate/partial") {
@@ -350,25 +351,26 @@ int main(int argc, char* argv[]) {
             const auto translation_dir = model_store.Resolve("translation", "default").dir;
             if (!std::filesystem::exists(translation_dir / ".cache")) {
                 first_use = true;
-                std::fprintf(stderr, "sotto-engine: first use, compiling the translator\n");
+                std::fprintf(stderr, "ambient-engine: first use, compiling the translator\n");
                 translator->Prepare();
             }
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "sotto-engine: no translation (%s)\n", e.what());
+            std::fprintf(stderr, "ambient-engine: no translation (%s)\n", e.what());
         }
         // 10 s, not 3: a Bluetooth microphone link waking measured 1.6-8.8 s
         // before first audio; wired mics answer in well under a second either way
-        sotto::audio::SessionController controller(
+        ambient::audio::SessionController controller(
             std::move(factory), events, session_store, *transcriber, *vad, std::chrono::seconds(10),
-            diariser.get(), 5 * sotto::audio::kSampleRate, note_writer.get(), &metrics);
+            diariser.get(), 5 * ambient::audio::kSampleRate, note_writer.get(), &metrics);
 
-        sotto::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
-                                    &ov_runtime, translator.get(), translate_lane.get(), first_use);
+        ambient::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
+                                      &ov_runtime, translator.get(), translate_lane.get(),
+                                      first_use);
         server.ServeOneClient();
         controller.Stop();
         return 0;
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "sotto-engine: %s\n", e.what());
+        std::fprintf(stderr, "ambient-engine: %s\n", e.what());
         return 1;
     }
 }

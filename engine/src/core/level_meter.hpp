@@ -9,7 +9,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 struct LevelReading {
     float level = 0.0F;  // 0..1 over a dBFS scale from the floor up
@@ -66,4 +66,4 @@ class LevelMeter {
     float envelope_ = 0.0F;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

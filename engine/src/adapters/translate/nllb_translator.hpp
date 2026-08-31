@@ -6,12 +6,12 @@
 
 #include "ports/translator.hpp"
 
-namespace sotto::models {
+namespace ambient::models {
 class ModelStore;
 class OvRuntime;
-}  // namespace sotto::models
+}  // namespace ambient::models
 
-namespace sotto::translate {
+namespace ambient::translate {
 
 // NLLB-200 on the manifest CPU: encoder once, greedy stateful decode;
 // loads on Prepare, else on first use
@@ -34,4 +34,4 @@ class NllbTranslator : public ITranslator {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace sotto::translate
+}  // namespace ambient::translate

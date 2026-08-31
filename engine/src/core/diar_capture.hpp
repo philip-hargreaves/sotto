@@ -6,7 +6,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // The frame below which diarisation state is final: segmentation has passed
 // it and the turn containing it has ended, so later audio changes nothing
@@ -20,4 +20,4 @@ inline std::uint64_t SettledFrontier(std::uint64_t seg_done, std::span<const asr
     return std::min(seg_done, last_turn_end);
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

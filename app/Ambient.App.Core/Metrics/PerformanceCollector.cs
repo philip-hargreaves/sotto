@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.App.Core.Metrics;
+namespace Ambient.App.Core.Metrics;
 
 /// <summary>
 /// Appends one JSON line per finished session to metrics.jsonl: the engine's

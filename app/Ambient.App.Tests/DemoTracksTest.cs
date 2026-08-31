@@ -1,13 +1,13 @@
-using Sotto.App.Core.Demo;
+using Ambient.App.Core.Demo;
 
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 public class DemoTracksTest
 {
     [Fact]
     public void ManifestListsOnlyTracksWhoseWavsExist()
     {
-        var root = Directory.CreateTempSubdirectory("sotto-demo-test");
+        var root = Directory.CreateTempSubdirectory("ambient-demo-test");
         try
         {
             var wav = Path.Combine(root.FullName, "elbow.wav");
@@ -34,7 +34,7 @@ public class DemoTracksTest
     [Fact]
     public void ABrokenManifestYieldsNoTracks()
     {
-        var root = Directory.CreateTempSubdirectory("sotto-demo-test");
+        var root = Directory.CreateTempSubdirectory("ambient-demo-test");
         try
         {
             File.WriteAllText(Path.Combine(root.FullName, "tracks.json"), "not json");

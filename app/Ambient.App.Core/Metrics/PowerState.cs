@@ -2,7 +2,7 @@ using Microsoft.Win32;
 using Windows.Win32;
 using Windows.Win32.System.Power;
 
-namespace Sotto.App.Core.Metrics;
+namespace Ambient.App.Core.Metrics;
 
 /// <summary>
 /// The machine's power situation at a moment: the Windows power-mode slider

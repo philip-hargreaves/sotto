@@ -3,7 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-namespace Sotto.App.Core.Metrics;
+namespace Ambient.App.Core.Metrics;
 
 /// <summary>
 /// Renders metrics.jsonl into one self-contained HTML file: readable in a
@@ -28,7 +28,7 @@ public static class ReportBuilder
 
         var html = new StringBuilder();
         html.Append("<!doctype html><html><head><meta charset=\"utf-8\">");
-        html.Append("<title>Sotto Performance Report</title><style>");
+        html.Append("<title>Ambient Performance Report</title><style>");
         html.Append("body{font-family:Segoe UI,sans-serif;max-width:72rem;margin:2rem auto;");
         html.Append("padding:0 1rem;color:#1a1a1a}h1{font-size:1.5rem;margin-bottom:.2rem}");
         html.Append("h2{font-size:1.1rem;margin:2rem 0 .2rem}table{border-collapse:collapse;");
@@ -37,7 +37,7 @@ public static class ReportBuilder
         html.Append("font-weight:600}");
         html.Append(".sub{color:#666;font-size:.9rem;margin:.1rem 0}pre{background:#f6f6f6;");
         html.Append("padding:1rem;overflow-x:auto;font-size:.8rem}</style></head><body>");
-        html.Append("<h1>Sotto Performance Report</h1>");
+        html.Append("<h1>Ambient Performance Report</h1>");
         html.Append(CultureInfo.InvariantCulture,
             $"<p class=\"sub\">Exported {exported:yyyy-MM-dd HH:mm} UTC · "
             + $"{sessions.Count} recorded sessions</p>");
@@ -53,7 +53,7 @@ public static class ReportBuilder
         }
 
         html.Append("</pre></details>");
-        html.Append("<script id=\"sotto-metrics\" type=\"application/json\">");
+        html.Append("<script id=\"ambient-metrics\" type=\"application/json\">");
         html.Append(JsonSerializer.Serialize(new { machine, sessions }));
         html.Append("</script></body></html>");
         return html.ToString();

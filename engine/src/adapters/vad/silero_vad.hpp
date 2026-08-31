@@ -6,7 +6,7 @@
 #include "adapters/models/ov_runtime.hpp"
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Silero through the model store, on CPU, loaded eagerly: ~0.1 ms per hop,
 // so it runs inline on the capture path
@@ -26,4 +26,4 @@ class SileroVad : public IStreamingVad {
     std::array<float, kContext> context_{};
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

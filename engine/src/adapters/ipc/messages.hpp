@@ -8,7 +8,7 @@
 #include <utility>
 #include <variant>
 
-namespace sotto::ipc {
+namespace ambient::ipc {
 
 using nlohmann::json;
 
@@ -126,4 +126,4 @@ inline std::optional<PeerInfo> PeerInfoFromJson(const json& j) {
                     kProtocolVersion};
 }
 
-}  // namespace sotto::ipc
+}  // namespace ambient::ipc

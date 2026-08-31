@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://sotto.dev/schema/messages.schema.json",
-  "title": "sotto IPC methods",
+  "$id": "https://ambient.dev/schema/messages.schema.json",
+  "title": "ambient IPC methods",
   "description": "Method payloads. Engine domain errors use codes -32000..-32099; the JSON-RPC reserved codes keep their spec meaning.",
   "$defs": {
     "peerInfo": {

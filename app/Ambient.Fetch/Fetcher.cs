@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
-namespace Sotto.Fetch;
+namespace Ambient.Fetch;
 
 /// <summary>
 /// Downloads and installs one pack: shards resume from the bytes on disk,

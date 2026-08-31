@@ -5,7 +5,7 @@
 
 #include "adapters/diarisation/segmenter.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 namespace {
 
 // 589 frames like the real model; helpers author class runs
@@ -68,4 +68,4 @@ TEST(SegDecode, SpansMergeAcrossWindows) {
 }
 
 }  // namespace
-}  // namespace sotto::diar
+}  // namespace ambient::diar

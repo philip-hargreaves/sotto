@@ -19,7 +19,7 @@
 #include "core/endpointer.hpp"
 #include "ports/audio_source.hpp"
 
-namespace sotto::asr {
+namespace ambient::asr {
 namespace {
 
 constexpr const char* kWav =
@@ -106,7 +106,7 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     const auto frames = LoadWav(kWav);
     const auto gold = NormalisedWords(LoadGold(kRef));
 
-    const models::ModelStore store(std::filesystem::path(SOTTO_MODELS_DIR));
+    const models::ModelStore store(std::filesystem::path(AMBIENT_MODELS_DIR));
     models::OvRuntime runtime;
     const auto load_start = std::chrono::steady_clock::now();
     WhisperTranscriber transcriber(store, runtime);
@@ -145,4 +145,4 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
 }
 
 }  // namespace
-}  // namespace sotto::asr
+}  // namespace ambient::asr

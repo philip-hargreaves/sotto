@@ -1,15 +1,15 @@
 using System.Diagnostics;
 using System.Text;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.Contract.Tests;
+namespace Ambient.Contract.Tests;
 
 /// <summary>
-/// Launches the real sotto_engine.exe and connects a verified client to it.
+/// Launches the real ambient_engine.exe and connects a verified client to it.
 /// </summary>
 internal sealed class EngineProcess : IAsyncDisposable
 {
-    private const string DefaultPipeName = "LOCAL\\sotto-engine";
+    private const string DefaultPipeName = "LOCAL\\ambient-engine";
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
     private readonly Process _process;
@@ -40,7 +40,7 @@ internal sealed class EngineProcess : IAsyncDisposable
     public static EngineProcess Start(
         string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null)
     {
-        var storeRoot = Path.Combine(Path.GetTempPath(), $"sotto-store-{Guid.NewGuid():N}");
+        var storeRoot = Path.Combine(Path.GetTempPath(), $"ambient-store-{Guid.NewGuid():N}");
         var startInfo = new ProcessStartInfo(LocateEngine())
         {
             UseShellExecute = false,
@@ -49,7 +49,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
         startInfo.ArgumentList.Add(storeRoot);
         startInfo.ArgumentList.Add(
-            modelsRoot ?? Path.Combine(Path.GetTempPath(), $"sotto-models-{Guid.NewGuid():N}"));
+            modelsRoot ?? Path.Combine(Path.GetTempPath(), $"ambient-models-{Guid.NewGuid():N}"));
         if (replayWavPath is not null)
         {
             startInfo.ArgumentList.Add(replayWavPath);
@@ -93,11 +93,11 @@ internal sealed class EngineProcess : IAsyncDisposable
         return PipeTransport.ConnectAsync(_pipeName, ConnectTimeout, (uint)_process.Id);
     }
 
-    // SOTTO_ENGINE_PATH override, else the newest built engine under any preset
+    // AMBIENT_ENGINE_PATH override, else the newest built engine under any preset
     private static string LocateEngine()
     {
-        const string exe = "sotto_engine.exe";
-        var overridePath = Environment.GetEnvironmentVariable("SOTTO_ENGINE_PATH");
+        const string exe = "ambient_engine.exe";
+        var overridePath = Environment.GetEnvironmentVariable("AMBIENT_ENGINE_PATH");
         if (!string.IsNullOrEmpty(overridePath))
         {
             return overridePath;
@@ -124,7 +124,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         }
 
         throw new FileNotFoundException(
-            $"{exe} not found via SOTTO_ENGINE_PATH or under build/");
+            $"{exe} not found via AMBIENT_ENGINE_PATH or under build/");
     }
 
     public async ValueTask DisposeAsync()

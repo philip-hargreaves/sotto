@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace sotto::store {
+namespace ambient::store {
 
 // Keeps each stream's IVs disjoint; every domain counts seq from zero
 enum class Domain : std::uint8_t {
@@ -47,4 +47,4 @@ class ChunkCipher {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace sotto::store
+}  // namespace ambient::store

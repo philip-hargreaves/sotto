@@ -7,7 +7,7 @@
 
 #include "ports/transcriber.hpp"
 
-namespace sotto::store {
+namespace ambient::store {
 
 using SessionId = std::string;
 
@@ -95,4 +95,4 @@ class ISessionStore {
     virtual void EraseUnretained() = 0;
 };
 
-}  // namespace sotto::store
+}  // namespace ambient::store

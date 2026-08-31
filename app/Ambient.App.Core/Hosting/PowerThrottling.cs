@@ -2,7 +2,7 @@ using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.System.Threading;
 
-namespace Sotto.App.Core.Hosting;
+namespace Ambient.App.Core.Hosting;
 
 /// <summary>
 /// Windows throttles windowless background processes (EcoQoS) once the user

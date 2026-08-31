@@ -1,4 +1,4 @@
-namespace Sotto.App.Tests;
+namespace Ambient.App.Tests;
 
 /// <summary>
 /// Locates the engine binary for real-engine tests: an explicit override,
@@ -10,13 +10,13 @@ public static class EnginePath
 {
     public static string Find()
     {
-        var overridePath = Environment.GetEnvironmentVariable("SOTTO_ENGINE_PATH");
+        var overridePath = Environment.GetEnvironmentVariable("AMBIENT_ENGINE_PATH");
         if (!string.IsNullOrEmpty(overridePath))
         {
             return overridePath;
         }
 
-        const string exe = "sotto_engine.exe";
+        const string exe = "ambient_engine.exe";
         for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir))
         {
             var buildRoot = Path.Combine(dir, "build");

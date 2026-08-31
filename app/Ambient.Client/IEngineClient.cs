@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.Client;
+namespace Ambient.Client;
 
 /// <summary>
 /// The shell's port to the engine. PipeTransport is the production

@@ -5,7 +5,7 @@
 
 #include "ports/audio_source.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 SileroVad::SileroVad(const models::ModelStore& store, models::OvRuntime& runtime) {
     models::LoadedModel loaded = runtime.Load(store, "vad", "default", "model.onnx");
@@ -41,4 +41,4 @@ void SileroVad::Reset() {
     context_.fill(0.0f);
 }
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

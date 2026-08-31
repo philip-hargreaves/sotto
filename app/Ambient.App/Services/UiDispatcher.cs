@@ -1,7 +1,7 @@
 using Microsoft.UI.Dispatching;
-using Sotto.App.Core;
+using Ambient.App.Core;
 
-namespace Sotto.App.Services;
+namespace Ambient.App.Services;
 
 /// <summary>
 /// DispatcherQueue adapter. First resolved on the UI thread during launch, so

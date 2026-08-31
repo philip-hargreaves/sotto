@@ -11,7 +11,7 @@
 #include "core/diar_regions.hpp"
 #include "ports/diariser.hpp"
 
-namespace sotto::diar {
+namespace ambient::diar {
 
 // 0.30 s: at 0.40 a clinical "No." was dropped and the note fabricated the denial
 inline constexpr std::uint64_t kPerTurnMinClipFrames = 4800;
@@ -102,4 +102,4 @@ inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>
     return texts;
 }
 
-}  // namespace sotto::diar
+}  // namespace ambient::diar

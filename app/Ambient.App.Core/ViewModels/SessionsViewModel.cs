@@ -2,9 +2,9 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Sotto.Client;
+using Ambient.Client;
 
-namespace Sotto.App.Core.ViewModels;
+namespace Ambient.App.Core.ViewModels;
 
 public sealed record SessionRow(
     string Id, string Title, string Started, string Duration, string EditedLabel)

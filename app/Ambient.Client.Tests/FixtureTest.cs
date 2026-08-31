@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.Client.Tests;
+namespace Ambient.Client.Tests;
 
 /// <summary>The fixtures both languages must agree on.</summary>
 public class FixtureTest
@@ -22,7 +22,7 @@ public class FixtureTest
     public void PeerInfoSerializesToHelloRequestParams()
     {
         var serialized = JsonSerializer.SerializeToElement(
-            new PeerInfo("sotto-shell", "0.1.0", Protocol.ProtocolVersion),
+            new PeerInfo("ambient-shell", "0.1.0", Protocol.ProtocolVersion),
             Protocol.JsonOptions);
         var expected = LoadFixture("hello-request.json").RootElement.GetProperty("params");
 

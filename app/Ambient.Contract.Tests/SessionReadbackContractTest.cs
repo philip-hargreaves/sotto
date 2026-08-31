@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sotto.Contract.Tests;
+namespace Ambient.Contract.Tests;
 
 /// <summary>
 /// The record, read back, delete loop against the real engine.
@@ -16,7 +16,7 @@ public class SessionReadbackContractTest
         try
         {
             await using var engine =
-                EngineProcess.Start($"LOCAL\\sotto-readback-{Guid.NewGuid():N}", wav);
+                EngineProcess.Start($"LOCAL\\ambient-readback-{Guid.NewGuid():N}", wav);
             await using var client = await engine.ConnectAsync();
             // The note and sheet follow the seal on their own thread; wait for them
             var patientReady = new TaskCompletionSource(
@@ -103,7 +103,7 @@ public class SessionReadbackContractTest
             await client.RequestAsync("session/close", null, Timeout);
             await Assert.ThrowsAnyAsync<Exception>(
                 () => client.RequestAsync("session/transcript", new { id = unretainedId }, Timeout));
-            Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "sotto.db")));
+            Assert.True(File.Exists(Path.Combine(engine.StoreRoot, "ambient.db")));
             Assert.False(Directory.Exists(Path.Combine(engine.StoreRoot, "sessions")));
 
             await Assert.ThrowsAnyAsync<Exception>(

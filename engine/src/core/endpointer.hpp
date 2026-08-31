@@ -10,7 +10,7 @@
 #include "ports/audio_source.hpp"
 #include "ports/streaming_vad.hpp"
 
-namespace sotto::audio {
+namespace ambient::audio {
 
 // Cuts the capture stream into windows at speech boundaries. Every
 // constant below is the researched, swept configuration - do not retune
@@ -197,4 +197,4 @@ class Endpointer {
     std::uint64_t first_new_frame_ = 0;
 };
 
-}  // namespace sotto::audio
+}  // namespace ambient::audio

@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-namespace sotto::core {
+namespace ambient::core {
 
 // The note's first sentence, cut at a word; "1.5 mg" does not end a
 // sentence, whitespace collapses
@@ -52,4 +52,4 @@ inline std::string SanitiseLabel(std::string_view raw, std::size_t max_chars = 6
     return label;
 }
 
-}  // namespace sotto::core
+}  // namespace ambient::core
