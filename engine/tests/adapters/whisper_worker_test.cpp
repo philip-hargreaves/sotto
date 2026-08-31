@@ -31,6 +31,32 @@ Turn Labelled(std::uint64_t first_frame, std::size_t count) {
     return turn;
 }
 
+TEST(WhisperWorker, ClipsBurstOnTheirOwnDecoderWhenGiven) {
+    std::atomic<int> live_calls{0};
+    std::atomic<int> clip_calls{0};
+    RecordingSink sink;
+    WhisperTranscriber transcriber(
+        [&live_calls](std::span<const float> f, std::uint64_t first) {
+            ++live_calls;
+            return std::vector<Turn>{Labelled(first, f.size())};
+        },
+        [&clip_calls](std::span<const float>, std::uint64_t) {
+            ++clip_calls;
+            Turn turn;
+            turn.text = "from the burst device";
+            return std::vector<Turn>{turn};
+        });
+    transcriber.Begin(sink);
+
+    std::vector<float> frames(1600);
+    transcriber.Submit(frames, 0);
+    transcriber.Finish();
+    EXPECT_EQ(transcriber.DecodeClip(frames, 0), "from the burst device");
+
+    EXPECT_EQ(live_calls.load(), 1) << "windows stay on the live device";
+    EXPECT_EQ(clip_calls.load(), 1) << "clips go to the burst device";
+}
+
 TEST(WhisperWorker, SubmitDoesNotBlockWhileADecodeIsInFlight) {
     std::promise<void> release;
     auto released = release.get_future().share();

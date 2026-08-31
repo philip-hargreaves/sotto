@@ -42,6 +42,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     {
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
+        FinalisePhase.Turns => "Writing transcript",
         FinalisePhase.Note => "Preparing note",
         _ => "Finalising",
     };

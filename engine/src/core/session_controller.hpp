@@ -622,6 +622,9 @@ class SessionController {
                         metrics_->RecordStage("diarise overlap", t.overlap_s);
                     }
                 }
+                // The re-decode is transcript work again - and on the NPU it
+                // is the longest stage, so the spinner must say so
+                events_.OnProgress("turns");
                 // The anchor voiceprints only feed role naming, which follows
                 // the GPU turn decode: embed them on the CPU meanwhile. The
                 // future's destructor waits, so an exception below cannot leave

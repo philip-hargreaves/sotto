@@ -14,7 +14,11 @@ import time
 from datetime import datetime, timezone
 
 ROOT = r"C:\dev\sotto"
-ENGINE = os.path.join(ROOT, r"build\release\engine\sotto_engine.exe")
+# PERF_ENGINE: run a copied binary so rebuilds don't fight a live sweep.
+# PERF_ENGINE_ARGS: extra flags, e.g. "--asr-device NPU".
+ENGINE = os.environ.get("PERF_ENGINE",
+                        os.path.join(ROOT, r"build\release\engine\sotto_engine.exe"))
+ENGINE_ARGS = os.environ.get("PERF_ENGINE_ARGS", "").split()
 MODELS = os.path.join(ROOT, "models")
 # Working data (tracks, store, logs, results) lives under build/, never in the repo
 HERE = os.environ.get("PERF_DIR", os.path.join(ROOT, "build", "perf-loop"))
@@ -162,7 +166,8 @@ class Engine:
         self.launched = now()
         self.stderr = open(self.log_path, "wb")
         self.proc = subprocess.Popen(
-            [ENGINE, self.pipe_name, STORE, MODELS], stderr=self.stderr, stdout=subprocess.DEVNULL)
+            [ENGINE, *ENGINE_ARGS, self.pipe_name, STORE, MODELS],
+            stderr=self.stderr, stdout=subprocess.DEVNULL)
         pipe = "\\\\.\\pipe\\" + self.pipe_name
         for _ in range(600):
             if self.proc.poll() is not None:

@@ -207,6 +207,10 @@ public class SessionCommandsTest
             Assert.Equal("Writing transcript", controls.FinalisingLabel);  // unknown: unchanged
             engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
             Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+            // The per-turn re-decode is transcript work again - and on the
+            // NPU the longest stage, so the spinner says what it is doing
+            engine.RaiseNotification("session/progress", Params(new { stage = "turns" }));
+            Assert.Equal("Writing transcript", controls.FinalisingLabel);
         };
         await session.StopRecordingAsync();
         engine.BeforeReply = null;
@@ -221,6 +225,7 @@ public class SessionCommandsTest
             p => Assert.Equal(FinalisePhase.Sealing, p),
             p => Assert.Equal(FinalisePhase.Transcript, p),
             p => Assert.Equal(FinalisePhase.Speakers, p),
+            p => Assert.Equal(FinalisePhase.Turns, p),
             p => Assert.Equal(FinalisePhase.Note, p));
 
         // The next stop starts from the beginning again
@@ -274,6 +279,29 @@ public class SessionCommandsTest
 
         Assert.Equal(3, engine.Requests.Count(r => r.Method == "session/start"));
         Assert.Equal(SessionState.Recording, session.State);
+        Assert.Equal("Recording", session.Status.LatestActivity);
+    }
+
+    [Theory]
+    [InlineData("efficiency", true)]
+    [InlineData("balanced", false)]
+    public async Task RecordingWarnsWhenTheMachineIsSavingPower(string mode, bool onMains)
+    {
+        var (session, _, _) = TestSession.Create(
+            powerState: () => new Sotto.App.Core.Metrics.PowerState(mode, onMains));
+        await session.StartRecordingAsync();
+
+        Assert.Equal("Recording - saving power, notes will be slower",
+            session.Status.LatestActivity);
+    }
+
+    [Fact]
+    public async Task RecordingOnMainsPowerCarriesNoWarning()
+    {
+        var (session, _, _) = TestSession.Create(
+            powerState: () => new Sotto.App.Core.Metrics.PowerState("performance", true));
+        await session.StartRecordingAsync();
+
         Assert.Equal("Recording", session.Status.LatestActivity);
     }
 

@@ -11,6 +11,7 @@ public enum FinalisePhase
     Sealing,
     Transcript,
     Speakers,
+    Turns,  // the per-turn re-decode: transcript work again, long on the NPU
     Note,
     Streaming,
 }

@@ -48,6 +48,9 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "sotto");
         services.AddSingleton<ICrashLog>(_ => new FileCrashLog(
             Path.Combine(localState, "crashes.jsonl")));
+        CrashDumps.Register(
+            Microsoft.Win32.Registry.CurrentUser, Path.Combine(localState, "dumps"),
+            "sotto_engine.exe", "sotto_note_host.exe");
         services.AddSingleton<ISessionState>(sp => new DeferredSessionState(sp));
         services.AddSingleton<IEngineHost>(sp => new EngineSupervisor(
             sp.GetRequiredService<IEngineLauncher>(),
@@ -105,6 +108,9 @@ public partial class App : Application
     {
         public bool ConsultationActive =>
             services.GetRequiredService<ConsultationViewModel>().ConsultationActive;
+
+        public string SessionPhase =>
+            services.GetRequiredService<ConsultationViewModel>().SessionPhase;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -114,6 +120,10 @@ public partial class App : Application
         var host = Services.GetRequiredService<IEngineHost>();
         var dispatcher = Services.GetRequiredService<IUiDispatcher>();
         var statusBar = Services.GetRequiredService<StatusBarViewModel>();
+        // Applied here, not in the settings view model: the bar must obey the
+        // saved preference before the settings page is ever opened
+        statusBar.MetricsVisible =
+            Services.GetRequiredService<AppPreferences>().ShowPerformanceMetrics;
         host.StatusChanged += _ =>
             dispatcher.Post(() => statusBar.SetEngineState(host.Status, host.Fault));
 

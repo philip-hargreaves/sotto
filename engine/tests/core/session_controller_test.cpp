@@ -1386,7 +1386,7 @@ TEST(SessionController, StopReportsEachFinaliseStageAsItStarts) {
     ASSERT_TRUE(WaitForFrames(store, 12800));
     controller.Stop();
 
-    EXPECT_EQ(events.progress, (std::vector<std::string>{"transcript", "speakers"}));
+    EXPECT_EQ(events.progress, (std::vector<std::string>{"transcript", "speakers", "turns"}));
 }
 
 TEST(SessionController, StopWithoutADiariserReportsOnlyTheTranscriptStage) {
