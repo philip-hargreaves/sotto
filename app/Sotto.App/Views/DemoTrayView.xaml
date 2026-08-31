@@ -27,7 +27,7 @@
             <TextBlock
                 VerticalAlignment="Center"
                 Style="{StaticResource CaptionText}"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Text="DEMO" />
 
             <ComboBox
@@ -67,7 +67,7 @@
                 <TextBlock
                     VerticalAlignment="Center"
                     FontSize="12"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Foreground="{ThemeResource MutedTextBrush}"
                     Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
             </StackPanel>
 

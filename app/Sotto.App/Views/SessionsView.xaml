@@ -48,11 +48,11 @@
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock
                                 VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Foreground="{ThemeResource FaintTextBrush}"
                                 Text="{x:Bind Started}" />
                             <TextBlock
                                 VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Foreground="{ThemeResource FaintTextBrush}"
                                 Text="{x:Bind Duration}" />
                             <Border
                                 Padding="6,1"
@@ -176,7 +176,7 @@
             <FontIcon
                 HorizontalAlignment="Center"
                 FontSize="26"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Foreground="{ThemeResource FaintTextBrush}"
                 Glyph="&#xE72E;" />
             <TextBlock
                 HorizontalAlignment="Center"

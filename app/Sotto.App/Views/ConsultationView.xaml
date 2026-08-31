@@ -28,9 +28,7 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
-                <!-- Time-shares the cell with New consultation; while
-                     recording the pin rule makes it read-only, with the why
-                     in the tooltip -->
+                <!-- Shares the cell with New consultation; read-only while recording -->
                 <DropDownButton
                     x:Name="MicPicker"
                     IsEnabled="{x:Bind Controls.MicPickerEnabled, Mode=OneWay}"
@@ -40,7 +38,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="14" Glyph="&#xE720;" />
                         <TextBlock VerticalAlignment="Center"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Foreground="{ThemeResource MutedTextBrush}"
                                    Text="{x:Bind Mic.Label, Mode=OneWay}" />
                     </StackPanel>
                     <DropDownButton.Flyout>

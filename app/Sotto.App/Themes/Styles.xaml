@@ -9,7 +9,7 @@
     <!-- Text roles on the Windows 11 type ramp -->
     <Style x:Key="PaneHeaderText" TargetType="TextBlock"
            BasedOn="{StaticResource BodyStrongTextBlockStyle}">
-        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource MutedTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -20,13 +20,13 @@
 
     <Style x:Key="CaptionText" TargetType="TextBlock"
            BasedOn="{StaticResource CaptionTextBlockStyle}">
-        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource MutedTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="MicroText" TargetType="TextBlock"
            BasedOn="{StaticResource CaptionTextBlockStyle}">
-        <Setter Property="Foreground" Value="{ThemeResource TextFillColorTertiaryBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource FaintTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -47,8 +47,7 @@
         <Setter Property="Padding" Value="16" />
     </Style>
 
-    <!-- Record disc: accent to begin, neutral to stop - one primary action
-         at a time, and it holds the calm centre of the screen -->
+    <!-- Record disc: accent to begin, neutral to stop -->
     <Style x:Key="RecordDisc" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
         <Setter Property="Width" Value="88" />
         <Setter Property="Height" Value="88" />
