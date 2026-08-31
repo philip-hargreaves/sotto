@@ -134,9 +134,10 @@ TEST(Handlers, SessionListAndTranscriptRoundTrip) {
     EXPECT_TRUE(list["sessions"][0]["editedAt"].is_null());
     EXPECT_EQ(list["sessions"][0]["audioSeconds"], 33.0)
         << "the audio's length from the turns, which outlive the audio";
-    // The fixture is the shape both languages agree on
-    for (const auto& [key, value] :
-         LoadFixture("session-list.json")["result"]["sessions"][0].items()) {
+    // The fixture is the shape both languages agree on. Named first: iterating
+    // a temporary's sub-object dangles (range-for extends only the top level)
+    const json list_fixture = LoadFixture("session-list.json");
+    for (const auto& [key, value] : list_fixture["result"]["sessions"][0].items()) {
         EXPECT_TRUE(list["sessions"][0].contains(key)) << key;
     }
 
@@ -164,7 +165,8 @@ TEST(Handlers, SessionNoteReturnsTheStoredText) {
     EXPECT_EQ(note["detail"], "concise");
     EXPECT_TRUE(note["generatedAt"].is_string());
     EXPECT_TRUE(note["editedAt"].is_null());
-    for (const auto& [key, value] : LoadFixture("session-note.json")["result"].items()) {
+    const json note_fixture = LoadFixture("session-note.json");
+    for (const auto& [key, value] : note_fixture["result"].items()) {
         EXPECT_TRUE(note.contains(key)) << key;
     }
 
@@ -195,7 +197,8 @@ TEST(Handlers, SessionPatientCarriesTheTranslationWhenStored) {
     patient = std::get<json>(HandleSessionPatient(*fixture.store, json{{"id", id}}));
     EXPECT_EQ(patient["translation"]["language"], "pl");
     EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.");
-    for (const auto& [key, value] : LoadFixture("session-patient.json")["result"].items()) {
+    const json patient_fixture = LoadFixture("session-patient.json");
+    for (const auto& [key, value] : patient_fixture["result"].items()) {
         EXPECT_TRUE(patient.contains(key)) << key;
     }
 }
