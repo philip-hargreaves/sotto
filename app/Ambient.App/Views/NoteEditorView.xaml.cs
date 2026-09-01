@@ -18,7 +18,11 @@ public sealed partial class NoteEditorView : UserControl
         // A stored session brings its own options; the combos follow
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(NoteViewModel.Style))
+            if (e.PropertyName == nameof(NoteViewModel.NoteEditing))
+            {
+                ShowEditingChrome(NoteBox, ViewModel.NoteEditing);
+            }
+            else if (e.PropertyName == nameof(NoteViewModel.Style))
             {
                 Select(StyleBox, ViewModel.Style);
             }
@@ -30,6 +34,24 @@ public sealed partial class NoteEditorView : UserControl
     }
 
     public NoteViewModel ViewModel { get; }
+
+    // The mode must be visible: an accent border while editing, the flat
+    // document look otherwise
+    private static void ShowEditingChrome(TextBox box, bool editing)
+    {
+        if (editing)
+        {
+            box.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)
+                Microsoft.UI.Xaml.Application.Current.Resources["AccentFillColorDefaultBrush"];
+            box.BorderThickness = new Thickness(1.5);
+        }
+        else
+        {
+            box.ClearValue(Control.BorderBrushProperty);
+            box.ClearValue(Control.BorderThicknessProperty);
+        }
+    }
+
 
     // The view model speaks engine values, the combos display names; the
     // glue lives here with the values travelling as item tags
@@ -51,6 +73,19 @@ public sealed partial class NoteEditorView : UserControl
         {
             ViewModel.Detail = tag;
         }
+    }
+
+    // Export is the one action that writes outside the encrypted store
+    private async void OnExportNote(object sender, RoutedEventArgs e)
+    {
+        var path = await SavePickerHelper.PickAsync("clinical-note.txt", "Text file", ".txt");
+        if (path is null)
+        {
+            return;
+        }
+
+        await System.IO.File.WriteAllTextAsync(path, ViewModel.ClinicalNoteText);
+        _status.Append($"Saved to {System.IO.Path.GetFileName(path)} - outside the encrypted store");
     }
 
     private async void OnCopyNote(object sender, RoutedEventArgs e) =>
