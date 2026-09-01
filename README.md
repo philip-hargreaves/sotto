@@ -7,10 +7,8 @@ Everything runs locally: audio, transcripts and notes never leave the machine.
 
 ## Run the release package
 
-Requirements: Windows 11 x64, an Intel Core Ultra Series 2 processor with Intel Arc iGPU,
-32 GB RAM and 20 GB free disk. The engine runs its models on the Intel GPU only and will
-report, rather than hide, a machine without one. Nothing needs installing - no runtimes,
-no admin rights.
+Requirements: Windows 11 x64, an Intel Core Ultra Series 2 processor or above with a Intel Arc iGPU,
+32 GB RAM and 20 GB free disk. 
 
 1. Extract `ambient.zip` anywhere, for example a folder on the Desktop.
 2. Open the `ambient` folder and double-click `Ambient.App.exe`.
@@ -25,7 +23,7 @@ kept, so it does not repeat. This is a quirk of the zip-style distribution: an i
 build would prepare the models during installation instead. Every later launch starts
 quickly.
 
-### Trying it out
+## Trying it out
 
 The zip bundles recorded doctor-patient consultations, so you can see the full pipeline
 without holding a consultation yourself:
