@@ -14,6 +14,11 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
+        // Unpackaged: the taskbar and title bar take the window icon,
+        // not the exe icon
+        AppWindow.SetIcon(System.IO.Path.Combine(
+            System.AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+
         navigation.Attach(NavHost);
         navigation.NavigateTo("consultation");
 
