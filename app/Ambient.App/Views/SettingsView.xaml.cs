@@ -12,6 +12,8 @@ public sealed partial class SettingsView : UserControl
         InitializeComponent();
         // Turning the history on accumulates patient records: confirmed,
         // never just toggled. Cancel is the safe default.
+        viewModel.PickSavePath = suggested =>
+            SavePickerHelper.PickAsync(suggested, "HTML report", ".html");
         viewModel.ConfirmKeepConsultations = async () =>
         {
             var dialog = new ContentDialog

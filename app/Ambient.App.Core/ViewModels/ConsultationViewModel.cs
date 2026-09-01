@@ -91,6 +91,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         EngineReady = engine.Connected;
         Note.TranslateRequested = TranslateAsync;
         Note.RegenerateRequested = RegenerateNoteAsync;
+        Note.RegeneratePatientRequested = RegeneratePatientAsync;
         Note.SaveNoteRequested = SaveNoteAsync;
         Note.SavePatientRequested = SavePatientAsync;
         // Persisted options applied before the change callback is wired,
@@ -241,6 +242,24 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         {
             await RequestAsync("note/options", new { style = Note.Style, detail = Note.Detail })
                 .ConfigureAwait(true);
+        }
+    }
+
+    // Unsaved note edits are saved first, so the rewrite reads what is on screen
+    public async Task RegeneratePatientAsync()
+    {
+        if (State != SessionState.Review)
+        {
+            return;
+        }
+
+        await SaveNoteAsync().ConfigureAwait(true);
+        var accepted = await RequestAsync("patient/regenerate", null).ConfigureAwait(true);
+        if (accepted)
+        {
+            _regenerating = true;
+            Note.PatientInfoText = "";
+            Status.Append("Rewriting patient sheet", busy: true);
         }
     }
 

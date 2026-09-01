@@ -47,6 +47,18 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public Func<Task>? RegenerateRequested { get; set; }
 
+    public Func<Task>? RegeneratePatientRequested { get; set; }
+
+    /// <summary>The staleness hint's action: rewrite the sheet from the edited note.</summary>
+    [RelayCommand(CanExecute = nameof(CanRegeneratePatient))]
+    private Task RegeneratePatient() => RegeneratePatientRequested!();
+
+    private bool CanRegeneratePatient() =>
+        RegeneratePatientRequested is not null && PatientStale && !AnyEditing;
+
+    partial void OnPatientStaleChanged(bool value) =>
+        RegeneratePatientCommand.NotifyCanExecuteChanged();
+
     public Func<Task>? SaveNoteRequested { get; set; }
 
     public Func<Task>? SavePatientRequested { get; set; }
@@ -102,7 +114,7 @@ public sealed partial class NoteViewModel : ObservableObject
     // The engine translates the stored sheet, which exists only once the
     // pipeline reports it ready - text alone streams in earlier
     private bool CanTranslate() => SelectedLanguage is not null && TranslateRequested is not null
-        && PipelineState == NotePipelineState.AllReady && !TranslationRunning;
+        && PipelineState == NotePipelineState.AllReady && !TranslationRunning && !AnyEditing;
 
     // An edited note is the clinician's wording; regenerating replaces it,
     // so it asks first. An unedited note regenerates straight away.
@@ -120,17 +132,92 @@ public sealed partial class NoteViewModel : ObservableObject
 
     // Any settled review state can regenerate, including a failed note -
     // regenerating IS the recovery. The engine refuses what it cannot do.
-    private bool CanRegenerate() => RegenerateRequested is not null && PipelineState
-        is NotePipelineState.AllReady or NotePipelineState.PatientFailed
+    private bool CanRegenerate() => RegenerateRequested is not null && !AnyEditing
+        && PipelineState is NotePipelineState.AllReady or NotePipelineState.PatientFailed
         or NotePipelineState.NoteFailed;
 
+    // The editing gate: a document mutates only between an explicit Edit and
+    // its Save; Discard restores the snapshot taken at Edit
+    [ObservableProperty]
+    public partial bool NoteEditing { get; private set; }
+
+    [ObservableProperty]
+    public partial bool PatientEditing { get; private set; }
+
+    public bool NoteViewing => !NoteEditing;
+
+    public bool PatientViewing => !PatientEditing;
+
+    public bool AnyEditing => NoteEditing || PatientEditing;
+
+    private string _noteSnapshot = "";
+    private string _patientSnapshot = "";
+
+    [RelayCommand(CanExecute = nameof(CanEditNote))]
+    private void EditNote()
+    {
+        _noteSnapshot = ClinicalNoteText;
+        NoteEditing = true;
+    }
+
+    private bool CanEditNote() => NoteDocumentReady && !NoteEditing;
+
+    [RelayCommand]
+    private void DiscardNote()
+    {
+        ClinicalNoteText = _noteSnapshot;
+        NoteEditing = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanEditPatient))]
+    private void EditPatient()
+    {
+        _patientSnapshot = PatientInfoText;
+        PatientEditing = true;
+    }
+
+    private bool CanEditPatient() => PatientDocumentReady && !PatientEditing;
+
+    [RelayCommand]
+    private void DiscardPatient()
+    {
+        PatientInfoText = _patientSnapshot;
+        PatientEditing = false;
+    }
+
+    partial void OnNoteEditingChanged(bool value) => EditingChanged();
+
+    partial void OnPatientEditingChanged(bool value) => EditingChanged();
+
+    // Regenerate, the sheet rewrite and translate all replace on-screen text,
+    // so none may run while a document is being edited
+    private void EditingChanged()
+    {
+        OnPropertyChanged(nameof(NoteViewing));
+        OnPropertyChanged(nameof(PatientViewing));
+        OnPropertyChanged(nameof(AnyEditing));
+        EditNoteCommand.NotifyCanExecuteChanged();
+        EditPatientCommand.NotifyCanExecuteChanged();
+        RegenerateCommand.NotifyCanExecuteChanged();
+        RegeneratePatientCommand.NotifyCanExecuteChanged();
+        TranslateCommand.NotifyCanExecuteChanged();
+    }
+
     [RelayCommand(CanExecute = nameof(CanSaveNote))]
-    private Task SaveNote() => SaveNoteRequested!();
+    private Task SaveNote()
+    {
+        NoteEditing = false;
+        return SaveNoteRequested!();
+    }
 
     private bool CanSaveNote() => SaveNoteRequested is not null && NoteDocumentReady;
 
     [RelayCommand(CanExecute = nameof(CanSavePatient))]
-    private Task SavePatient() => SavePatientRequested!();
+    private Task SavePatient()
+    {
+        PatientEditing = false;
+        return SavePatientRequested!();
+    }
 
     private bool CanSavePatient() => SavePatientRequested is not null && PatientDocumentReady;
 
@@ -143,6 +230,8 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>The pane returns to its writing look for a rewrite.</summary>
     public void BeginRegenerate()
     {
+        NoteEditing = false;
+        PatientEditing = false;
         PipelineState = NotePipelineState.NoteWriting;
         ClinicalNoteText = "";
         PatientInfoText = "";
@@ -181,6 +270,8 @@ public sealed partial class NoteViewModel : ObservableObject
             _suppressOptionsChanged = false;
         }
 
+        NoteEditing = false;
+        PatientEditing = false;
         ClinicalNoteText = note;
         PatientInfoText = patient;
         TranslationText = translation;
@@ -249,6 +340,8 @@ public sealed partial class NoteViewModel : ObservableObject
         RegenerateCommand.NotifyCanExecuteChanged();
         SaveNoteCommand.NotifyCanExecuteChanged();
         SavePatientCommand.NotifyCanExecuteChanged();
+        EditNoteCommand.NotifyCanExecuteChanged();
+        EditPatientCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(NoteDocumentReady));
         OnPropertyChanged(nameof(PatientDocumentReady));
         OnPropertyChanged(nameof(NotePreparing));
@@ -300,6 +393,8 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public void Reset()
     {
+        NoteEditing = false;
+        PatientEditing = false;
         PipelineState = NotePipelineState.Pending;
         ClinicalNoteText = "";
         PatientInfoText = "";

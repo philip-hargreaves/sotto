@@ -7,6 +7,98 @@ namespace Ambient.App.Tests;
 public class ReviewSessionTest
 {
     [Fact]
+    public async Task DocumentsAreReadOnlyUntilEditAndDiscardRestores()
+    {
+        var (session, _, note) = TestSession.Create();
+        await session.OpenStoredSessionAsync("abc");
+        note.ClinicalNoteText = "the stored note";
+
+        Assert.True(note.NoteViewing, "read-only until an explicit Edit");
+        note.EditNoteCommand.Execute(null);
+        Assert.True(note.NoteEditing);
+
+        note.ClinicalNoteText = "a stray keystroke";
+        note.DiscardNoteCommand.Execute(null);
+
+        Assert.Equal("the stored note", note.ClinicalNoteText);
+        Assert.True(note.NoteViewing);
+    }
+
+    [Fact]
+    public async Task SaveCommitsAndLeavesEditing()
+    {
+        var (session, _, note) = TestSession.Create();
+        await session.OpenStoredSessionAsync("abc");
+        var saves = 0;
+        note.SaveNoteRequested = () =>
+        {
+            saves++;
+            return Task.CompletedTask;
+        };
+
+        note.EditNoteCommand.Execute(null);
+        note.ClinicalNoteText = "a deliberate edit";
+        await note.SaveNoteCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, saves);
+        Assert.True(note.NoteViewing);
+        Assert.Equal("a deliberate edit", note.ClinicalNoteText);
+    }
+
+    [Fact]
+    public async Task NothingRegeneratesOrTranslatesWhileEditing()
+    {
+        var (session, _, note) = TestSession.Create();
+        await session.OpenStoredSessionAsync("abc");
+        note.RegeneratePatientRequested = () => Task.CompletedTask;
+        note.PatientStale = true;
+        note.SelectedLanguage = "French";
+
+        Assert.True(note.RegenerateCommand.CanExecute(null));
+        note.EditPatientCommand.Execute(null);
+
+        Assert.False(note.RegenerateCommand.CanExecute(null));
+        Assert.False(note.RegeneratePatientCommand.CanExecute(null));
+        Assert.False(note.TranslateCommand.CanExecute(null));
+
+        note.DiscardPatientCommand.Execute(null);
+        Assert.True(note.RegenerateCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task LeavingMidEditAutosavesTheEdit()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.OpenStoredSessionAsync("abc");
+        note.EditNoteCommand.Execute(null);
+        note.ClinicalNoteText = "edited then left";
+
+        await session.CloseReviewAsync();
+
+        Assert.Contains(engine.Requests,
+            r => r.Method == "note/update" && r.Params.Contains("edited then left"));
+    }
+
+    [Fact]
+    public async Task StaleSheetRewritesFromTheStoredNote()
+    {
+        var (session, engine, note) = TestSession.Create();
+        await session.OpenStoredSessionAsync("abc");
+        note.PatientInfoText = "old sheet";
+        note.PatientStale = true;
+        Assert.True(note.RegeneratePatientCommand.CanExecute(null));
+
+        await note.RegeneratePatientCommand.ExecuteAsync(null);
+
+        Assert.Contains(engine.Requests, r => r.Method == "patient/regenerate");
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "fresh sheet" }));
+        Assert.Equal("fresh sheet", note.PatientInfoText);
+        Assert.False(note.PatientStale, "rewritten from the note, no longer stale");
+        Assert.False(note.RegeneratePatientCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task RegenerateOnAnEditedNoteAsksFirst()
     {
         var (session, engine, note) = TestSession.Create();

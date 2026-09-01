@@ -177,6 +177,31 @@ public class SettingsViewModelTest
     }
 
     [Fact]
+    public async Task ExportGoesWhereThePickerChoseAndCancelIsSilent()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        var collector = new Ambient.App.Core.Metrics.PerformanceCollector(
+            new FakeEngineClient(), () => true, () => null, Path.Combine(dir, "metrics.jsonl"));
+        collector.SessionStarted("mic", 0, null);
+        collector.StopRequested();
+        await collector.SessionFinishedAsync(null, 10);
+        var settings = new SettingsViewModel(machine: new FixedMachine(), metrics: collector);
+        var chosen = Path.Combine(dir, "picked.html");
+
+        settings.PickSavePath = _ => Task.FromResult<string?>(null);
+        await settings.ExportPerformanceReportCommand.ExecuteAsync(null);
+        Assert.Equal("", settings.ExportResult);
+        Assert.False(File.Exists(chosen));
+
+        settings.PickSavePath = _ => Task.FromResult<string?>(chosen);
+        await settings.ExportPerformanceReportCommand.ExecuteAsync(null);
+        Assert.True(File.Exists(chosen), "written where the picker chose");
+        Assert.Contains("picked.html", settings.ExportResult);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public void ExportWithoutDataExplainsItself()
     {
         var settings = new SettingsViewModel(machine: new FixedMachine());

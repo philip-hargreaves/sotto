@@ -11,9 +11,14 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid>
-            <StackPanel Orientation="Horizontal" Spacing="8"
-                        Visibility="{x:Bind ViewModel.NoteCaptionVisible, Mode=OneWay}">
+        <!-- Top right produces the document; bottom left takes it away;
+             bottom right is the edit lifecycle -->
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <ProgressRing
                     Width="14"
                     Height="14"
@@ -21,43 +26,14 @@
                     Visibility="{x:Bind ViewModel.NotePreparing, Mode=OneWay}" />
                 <TextBlock
                     Style="{StaticResource MicroText}"
-                    Text="{x:Bind ViewModel.NoteStateCaption, Mode=OneWay}" />
+                    Text="{x:Bind ViewModel.NoteStateCaption, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.NoteCaptionVisible, Mode=OneWay}" />
+                <TextBlock
+                    Style="{StaticResource MicroText}"
+                    Text="{x:Bind ViewModel.EditedStamp, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.Edited, Mode=OneWay}" />
             </StackPanel>
-            <TextBlock
-                HorizontalAlignment="Right"
-                Style="{StaticResource MicroText}"
-                Text="{x:Bind ViewModel.EditedStamp, Mode=OneWay}"
-                Visibility="{x:Bind ViewModel.Edited, Mode=OneWay}" />
-        </Grid>
-
-        <!-- The clinician's document; editable in place. The minimum keeps
-             it a document when short or hosted in an unbounded column -->
-        <TextBox
-            Grid.Row="1"
-            MinHeight="140"
-            Style="{StaticResource DocumentTextBox}"
-            Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}" />
-
-        <!-- Style and detail sit with Regenerate because they ARE a
-             regenerate - changing one rewrites the note, it does
-             not reformat the text in place -->
-        <Grid Grid.Row="2" Margin="0,2,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="RegenerateButton"
-                        Command="{x:Bind ViewModel.RegenerateCommand}"
-                        ToolTipService.ToolTip="Rewrite the note with the chosen style and detail">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
-                        <TextBlock Text="Regenerate" />
-                    </StackPanel>
-                </Button>
-                <Button Click="OnCopyNote"
-                        IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE8C8;" />
-                        <TextBlock Text="Copy" />
-                    </StackPanel>
-                </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <ComboBox
                     x:Name="StyleBox"
                     MinWidth="104"
@@ -77,17 +53,71 @@
                     <ComboBoxItem Content="Standard" Tag="standard" />
                     <ComboBoxItem Content="Detailed" Tag="detailed" />
                 </ComboBox>
+                <Button x:Name="RegenerateButton"
+                        Command="{x:Bind ViewModel.RegenerateCommand}"
+                        ToolTipService.ToolTip="Rewrite the note with the chosen style and detail">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                        <TextBlock Text="Regenerate" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
-            <!-- The committing action takes the system accent -->
-            <Button
-                HorizontalAlignment="Right"
-                Command="{x:Bind ViewModel.SaveNoteCommand}"
-                Style="{StaticResource AccentButtonStyle}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon FontSize="14" Glyph="&#xE74E;" />
-                    <TextBlock Text="Save note" />
-                </StackPanel>
-            </Button>
+        </Grid>
+
+        <!-- The clinician's document; editable in place. The minimum keeps
+             it a document when short or hosted in an unbounded column -->
+        <TextBox
+            x:Name="NoteBox"
+            Grid.Row="1"
+            MinHeight="140"
+            IsHitTestVisible="{x:Bind ViewModel.NoteEditing, Mode=OneWay}"
+            IsReadOnly="{x:Bind ViewModel.NoteViewing, Mode=OneWay}"
+            IsTabStop="{x:Bind ViewModel.NoteEditing, Mode=OneWay}"
+            Style="{StaticResource DocumentTextBox}"
+            Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}" />
+
+        <Grid Grid.Row="2" Margin="0,2,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Click="OnCopyNote"
+                        IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                        <TextBlock Text="Copy" />
+                    </StackPanel>
+                </Button>
+                <Button Click="OnExportNote"
+                        IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.NoteViewing, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE898;" />
+                        <TextBlock Text="Export" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <!-- Read-only until an explicit Edit; Save commits, Discard restores -->
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                <Button
+                    Command="{x:Bind ViewModel.EditNoteCommand}"
+                    Visibility="{x:Bind ViewModel.NoteViewing, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE70F;" />
+                        <TextBlock Text="Edit" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    Command="{x:Bind ViewModel.DiscardNoteCommand}"
+                    Content="Discard"
+                    Visibility="{x:Bind ViewModel.NoteEditing, Mode=OneWay}" />
+                <Button
+                    Command="{x:Bind ViewModel.SaveNoteCommand}"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Visibility="{x:Bind ViewModel.NoteEditing, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                        <TextBlock Text="Save note" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- An edited note is the clinician's wording; Regenerate asks
