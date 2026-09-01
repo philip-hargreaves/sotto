@@ -81,26 +81,12 @@ public class ReportBuilderTest
     }
 
     [Fact]
-    public void ComparesDevicesOnlyWhenTwoHaveComparableSessions()
-    {
-        var gpuOnly = ReportBuilder.Build(Machine,
-            [Session("GPU.0", 33.4, 1.0)], DateTimeOffset.UtcNow);
-        Assert.DoesNotContain("Transcription by Device", gpuOnly);
-
-        var both = ReportBuilder.Build(Machine,
-            [Session("GPU.0", 33.4, 1.0), Session("NPU", 11.2, 1.0)], DateTimeOffset.UtcNow);
-        Assert.Contains("Transcription by Device", both);
-        Assert.Contains("11.2", both);
-    }
-
-    [Fact]
-    public void AcceleratedReplaysAreExcludedFromComparison()
+    public void ReplaySpeedIsNamedPerSession()
     {
         var html = ReportBuilder.Build(Machine,
             [Session("GPU.0", 33.4, 1.0), Session("NPU", 11.2, 16.0)], DateTimeOffset.UtcNow);
 
         Assert.Contains("Replay &#215;16", html);  // × html-encoded
-        Assert.DoesNotContain("Transcription by Device", html);
     }
 
     [Fact]

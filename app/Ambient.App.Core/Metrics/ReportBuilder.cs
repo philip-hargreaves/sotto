@@ -43,7 +43,6 @@ public static class ReportBuilder
             + $"{sessions.Count} recorded sessions</p>");
 
         AppendMachine(html, machine, sessions);
-        AppendComparison(html, sessions);
         AppendSessions(html, sessions);
 
         html.Append("<h2>Raw Data</h2><details><summary>Session records (JSON)</summary><pre>");
@@ -173,50 +172,6 @@ public static class ReportBuilder
                 && y.Contains("AI BOOST", StringComparison.Ordinal));
     }
 
-    private static void AppendComparison(StringBuilder html, List<JsonElement> sessions)
-    {
-        var groups = sessions.Where(Comparable)
-            .GroupBy(s => Text(s, "engine", "devices", "asr") ?? "?")
-            .Where(g => g.Key != "?")
-            .ToList();
-        if (groups.Count < 2)
-        {
-            return;
-        }
-
-        html.Append("<h2>Transcription by Device</h2>");
-        html.Append("<p class=\"sub\">Medians over microphone and real-time replay sessions; "
-            + "accelerated test replays are excluded.</p><table><tr><th></th>");
-        foreach (var group in groups)
-        {
-            html.Append(CultureInfo.InvariantCulture,
-                $"<th>{WebUtility.HtmlEncode(group.Key)} ({group.Count()} sessions)</th>");
-        }
-
-        html.Append("</tr>");
-        var rows = new (string Label, Func<JsonElement, double?> Value)[]
-        {
-            ("Transcription RTF", s => Number(s, "engine", "asrRealtimeFactor")),
-            ("Transcript finalise (s)",
-                s => Number(s, "engine", "stageSeconds", "transcript sealed")),
-            ("Note prefill (s)", NotePrefill),
-            ("Note generation (s)", NoteGeneration),
-            ("Stop to note done (s)", s => Number(s, "note", "readyAfterStopSeconds")),
-        };
-        foreach (var (label, value) in rows)
-        {
-            html.Append(CultureInfo.InvariantCulture, $"<tr><td>{label}</td>");
-            foreach (var group in groups)
-            {
-                html.Append(CultureInfo.InvariantCulture, $"<td>{Median(group, value)}</td>");
-            }
-
-            html.Append("</tr>");
-        }
-
-        html.Append("</table>");
-    }
-
     private static void AppendSessions(StringBuilder html, List<JsonElement> sessions)
     {
         html.Append("<h2>Sessions</h2>");
@@ -259,12 +214,6 @@ public static class ReportBuilder
     }
 
 
-    private static bool Comparable(JsonElement session)
-    {
-        var speed = Number(session, "replaySpeed");
-        return speed is null || speed <= 1.0;
-    }
-
     private static double? NoteGeneration(JsonElement s)
     {
         var first = Number(s, "note", "firstPartialAfterStopSeconds");
@@ -283,14 +232,6 @@ public static class ReportBuilder
 
         var whole = (int)Math.Round(seconds.Value);
         return $"{whole / 60}:{whole % 60:00}";
-    }
-
-    private static string Median(IEnumerable<JsonElement> sessions,
-        Func<JsonElement, double?> value)
-    {
-        var values = sessions.Select(value).Where(v => v is not null)
-            .Select(v => v!.Value).Order().ToList();
-        return values.Count == 0 ? "-" : Format(values[values.Count / 2]);
     }
 
     private static string Format(double? value) => value is null
