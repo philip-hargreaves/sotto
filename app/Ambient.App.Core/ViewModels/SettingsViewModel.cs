@@ -184,9 +184,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string ExportResult { get; private set; } = "";
 
+    /// <summary>Suggested name in, chosen path (or null) out; the view owns the picker.</summary>
+    public Func<string, Task<string?>>? PickSavePath { get; set; }
+
     /// <summary>One self-contained HTML file: readable, emailable, parseable.</summary>
     [RelayCommand]
-    private void ExportPerformanceReport()
+    private async Task ExportPerformanceReport()
     {
         if (_machine is null || _metrics is null || !File.Exists(_metrics.Path))
         {
@@ -198,8 +201,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             var html = ReportBuilder.Build(
                 _machine.Describe(), File.ReadAllLines(_metrics.Path), DateTimeOffset.UtcNow);
-            var path = Path.Combine(_exportDirectory,
-                $"ambient-perf-{Environment.MachineName}-{DateTime.Now:yyyyMMdd}.html");
+            var suggested = $"ambient-perf-{Environment.MachineName}-{DateTime.Now:yyyyMMdd}.html";
+            var path = PickSavePath is not null
+                ? await PickSavePath(suggested).ConfigureAwait(true)
+                : Path.Combine(_exportDirectory, suggested);
+            if (path is null)
+            {
+                return;  // cancelled: no file, no caption
+            }
+
             File.WriteAllText(path, html);
             ExportResult = $"saved {path}";
         }
