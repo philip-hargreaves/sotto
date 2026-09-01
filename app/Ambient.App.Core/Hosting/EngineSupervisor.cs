@@ -122,6 +122,15 @@ public sealed class EngineSupervisor(
         var exitCode = process.ExitCode;
         process.Dispose();
 
+        // Exit 0 is the engine leaving on request - a stop, never a crash.
+        // Counting it burns restart budget and races a settings-driven
+        // Shutdown/Start with a spurious supervisor relaunch
+        if (exitCode == 0)
+        {
+            SetStatusLocked(EngineStatus.Stopped, changes);
+            return;
+        }
+
         var now = clock.GetUtcNow();
         _crashes.RemoveAll(crash => now - crash > RestartPolicy.StormWindow);
         _crashes.Add(now);

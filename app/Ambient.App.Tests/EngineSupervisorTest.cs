@@ -12,7 +12,8 @@ public class EngineSupervisorTest
 
         public bool HasExited { get; private set; } = stillborn;
 
-        public int ExitCode { get; private set; }
+        // A process dead at launch crashed; only a requested exit is 0
+        public int ExitCode { get; private set; } = stillborn ? 1 : 0;
 
         public bool Killed { get; private set; }
 
@@ -193,6 +194,22 @@ public class EngineSupervisorTest
         Assert.Single(h.Launcher.Launched);
         Assert.Null(h.Host.Fault);
         Assert.Null(h.Host.EnginePid);
+    }
+
+    [Fact]
+    public void ACleanExitIsAStopNotACrash()
+    {
+        var h = new Harness();
+        h.Host.Start();
+
+        h.Current.Crash(0);
+
+        Assert.Equal(EngineStatus.Stopped, h.Host.Status);
+        Assert.Null(h.Host.Fault);
+        Assert.Single(h.Launcher.Launched);
+        Assert.Empty(h.Log.Reports);
+        h.Host.Start();
+        Assert.Equal(EngineStatus.Running, h.Host.Status);
     }
 
     [Fact]
