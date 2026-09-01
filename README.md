@@ -1,4 +1,4 @@
-# ambient
+# Ambient Voice Scribe Technology - better name TBC
 
 On-device ambient AI for clinical consultations. A C++20 engine with a WinUI 3 shell that
 listens to the consultation, produces a labelled transcript, and drafts a structured clinical note.
