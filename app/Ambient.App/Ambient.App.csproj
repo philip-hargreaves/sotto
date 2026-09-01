@@ -15,6 +15,8 @@
          distribution work. Self-contained: no runtime install needed -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- English-only satellite resources; ~90 culture folders otherwise -->
+    <SatelliteResourceLanguages>en-US</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -60,6 +62,16 @@
     <Exec Command='mklink /J "$(TargetDir)AppX\prompts" "$(MSBuildProjectDirectory)\..\..\prompts"' />
   </Target>
 
+  <!-- Demo tracks too, so every layout has demo\ beside the exe -->
+  <Target Name="LinkDemo" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\demo') And !Exists('$(TargetDir)demo')">
+    <Exec Command='mklink /J "$(TargetDir)demo" "$(MSBuildProjectDirectory)\..\..\demo"' />
+  </Target>
+  <Target Name="LinkDemoAppX" AfterTargets="Build"
+          Condition="Exists('$(MSBuildProjectDirectory)\..\..\demo') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\demo')">
+    <Exec Command='mklink /J "$(TargetDir)AppX\demo" "$(MSBuildProjectDirectory)\..\..\demo"' />
+  </Target>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
@@ -68,7 +80,8 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
     <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\AppIcon.ico" />
+    <!-- Read back at runtime by AppWindow.SetIcon, so it must ship -->
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <!-- Partner marks; the json decides what shows, per showcase -->
     <Content Include="Assets\logos\**" CopyToOutputDirectory="PreserveNewest" />
