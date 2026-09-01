@@ -353,6 +353,15 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
             }
             return json::object();
         });
+    // The sheet from the stored note, edits included; streams as usual
+    server.RegisterMethod(
+        "patient/regenerate", [&controller](const json&) -> std::variant<json, Error> {
+            if (!controller.RegeneratePatient()) {
+                return Error{kSessionError, "Session error",
+                             json("no stored note, or a document is already being written")};
+            }
+            return json::object();
+        });
     server.RegisterMethod(
         "note/update", [&sessions](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);

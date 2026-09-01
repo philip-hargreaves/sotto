@@ -321,6 +321,54 @@ class SessionController {
         return true;
     }
 
+    // The sheet rewritten from the stored note - clinician edits included -
+    // so an edited note can bring the sheet back into agreement
+    bool RegeneratePatient() {
+        if (note_writer_ == nullptr || !note_writer_->WritesPatient() || Running() ||
+            note_busy_.load()) {
+            return false;
+        }
+        store::SessionId id = LastFinalised();
+        if (id.empty()) {
+            return false;
+        }
+        std::string note;
+        try {
+            note = store_.ReadDocument(id, store::DocumentKind::kNote).text;
+        } catch (...) {
+            return false;
+        }
+        if (note.empty()) {
+            return false;
+        }
+        JoinNoteThread();
+        std::lock_guard<std::mutex> lock(mutex_);
+        note_busy_ = true;
+        note_thread_ = std::thread([this, id = std::move(id), note = std::move(note)] {
+            struct BusyGuard {
+                std::atomic<bool>& flag;
+                ~BusyGuard() {
+                    flag = false;
+                }
+            } busy_guard{note_busy_};
+            if (note_abort_.load()) {
+                return;
+            }
+            try {
+                const std::string patient = note_writer_->WritePatient(
+                    note,
+                    [this](const std::string& partial) { events_.OnPatientPartial(partial); });
+                SavePatient(id, patient);
+                events_.OnPatientReady(patient);
+            } catch (const std::exception& e) {
+                events_.OnPatientFailed(e.what());
+            } catch (...) {
+                events_.OnPatientFailed("patient information failed");
+            }
+        });
+        return true;
+    }
+
     note::NoteOptions CurrentNoteOptions() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return note_options_;

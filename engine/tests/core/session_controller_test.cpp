@@ -730,6 +730,32 @@ TEST(SessionController, AnOpenedSessionIsTheRegenerateTarget) {
     EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "closed";
 }
 
+TEST(SessionController, RegeneratePatientRewritesTheSheetFromTheStoredNote) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    store.turns = {{0, 16000 * 30, "doctor", "a stored consultation with enough words to note"}};
+    store.note = "the note as the clinician edited it";
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeNoteWriter writer;
+    writer.patient = true;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, nullptr, 5 * kSampleRate,
+                                 &writer, nullptr, 0);
+
+    EXPECT_FALSE(controller.RegeneratePatient()) << "nothing open yet";
+    ASSERT_TRUE(controller.Open("past"));
+    ASSERT_TRUE(controller.RegeneratePatient());
+    ASSERT_TRUE(events.WaitForPatient());
+
+    EXPECT_EQ(writer.patient_input, "the note as the clinician edited it")
+        << "the sheet regenerates from the stored note, edits included";
+    EXPECT_EQ(store.patient, "the patient sheet");
+
+    controller.Close();
+    EXPECT_FALSE(controller.RegeneratePatient()) << "closed";
+}
+
 TEST(SessionController, OpenIsRefusedWhileRecordingOrForAnUnknownSession) {
     RecordingEvents events;
     FakeSessionStore store;
