@@ -48,6 +48,40 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button
                         VerticalAlignment="Center"
+                        Style="{StaticResource TrayButton}"
+                        ToolTipService.ToolTip="About Ambient">
+                        <FontIcon FontSize="16" Glyph="&#xE946;" />
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <ScrollViewer MaxHeight="560">
+                                    <StackPanel MaxWidth="400" Spacing="8">
+                                        <TextBlock FontWeight="SemiBold" Text="About" />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="Ambient produces a draft transcript, clinical note and patient information sheet from a consultation. The patient sheet can also be translated into the patient's own language. Every document is a draft for a clinician to review and edit - nothing is final until a clinician has checked it." />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="This app is a demonstrative product, developed by Philip Hargreaves in collaboration with Intel and the NHS. It is for demonstration and evaluation only, and is not for use in real clinical settings." />
+                                        <TextBlock FontWeight="SemiBold" Margin="0,8,0,0" Text="Disclaimer" />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="&#x2022;  Ambient does not diagnose, recommend treatment or add clinical information of its own. It is not a medical device." />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="&#x2022;  Automatic transcription, drafting and translation make mistakes - missed words, wrong speaker labels, wording that changes meaning. Ambient is built on the principle that a clinician checks every document against what was actually said." />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="&#x2022;  Nothing Ambient produces is a substitute for clinical judgement; responsibility for any clinical record always rests with a clinician." />
+                                        <TextBlock FontWeight="SemiBold" Margin="0,8,0,0" Text="Privacy" />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="Everything runs on device. Audio, transcripts, notes and translations are processed and stored locally; nothing leaves the device." />
+                                        <TextBlock FontWeight="SemiBold" Margin="0,8,0,0" Text="Minimum system requirements" />
+                                        <TextBlock TextWrapping="Wrap"
+                                            Text="&#x2022;  Windows 11, 64-bit&#x0a;&#x2022;  Intel Core Ultra Series 2 processor with Intel Arc iGPU&#x0a;&#x2022;  32 GB RAM&#x0a;&#x2022;  20 GB free disk space, for the models and their compiled caches" />
+                                        <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}"
+                                            Text="Developed and tested on an Intel Core Ultra 9 285H with Intel Arc 140T graphics and 64 GB RAM." />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button
+                        VerticalAlignment="Center"
                         Command="{x:Bind Shell.ShowSessionsCommand}"
                         Style="{StaticResource TrayButton}"
                         ToolTipService.ToolTip="Sessions">
