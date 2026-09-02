@@ -31,4 +31,17 @@ TEST(SettledFrontier, TurnsPastTheAudioDoNotCount) {
     EXPECT_EQ(SettledFrontier(320000, turns, 80000), 0u);
 }
 
+TEST(SegSettledFrontier, TrailsVadByTheRegionMargin) {
+    using ambient::diar::kSegFrontierMarginFrames;
+    EXPECT_EQ(ambient::diar::SegSettledFrontier(320000, 160000),
+              160000u - kSegFrontierMarginFrames);  // vad behind
+    EXPECT_EQ(ambient::diar::SegSettledFrontier(100000, 320000), 100000u);  // seg behind
+}
+
+TEST(SegSettledFrontier, NothingSettlesInsideTheFirstMargin) {
+    EXPECT_EQ(ambient::diar::SegSettledFrontier(320000, ambient::diar::kSegFrontierMarginFrames),
+              0u);
+    EXPECT_EQ(ambient::diar::SegSettledFrontier(320000, 0), 0u);
+}
+
 }  // namespace
