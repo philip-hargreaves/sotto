@@ -6,6 +6,7 @@
 #include "adapters/diarisation/speaker_clustering.hpp"
 #include "core/diar_capture.hpp"
 #include "core/diar_regions.hpp"
+#include "core/env_flag.hpp"
 #include "core/per_turn.hpp"
 #include "core/slice_refinement.hpp"
 
@@ -75,15 +76,21 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
         s.seg_done += kSegWindowFrames;
     }
 
-    const auto settled = SettledFrontier(s.seg_done, turns, audio.size());
+    const auto settled =
+        EnvFlag("AMBIENT_SEG_FRONTIER")
+            ? SegSettledFrontier(s.seg_done, s.vad_probabilities.size() * audio::kVadHopFrames)
+            : SettledFrontier(s.seg_done, turns, audio.size());
     if (settled == 0) return;
 
     // Slices behind the frontier, cut exactly as finalise cuts them
+    // (including the AMBIENT_DIAR_SEG_CUTS_ONLY windowless ablation)
     auto cps = s.seg.change_points;
-    for (const auto& turn : turns) {
-        if (turn.first_frame <= settled) cps.push_back(turn.first_frame);
-        if (turn.first_frame + turn.frame_count <= settled) {
-            cps.push_back(turn.first_frame + turn.frame_count);
+    if (!EnvFlag("AMBIENT_DIAR_SEG_CUTS_ONLY")) {
+        for (const auto& turn : turns) {
+            if (turn.first_frame <= settled) cps.push_back(turn.first_frame);
+            if (turn.first_frame + turn.frame_count <= settled) {
+                cps.push_back(turn.first_frame + turn.frame_count);
+            }
         }
     }
     std::sort(cps.begin(), cps.end());

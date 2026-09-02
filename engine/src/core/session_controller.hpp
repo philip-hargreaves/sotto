@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "core/endpointer.hpp"
+#include "core/env_flag.hpp"
 #include "core/level_meter.hpp"
 #include "core/metrics.hpp"
 #include "core/note_label.hpp"
@@ -436,7 +437,11 @@ class SessionController {
                                                    frames.end());
                 } else {
                     controller.DrainVadBacklog();
+                    // AMBIENT_NO_LIVE_ASR (windowless prototype, requires the seg-cuts
+                    // and seg-frontier flags): the endpointer still runs, its windows
+                    // are never decoded - per-turn clips are the only ASR
                     for (const auto& window : controller.endpointer_->Push(frames)) {
+                        if (EnvFlag("AMBIENT_NO_LIVE_ASR")) continue;
                         controller.transcriber_.Submit(window.frames, window.first_frame,
                                                        window.first_new_frame);
                     }
@@ -549,6 +554,7 @@ class SessionController {
         }
         std::vector<float> backlog = std::exchange(vad_backlog_, {});
         for (const auto& window : endpointer_->Push(backlog)) {
+            if (EnvFlag("AMBIENT_NO_LIVE_ASR")) continue;
             transcriber_.Submit(window.frames, window.first_frame, window.first_new_frame);
         }
     }
@@ -604,7 +610,9 @@ class SessionController {
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
             DrainVadBacklog();  // a stop can land before the VAD does
             if (const auto tail = endpointer_->Flush()) {
-                transcriber_.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
+                if (!EnvFlag("AMBIENT_NO_LIVE_ASR")) {
+                    transcriber_.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
+                }
             }
         }
         transcriber_.Finish();
@@ -642,11 +650,14 @@ class SessionController {
                 }
                 diar::ReconcileTurns(transcribed);
                 // Transcribed-turn edges are extra slice cuts: they land on
-                // real speech boundaries and measured +0.41 pt attribution
+                // real speech boundaries and measured +0.41 pt attribution.
+                // AMBIENT_DIAR_SEG_CUTS_ONLY drops them (windowless ablation)
                 std::vector<std::uint64_t> boundaries;
-                for (const auto& turn : transcribed) {
-                    boundaries.push_back(turn.first_frame);
-                    boundaries.push_back(turn.first_frame + turn.frame_count);
+                if (!EnvFlag("AMBIENT_DIAR_SEG_CUTS_ONLY")) {
+                    for (const auto& turn : transcribed) {
+                        boundaries.push_back(turn.first_frame);
+                        boundaries.push_back(turn.first_frame + turn.frame_count);
+                    }
                 }
                 events_.OnProgress("speakers");
                 const auto result = diariser_->Diarise(session_audio_, boundaries);
