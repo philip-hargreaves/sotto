@@ -5,8 +5,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -400,6 +402,14 @@ struct FakeNoteWriter : note::INoteWriter {
 
     void Prepare() override {
         ++prepares;
+    }
+
+    std::atomic<int> prefills{0};
+    std::string last_prefill_speaker;  // read after the controller joins its threads
+
+    void Prefill(const std::vector<asr::Turn>& guess, const note::NoteOptions&) override {
+        ++prefills;
+        if (!guess.empty()) last_prefill_speaker = guess.front().speaker;
     }
 
     bool WritesPatient() const override {
@@ -1109,6 +1119,13 @@ struct FakeDiariser : diar::IDiariser {
         advanced_turns = turns.size();
     }
 
+    bool speculate_transcript = false;
+
+    std::vector<asr::Turn> SpeculativeTranscript() override {
+        if (!speculate_transcript) return {};
+        return {{0, 16000, "doctor", "settled words"}};
+    }
+
     // Pretends capture speculated the first cluster's turn (its span is the
     // first half of the audio Diarise saw)
     diar::TurnTexts TakeTurnTexts() override {
@@ -1230,6 +1247,41 @@ TEST(SessionController, DiarisationAdvancesDuringCapture) {
     EXPECT_LE(diariser.advanced_frames, store.frames.size())
         << "Advance only ever sees captured audio";
     EXPECT_EQ(diariser.calls, 1);
+}
+
+TEST(SessionController, TheSpeculatedOpeningReachesTheNoteWriterOnlyBehindTheFlag) {
+    struct FlagScope {
+        FlagScope() {
+            _putenv_s("AMBIENT_NOTE_PREFILL", "1");
+        }
+        ~FlagScope() {
+            _putenv_s("AMBIENT_NOTE_PREFILL", "");
+        }
+    };
+    for (const bool flag : {false, true}) {
+        std::optional<FlagScope> scope;
+        if (flag) scope.emplace();
+        RecordingEvents events;
+        FakeSessionStore store;
+        asr::ScriptedTranscriber transcriber;
+        PassthroughVad vad;
+        FakeDiariser diariser;
+        diariser.speculate_transcript = true;
+        FakeNoteWriter writer;
+        SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped),
+                                     events, store, transcriber, vad, kTestSettle, &diariser,
+                                     LevelMeter::kWindowFrames, &writer);
+        ASSERT_TRUE(controller.Start());
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        controller.Stop();
+        ASSERT_GT(diariser.advances, 0);
+        if (flag) {
+            EXPECT_GT(writer.prefills.load(), 0) << "each tick hands the guess to the note lane";
+            EXPECT_EQ(writer.last_prefill_speaker, "doctor");
+        } else {
+            EXPECT_EQ(writer.prefills.load(), 0) << "shipped behaviour: no prefill";
+        }
+    }
 }
 
 TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {

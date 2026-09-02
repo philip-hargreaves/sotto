@@ -40,6 +40,10 @@ class QwenNoteWriter : public INoteWriter {
     // Loads the pipeline in the background; idempotent, retried on failure
     void Prepare() override;
 
+    // One discarded token over the guessed prompt prefix; skipped while a
+    // generation runs or the model is still loading
+    void Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) override;
+
     void Cancel() override;
 
    private:

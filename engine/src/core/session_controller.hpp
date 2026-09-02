@@ -524,6 +524,12 @@ class SessionController {
                         }
                         return transcriber_.DecodeClip(clip, first);
                     });
+                // AMBIENT_NOTE_PREFILL (windowless prototype): the note host
+                // extends its KV over the settled opening between whisper decodes
+                if (EnvFlag("AMBIENT_NOTE_PREFILL") && note_writer_ != nullptr) {
+                    const auto guess = diariser_->SpeculativeTranscript();
+                    if (!guess.empty()) note_writer_->Prefill(guess, CurrentNoteOptions());
+                }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
             lock.lock();
