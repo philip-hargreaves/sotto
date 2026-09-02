@@ -28,6 +28,14 @@ struct CaptureDiarisation {
     TurnTexts turn_texts;  // the speculation cache, keyed on exact decode spans
 };
 
+// What the last Advance could say about the sealed transcript's opening
+struct Speculation {
+    std::vector<LabelledSlice> turns;  // settled, merged, text known
+    std::vector<std::string> texts;
+    std::vector<std::vector<float>> centroids;  // provisional clusters
+    int cluster_count = 0;
+};
+
 // Capture-phase stages behind the settled frontier; finalise stays
 // bit-identical and pays only the tail
 class DiarWorker {
@@ -47,7 +55,12 @@ class DiarWorker {
 
     CaptureDiarisation Take() {
         overlap_cache_.clear();
+        speculation_ = {};
         return std::exchange(state_, {});
+    }
+
+    const Speculation& LastSpeculation() const {
+        return speculation_;
     }
 
    private:
@@ -60,6 +73,7 @@ class DiarWorker {
     Segmenter& segmenter_;
     SpeakerEmbedder& embedder_;
     CaptureDiarisation state_;
+    Speculation speculation_;
 };
 
 }  // namespace ambient::diar

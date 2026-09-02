@@ -6,6 +6,7 @@
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
 #include "core/diar_regions.hpp"
+#include "core/role_naming.hpp"
 #include "core/slice_refinement.hpp"
 
 namespace ambient::diar {
@@ -168,6 +169,40 @@ std::vector<double> SpeakerDiariser::AnchorSimilarities(std::span<const float> a
         voiceprints_[static_cast<std::size_t>(c)] = std::move(voiceprint);
     }
     return similarity;
+}
+
+std::vector<asr::Turn> SpeakerDiariser::SpeculativeTranscript() {
+    const Speculation& spec = worker_.LastSpeculation();
+    if (spec.turns.empty()) return {};
+    std::vector<double> similarity;
+    const auto anchor = anchors_.Anchor();
+    if (anchor && spec.centroids.size() == static_cast<std::size_t>(spec.cluster_count)) {
+        for (const auto& centroid : spec.centroids) {
+            double dot = 0.0;
+            for (std::size_t d = 0; d < centroid.size() && d < anchor->size(); ++d) {
+                dot += static_cast<double>(centroid[d]) * (*anchor)[d];
+            }
+            similarity.push_back(dot);
+        }
+    }
+    std::vector<RoleTurn> role_turns;
+    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
+        role_turns.push_back({spec.turns[i].cluster,
+                              spec.turns[i].end_frame - spec.turns[i].first_frame, spec.texts[i]});
+    }
+    const auto roles = NameRoles(role_turns, spec.cluster_count, similarity);
+    std::vector<asr::Turn> out;
+    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
+        const auto cluster = static_cast<std::size_t>(spec.turns[i].cluster);
+        asr::Turn turn;
+        turn.first_frame = spec.turns[i].first_frame;
+        turn.frame_count = spec.turns[i].end_frame - spec.turns[i].first_frame;
+        turn.speaker = cluster < roles.role_of_cluster.size() ? roles.role_of_cluster[cluster]
+                                                              : "unknown";
+        turn.text = spec.texts[i];
+        out.push_back(std::move(turn));
+    }
+    return out;
 }
 
 void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,

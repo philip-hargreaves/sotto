@@ -102,4 +102,25 @@ inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>
     return texts;
 }
 
+// Merged turns whose text the cache already holds, in order, up to the first
+// span finalise would have to decode: from there on the sealed transcript is
+// unknowable. Spans below the clip floor are skipped as finalise skips them
+inline std::vector<LabelledSlice> SpeculatedTurns(const std::vector<LabelledSlice>& merged,
+                                                  std::uint64_t audio_frames,
+                                                  const TurnTexts& cache,
+                                                  std::vector<std::string>* texts) {
+    const auto spans = DecodeSpans(merged, audio_frames);
+    std::vector<LabelledSlice> known;
+    texts->clear();
+    for (std::size_t i = 0; i < merged.size(); ++i) {
+        const auto [a, b] = spans[i];
+        if (a >= b || b - a < kPerTurnMinClipFrames) continue;
+        const auto it = cache.find({a, b});
+        if (it == cache.end()) break;
+        known.push_back(merged[i]);
+        texts->push_back(it->second);
+    }
+    return known;
+}
+
 }  // namespace ambient::diar

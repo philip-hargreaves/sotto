@@ -40,6 +40,10 @@ class DeferredDiariser : public IDiariser {
         return inner_.Get().TakeTurnTexts();
     }
 
+    std::vector<asr::Turn> SpeculativeTranscript() override {
+        return inner_.Get().SpeculativeTranscript();
+    }
+
     void DiscardCapture() override {
         if (inner_.Loaded()) {
             inner_.Get().DiscardCapture();

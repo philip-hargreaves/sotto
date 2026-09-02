@@ -44,6 +44,10 @@ class SpeakerDiariser : public IDiariser {
         return std::exchange(texts_, {});
     }
 
+    // Roles named as finalise names them, with cluster centroids standing in
+    // for the voiceprints against the anchor
+    std::vector<asr::Turn> SpeculativeTranscript() override;
+
     void DiscardCapture() override {
         (void)worker_.Take();
         texts_.clear();

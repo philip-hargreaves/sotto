@@ -86,6 +86,10 @@ struct CountingDiariser : diar::IDiariser {
     void DiscardCapture() override {
         ++discards;
     }
+
+    std::vector<asr::Turn> SpeculativeTranscript() override {
+        return {{0, 16000, "doctor", "guessed"}};
+    }
 };
 
 // The engine only ever sees the wrapper; a method it does not forward is a
@@ -98,6 +102,17 @@ TEST(DeferredDiariser, ForwardsAnchorSimilarities) {
     const auto similarity = diariser.AnchorSimilarities({}, {}, 2);
 
     EXPECT_EQ(similarity, (std::vector<double>{0.75, 0.75}));
+}
+
+TEST(DeferredDiariser, ForwardsTheSpeculativeTranscript) {
+    std::atomic<int> discards{0};
+    diar::DeferredDiariser diariser(
+        [&discards] { return std::make_unique<CountingDiariser>(discards); });
+
+    const auto guess = diariser.SpeculativeTranscript();
+
+    ASSERT_EQ(guess.size(), 1u);
+    EXPECT_EQ(guess[0].speaker, "doctor");
 }
 
 TEST(DeferredDiariser, DiscardBeforeTheLoadIsANoOp) {

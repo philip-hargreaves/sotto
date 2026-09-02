@@ -172,6 +172,10 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
         if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
         s.turn_texts[{a, b}] = text;
     }
+
+    speculation_.turns = SpeculatedTurns(merged, audio.size(), s.turn_texts, &speculation_.texts);
+    speculation_.centroids = clusters.centroids;
+    speculation_.cluster_count = clusters.count;
 }
 
 }  // namespace ambient::diar

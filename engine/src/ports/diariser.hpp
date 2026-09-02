@@ -68,6 +68,13 @@ class IDiariser {
         return {};
     }
 
+    // The sealed transcript's opening as far as capture can know it: settled
+    // turns with cached texts and provisional roles. Valid after Advance, on
+    // its thread; empty when nothing has settled
+    virtual std::vector<asr::Turn> SpeculativeTranscript() {
+        return {};
+    }
+
     // Drop capture state a finalise will never consume (cancel, abandon)
     virtual void DiscardCapture() {}
 };

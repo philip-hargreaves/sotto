@@ -110,5 +110,37 @@ TEST(DecodeTurnTexts, ATurnPastTheAudioEndIsBounded) {
     EXPECT_EQ(calls[0].second, 10000u) << "clamped to the audio that exists";
 }
 
+TEST(SpeculatedTurns, StopsAtTheFirstSpanTheCacheDoesNotHold) {
+    const std::vector<LabelledSlice> merged{
+        {0, 30000, 0}, {30000, 60000, 1}, {60000, 90000, 0}, {90000, 120000, 1}};
+    TurnTexts cache;
+    cache[{0, 30000}] = "first";
+    cache[{30000, 60000}] = "second";
+    cache[{90000, 120000}] = "fourth";  // known, but behind an unknown turn
+    std::vector<std::string> texts;
+    const auto known = SpeculatedTurns(merged, 120000, cache, &texts);
+    ASSERT_EQ(known.size(), 2u);
+    EXPECT_EQ(known[1].cluster, 1);
+    EXPECT_EQ(texts, (std::vector<std::string>{"first", "second"}));
+}
+
+TEST(SpeculatedTurns, SkipsSpansBelowTheClipFloorAsFinaliseDoes) {
+    const std::vector<LabelledSlice> merged{{0, 30000, 0}, {30000, 32000, 1}, {32000, 60000, 0}};
+    TurnTexts cache;
+    cache[{0, 30000}] = "first";
+    cache[{32000, 60000}] = "third";
+    std::vector<std::string> texts;
+    const auto known = SpeculatedTurns(merged, 60000, cache, &texts);
+    ASSERT_EQ(known.size(), 2u);
+    EXPECT_EQ(known[1].first_frame, 32000u);
+    EXPECT_EQ(texts[1], "third");
+}
+
+TEST(SpeculatedTurns, NothingKnownIsEmpty) {
+    std::vector<std::string> texts;
+    EXPECT_TRUE(SpeculatedTurns({{0, 30000, 0}}, 30000, {}, &texts).empty());
+    EXPECT_TRUE(texts.empty());
+}
+
 }  // namespace
 }  // namespace ambient::diar
