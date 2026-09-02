@@ -40,6 +40,7 @@ add_executable(engine_tests
     adapters/db_test.cpp
     adapters/fbank_test.cpp
     adapters/framing_test.cpp
+    adapters/gpu_lease_test.cpp
     adapters/capture_devices_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp

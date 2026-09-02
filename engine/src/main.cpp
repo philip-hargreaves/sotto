@@ -40,6 +40,7 @@
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
 #include "core/cli_args.hpp"
+#include "core/env_flag.hpp"
 #include "core/metrics.hpp"
 #include "core/session_controller.hpp"
 #include "core/throughput.hpp"
@@ -183,6 +184,12 @@ int main(int argc, char* argv[]) {
         // Flags first, then positional: pipe name, store root, models root, replay wav
         std::vector<std::string> args(argv + 1, argv + argc);
         const std::string asr_device = ambient::TakeFlag(args, "--asr-device");
+        // AMBIENT_NOTE_PREFILL: whisper and the note host take turns on the GPU
+        if (ambient::EnvFlag("AMBIENT_NOTE_PREFILL")) {
+            const std::string lease = "Local\\ambient-gpu-" + std::to_string(GetCurrentProcessId());
+            _putenv_s("AMBIENT_GPU_LEASE", lease.c_str());
+            std::fprintf(stderr, "ambient-engine: note prefill on, GPU lease %s\n", lease.c_str());
+        }
         std::fprintf(stderr, "ambient-engine: power throttling %s\n",
                      ambient::host::Describe(ambient::host::DisableThrottlingOnSelf()).c_str());
 

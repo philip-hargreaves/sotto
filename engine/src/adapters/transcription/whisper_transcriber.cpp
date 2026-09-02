@@ -6,6 +6,7 @@
 #include <openvino/genai/whisper_pipeline.hpp>
 #include <utility>
 
+#include "adapters/host/gpu_lease.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "core/metrics.hpp"
@@ -43,6 +44,11 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     // rejected: it worsened WER even with register effects folded out
     return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
+        const auto lease = host::GpuLease::Global().Acquire();
+        if (lease.waited() > 0.25) {
+            std::fprintf(stderr, "ambient-engine: asr waited %.2f s for the GPU lease\n",
+                         lease.waited());
+        }
         auto result = pipeline->generate(audio, config);
 
         std::vector<Turn> turns;
