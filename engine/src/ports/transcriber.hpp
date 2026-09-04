@@ -58,12 +58,6 @@ class ITranscriber {
         return {};
     }
 
-    // Sentence ends inside decoded clips, timed by character position
-    // (AMBIENT_CLIP_CUTS=punct; the diariser snaps them onto pauses)
-    virtual std::vector<std::uint64_t> TakePunctuationCuts() {
-        return {};
-    }
-
     // Free the model's device memory; the next use reloads it
     virtual void Release() {}
 };

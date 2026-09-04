@@ -25,10 +25,14 @@ constexpr auto kTestSettle = std::chrono::milliseconds(200);
 // The pipeline switches default to the single-decode product (env_flag.hpp);
 // tests of the retained two-pass arm (live windows, no cuts, no prefill) say so
 struct TwoPassArm {
-    static constexpr const char* kSwitches[] = {
-        "AMBIENT_DIAR_SEG_CUTS_ONLY", "AMBIENT_SEG_FRONTIER", "AMBIENT_NO_LIVE_ASR",
-        "AMBIENT_NOTE_PREFILL",       "AMBIENT_CLIP_CUTS",    "AMBIENT_RESPLIT",
-        "AMBIENT_TIDY",               "AMBIENT_CHUNK_ASSEMBLE"};
+    static constexpr const char* kSwitches[] = {"AMBIENT_DIAR_SEG_CUTS_ONLY",
+                                                "AMBIENT_SEG_FRONTIER",
+                                                "AMBIENT_NO_LIVE_ASR",
+                                                "AMBIENT_NOTE_PREFILL",
+                                                "AMBIENT_CLIP_CUTS",
+                                                "AMBIENT_RESPLIT",
+                                                "AMBIENT_TIDY",
+                                                "AMBIENT_CHUNK_ASSEMBLE"};
     TwoPassArm() {
         for (const char* name : kSwitches) _putenv_s(name, "0");
     }
@@ -1400,8 +1404,7 @@ TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
     EXPECT_EQ(diariser.takes, 1);
     ASSERT_EQ(store.turns.size(), 2u);
     EXPECT_EQ(store.turns[0].text, "Speculated words.") << "the cache hit stands, tidied";
-    EXPECT_NE(store.turns[1].text.find("e-decoded"), std::string::npos)
-        << "the miss decodes fresh";
+    EXPECT_NE(store.turns[1].text.find("e-decoded"), std::string::npos) << "the miss decodes fresh";
 }
 
 TEST(SessionController, PauseReachesTheSourceAndStopStillWins) {

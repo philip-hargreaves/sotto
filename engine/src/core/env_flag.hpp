@@ -16,7 +16,7 @@ inline const char* DefaultValue(const char* name) {
         {"AMBIENT_SEG_FRONTIER", "1"},        // turns close at the settled frontier
         {"AMBIENT_NO_LIVE_ASR", "1"},         // one decode per turn, no live pass
         {"AMBIENT_NOTE_PREFILL", "1"},        // note prompt prefilled during capture
-        {"AMBIENT_CLIP_CUTS", "snap"},        // Whisper chunk edges as cuts, snapped to pauses
+        {"AMBIENT_CLIP_CUTS", "1"},           // Whisper chunk edges as cuts, snapped to pauses
         {"AMBIENT_RESPLIT", "1"},             // merged turns re-split by embedding at seal
         {"AMBIENT_TIDY", "1"},                // professional-transcript tidy at seal
         {"AMBIENT_CHUNK_ASSEMBLE", "1"},      // cut pieces take the parent decode's chunks

@@ -14,8 +14,7 @@ namespace ambient::diar {
 
 // (clip, absolute first frame) -> Whisper's chunks with absolute frames; the
 // text is their join
-using DecodeClipFn =
-    std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
+using DecodeClipFn = std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
 
 inline std::string JoinedText(const std::vector<asr::Turn>& chunks) {
     std::string text;
@@ -113,8 +112,6 @@ class IDiariser {
     // Extra cut points (absolute frames) for the next Advance and Diarise;
     // AMBIENT_CLIP_CUTS feeds Whisper's chunk edges here
     virtual void AddCutPoints(std::span<const std::uint64_t>) {}
-
-    virtual void AddPunctuationCuts(std::span<const std::uint64_t>) {}
 
     // Drop capture state a finalise will never consume (cancel, abandon)
     virtual void DiscardCapture() {}

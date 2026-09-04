@@ -17,7 +17,8 @@ TEST(GpuLease, UnnamedLeaseIsInertAndFree) {
 }
 
 TEST(GpuLease, TwoHoldersOfOneNameTakeTurns) {
-    const std::string name = "Local\\ambient-gpu-lease-test-" + std::to_string(GetCurrentProcessId());
+    const std::string name =
+        "Local\\ambient-gpu-lease-test-" + std::to_string(GetCurrentProcessId());
     GpuLease engine(name);
     GpuLease host(name);  // a second handle, as the other process would open it
     ASSERT_TRUE(engine.Active());

@@ -69,27 +69,9 @@ TEST(WhisperWorker, ClipSegmentEdgesInsideTheClipAreTakenAsCuts) {
     const std::vector<float> frames(48000, 0.1f);
     ASSERT_EQ(transcriber.DecodeClip(frames, 16000), "have you had any clots not that I know of");
     const auto cuts = transcriber.TakeClipCuts();
-    EXPECT_EQ(cuts, (std::vector<std::uint64_t>{16000 + 19200, 16000 + 19200,
-                                                16000 + 48000 - 800}));
+    EXPECT_EQ(cuts,
+              (std::vector<std::uint64_t>{16000 + 19200, 16000 + 19200, 16000 + 48000 - 800}));
     EXPECT_TRUE(transcriber.TakeClipCuts().empty()) << "taking drains";
-}
-
-TEST(WhisperWorker, SentenceEndsInsideASegmentBecomePunctuationCuts) {
-    // One 4 s segment from frame 0: "blood clots? Not that I know of, no. Anyone" - two
-    // sentence ends, timed by character share
-    WhisperTranscriber transcriber([](std::span<const float> f, std::uint64_t first) {
-        return std::vector<Turn>{{first, static_cast<std::uint64_t>(f.size()), "",
-                                  "blood clots? Not that I know of, no. Anyone"}};
-    });
-    const std::vector<float> frames(64000, 0.1f);
-    (void)transcriber.DecodeClip(frames, 0);
-    const auto cuts = transcriber.TakePunctuationCuts();
-    ASSERT_EQ(cuts.size(), 2u);
-    EXPECT_GT(cuts[0], 15000u);  // "blood clots?" is ~28% of the text
-    EXPECT_LT(cuts[0], 20000u);
-    EXPECT_GT(cuts[1], cuts[0]);
-    EXPECT_LT(cuts[1], 64000u);
-    EXPECT_TRUE(transcriber.TakeClipCuts().empty()) << "a single segment has no interior edge";
 }
 
 TEST(WhisperWorker, SubmitDoesNotBlockWhileADecodeIsInFlight) {
@@ -380,20 +362,18 @@ Turn At(std::uint64_t first, std::uint64_t count, const char* text) {
     return t;
 }
 
-TEST(WhisperWorker, WordTurnsReachTheClipCallerWhileCutsComeFromChunks) {
+TEST(WhisperWorker, ChunksReachTheClipCallerAndTheirEdgesBecomeCuts) {
     WhisperTranscriber transcriber(DecodeFn([](std::span<const float>, std::uint64_t first) {
-        return ClipDecode({At(first, 16000, "have you had clots?"), At(first + 16000, 8000, "No.")},
-                          {At(first, 4000, "have"), At(first + 4000, 4000, "you"),
-                           At(first + 8000, 4000, "had"), At(first + 12000, 4000, "clots?"),
-                           At(first + 16000, 8000, "No.")});
+        return std::vector<Turn>{At(first, 16000, "have you had clots?"),
+                                 At(first + 16000, 8000, "No.")};
     }));
     const std::vector<float> clip(24000, 0.0f);
     const auto chunks = transcriber.DecodeClipChunks(clip, 32000);
-    ASSERT_EQ(chunks.size(), 5u) << "the words, for the padded-clip trim";
-    EXPECT_EQ(chunks[4].text, "No.");
+    ASSERT_EQ(chunks.size(), 2u);
+    EXPECT_EQ(chunks[1].text, "No.");
     const auto cuts = transcriber.TakeClipCuts();
     EXPECT_EQ(cuts, (std::vector<std::uint64_t>{48000u, 48000u}))
-        << "the interior chunk edge (both sides), not the word edges";
+        << "the interior chunk edge, both sides";
     EXPECT_EQ(transcriber.DecodeClip(clip, 32000), "have you had clots? No.");
 }
 

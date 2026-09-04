@@ -59,10 +59,10 @@ TEST(TidyTranscript, TurnsStartWithACapitalAndEndWithPunctuation) {
 }
 
 TEST(TidyTranscript, ASliverRejoinsItsOwnSentenceBeforeItCanBeDropped) {
-    const auto out = TidyTranscript({T(635, 648, "doctor", "Sure, sure."),
-                                     T(651, 661, "patient", "So I..."),
-                                     T(663, 681, "patient", "to know what's going on."),
-                                     T(685, 711, "doctor", "And so did you say")});
+    const auto out =
+        TidyTranscript({T(635, 648, "doctor", "Sure, sure."), T(651, 661, "patient", "So I..."),
+                        T(663, 681, "patient", "to know what's going on."),
+                        T(685, 711, "doctor", "And so did you say")});
     ASSERT_EQ(out.size(), 3u);
     EXPECT_EQ(out[1].text, "So I... to know what's going on.");
 }
@@ -78,9 +78,9 @@ TEST(TidyTranscript, AMergedFragmentAfterAFinishedSentenceIsCapitalised) {
 }
 
 TEST(TidyTranscript, NoWordMovesBetweenSpeakers) {
-    const auto in = std::vector<asr::Turn>{T(0, 10, "doctor", "how old are you"),
-                                           T(11, 14, "patient", "53"),
-                                           T(15, 30, "doctor", "fantastic and any other illnesses")};
+    const auto in =
+        std::vector<asr::Turn>{T(0, 10, "doctor", "how old are you"), T(11, 14, "patient", "53"),
+                               T(15, 30, "doctor", "fantastic and any other illnesses")};
     const auto out = TidyTranscript(in);
     ASSERT_EQ(out.size(), 3u);
     for (std::size_t i = 0; i < 3; ++i) {

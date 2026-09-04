@@ -88,7 +88,8 @@ class GpuLease {
         const auto t0 = std::chrono::steady_clock::now();
         const DWORD result = WaitForSingleObject(mutex_, INFINITE);
         if (result != WAIT_OBJECT_0 && result != WAIT_ABANDONED) return {};
-        return {mutex_, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()};
+        return {mutex_,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()};
     }
 
    private:

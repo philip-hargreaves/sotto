@@ -34,13 +34,6 @@ TEST(SnapClipCuts, AnEdgeTooCloseToAnotherCutIsDropped) {
     EXPECT_TRUE(SnapClipCuts(cuts, Probabilities(), seg).empty());
 }
 
-TEST(SnapClipCuts, ExactModeKeepsAnEdgeWithoutAPauseButHonoursClearance) {
-    const std::vector<std::uint64_t> cuts{120 * 512, 120 * 512 + 3000};
-    const auto kept = SnapClipCuts(cuts, Probabilities(), {}, 0, false);
-    ASSERT_EQ(kept.size(), 1u);
-    EXPECT_EQ(kept[0], 120u * 512u);
-}
-
 TEST(SnapClipCuts, TwoEdgesOnOnePauseKeepOne) {
     const std::vector<std::uint64_t> cuts{41 * 512 - 2000, 41 * 512 + 2000};
     EXPECT_EQ(SnapClipCuts(cuts, Probabilities(), {}).size(), 1u);

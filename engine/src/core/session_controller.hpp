@@ -21,9 +21,9 @@
 #include "core/note_label.hpp"
 #include "core/per_turn.hpp"
 #include "core/resplit.hpp"
-#include "core/tidy_transcript.hpp"
 #include "core/resume_source.hpp"
 #include "core/role_naming.hpp"
+#include "core/tidy_transcript.hpp"
 #include "core/turn_reconcile.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/diariser.hpp"
@@ -531,9 +531,7 @@ class SessionController {
                 if (EnvFlag("AMBIENT_CLIP_CUTS")) {
                     const auto cuts = transcriber_.TakeClipCuts();
                     if (!cuts.empty()) diariser_->AddCutPoints(cuts);
-                    const auto sentence = transcriber_.TakePunctuationCuts();
-                    if (!sentence.empty()) diariser_->AddPunctuationCuts(sentence);
-                    if (!cuts.empty() || !sentence.empty()) {
+                    if (!cuts.empty()) {
                         diariser_->Advance(audio, turns, decode);
                     }
                 }
@@ -639,8 +637,6 @@ class SessionController {
                                   });
                 const auto cuts = transcriber_.TakeClipCuts();
                 if (!cuts.empty()) diariser_->AddCutPoints(cuts);
-                const auto sentence = transcriber_.TakePunctuationCuts();
-                if (!sentence.empty()) diariser_->AddPunctuationCuts(sentence);
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
             stage("capture settled");
@@ -757,8 +753,8 @@ class SessionController {
                 if (EnvFlag("AMBIENT_RESPLIT")) {
                     const auto centroids = diariser_->ClusterCentroids();
                     const std::string margin_ms = EnvValue("AMBIENT_RESPLIT_MARGIN");
-                    const double margin = margin_ms.empty() ? diar::kResplitMargin
-                                                            : std::atof(margin_ms.c_str());
+                    const double margin =
+                        margin_ms.empty() ? diar::kResplitMargin : std::atof(margin_ms.c_str());
                     const auto pieces = diar::ResplitByEmbedding(
                         turns, turn_texts, turn_chunks,
                         [this](std::uint64_t first, std::uint64_t end) {
@@ -813,7 +809,8 @@ class SessionController {
                 }
                 // AMBIENT_TIDY: fragments merged, slivers dropped,
                 // capitals and full stops; no word changes speaker
-                if (EnvFlag("AMBIENT_TIDY")) attributed = diar::TidyTranscript(std::move(attributed));
+                if (EnvFlag("AMBIENT_TIDY"))
+                    attributed = diar::TidyTranscript(std::move(attributed));
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
                     note_input = attributed;

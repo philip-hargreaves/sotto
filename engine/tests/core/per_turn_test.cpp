@@ -157,14 +157,24 @@ namespace {
 
 TEST(AssembleFromChunks, ACutPieceOnChunkEdgesIsAssembledNotRedecoded) {
     struct Flag {
-        Flag() { _putenv_s("AMBIENT_CHUNK_ASSEMBLE", "1"); }
-        ~Flag() { _putenv_s("AMBIENT_CHUNK_ASSEMBLE", ""); }
+        Flag() {
+            _putenv_s("AMBIENT_CHUNK_ASSEMBLE", "1");
+        }
+        ~Flag() {
+            _putenv_s("AMBIENT_CHUNK_ASSEMBLE", "");
+        }
     } flag;
     TurnChunks cache;
     asr::Turn c1, c2, c3;
-    c1.first_frame = 0; c1.frame_count = 40000; c1.text = "have you had clots?";
-    c2.first_frame = 41000; c2.frame_count = 12000; c2.text = "No.";
-    c3.first_frame = 54000; c3.frame_count = 30000; c3.text = "Anyone in your family?";
+    c1.first_frame = 0;
+    c1.frame_count = 40000;
+    c1.text = "have you had clots?";
+    c2.first_frame = 41000;
+    c2.frame_count = 12000;
+    c2.text = "No.";
+    c3.first_frame = 54000;
+    c3.frame_count = 30000;
+    c3.text = "Anyone in your family?";
     cache[{0, 84000}] = {c1, c2, c3};
     const auto piece = AssembleFromChunks(cache, 40500, 53500);  // the cut around "No."
     ASSERT_TRUE(piece.has_value());

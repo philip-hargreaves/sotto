@@ -18,7 +18,6 @@ add_executable(engine_tests
     core/audio_ring_test.cpp
     core/cli_args_test.cpp
     core/clip_cuts_test.cpp
-    core/padded_decode_test.cpp
     core/tidy_transcript_test.cpp
     core/resplit_test.cpp
     core/diar_capture_test.cpp

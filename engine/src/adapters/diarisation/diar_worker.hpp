@@ -26,12 +26,11 @@ struct CaptureDiarisation {
     std::uint64_t seg_done = 0;            // frames fully segmented
     // Slice span -> embedding; empty means too short to embed
     std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> embeddings;
-    TurnTexts turn_texts;  // the speculation cache, keyed on exact decode spans
+    TurnTexts turn_texts;    // the speculation cache, keyed on exact decode spans
     TurnChunks turn_chunks;  // the chunks behind it, same keys
     // Edge-chunk span -> embedding, computed during capture (AMBIENT_RESPLIT)
     std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> chunk_embeddings;
-    std::vector<std::uint64_t> clip_cuts;   // AMBIENT_CLIP_CUTS: segment edges from clip decodes
-    std::vector<std::uint64_t> punct_cuts;  // AMBIENT_CLIP_CUTS=punct: sentence ends, estimated
+    std::vector<std::uint64_t> clip_cuts;  // AMBIENT_CLIP_CUTS: segment edges from clip decodes
 };
 
 // What the last Advance could say about the sealed transcript's opening
@@ -72,10 +71,6 @@ class DiarWorker {
 
     void AddCutPoints(std::span<const std::uint64_t> cuts) {
         state_.clip_cuts.insert(state_.clip_cuts.end(), cuts.begin(), cuts.end());
-    }
-
-    void AddPunctuationCuts(std::span<const std::uint64_t> cuts) {
-        state_.punct_cuts.insert(state_.punct_cuts.end(), cuts.begin(), cuts.end());
     }
 
    private:

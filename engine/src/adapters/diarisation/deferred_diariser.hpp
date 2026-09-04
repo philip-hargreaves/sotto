@@ -66,10 +66,6 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().AddCutPoints(cuts);
     }
 
-    void AddPunctuationCuts(std::span<const std::uint64_t> cuts) override {
-        inner_.Get().AddPunctuationCuts(cuts);
-    }
-
     void DiscardCapture() override {
         if (inner_.Loaded()) {
             inner_.Get().DiscardCapture();

@@ -34,7 +34,7 @@ TEST(SettledFrontier, TurnsPastTheAudioDoNotCount) {
 TEST(SegSettledFrontier, TrailsVadByTheRegionMargin) {
     using ambient::diar::kSegFrontierMarginFrames;
     EXPECT_EQ(ambient::diar::SegSettledFrontier(320000, 160000),
-              160000u - kSegFrontierMarginFrames);  // vad behind
+              160000u - kSegFrontierMarginFrames);                          // vad behind
     EXPECT_EQ(ambient::diar::SegSettledFrontier(100000, 320000), 100000u);  // seg behind
 }
 

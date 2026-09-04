@@ -75,10 +75,6 @@ class SpeakerDiariser : public IDiariser {
         worker_.AddCutPoints(cuts);
     }
 
-    void AddPunctuationCuts(std::span<const std::uint64_t> cuts) override {
-        worker_.AddPunctuationCuts(cuts);
-    }
-
     void DiscardCapture() override {
         (void)worker_.Take();
         texts_.clear();

@@ -1,10 +1,10 @@
 #include "adapters/note/worker_note_writer.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <atomic>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -184,7 +184,10 @@ struct WorkerNoteWriter::Impl {
         while (PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr) && available > 0) {
             char buffer[4096];
             DWORD read = 0;
-            if (!ReadFile(pipe, buffer, static_cast<DWORD>(std::min<DWORD>(available, sizeof(buffer))), &read, nullptr) || read == 0) {
+            if (!ReadFile(pipe, buffer,
+                          static_cast<DWORD>(std::min<DWORD>(available, sizeof(buffer))), &read,
+                          nullptr) ||
+                read == 0) {
                 return;
             }
             decoder.Push({buffer, read});

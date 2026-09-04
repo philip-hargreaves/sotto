@@ -169,8 +169,7 @@ std::string QwenNoteWriter::WriteLabel(const std::string& note) {
     return Generate(LoadPrompt(impl_->prompt_dir / "label.md") + note + "\n", nullptr, 16);
 }
 
-void QwenNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
-                             const NoteOptions& options) {
+void QwenNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) {
     if (transcript.empty()) return;
     const auto pipeline = impl_->Pipeline();
     if (pipeline == nullptr) return;
@@ -230,8 +229,7 @@ std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& 
 
     if (!impl_->last_prefill.empty()) {
         const std::size_t shared = SharedPrefix(wrapped, impl_->last_prefill);
-        std::fprintf(stderr,
-                     "ambient-note-host: prompt %zu chars, prefill covered %zu (%.0f%%)\n",
+        std::fprintf(stderr, "ambient-note-host: prompt %zu chars, prefill covered %zu (%.0f%%)\n",
                      wrapped.size(), shared, 100.0 * shared / wrapped.size());
         impl_->last_prefill.clear();
     }

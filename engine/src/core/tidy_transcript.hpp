@@ -24,8 +24,8 @@ inline constexpr std::uint64_t kTidyMergeGapFrames = 16000;  // 1 s
 namespace detail {
 
 inline bool IsDisfluency(const std::string& w) {
-    static const char* const kWords[] = {"um",  "uh", "er",  "erm", "hm",  "hmm",
-                                         "mm",  "mmm", "mhm", "ah", "eh",  "huh"};
+    static const char* const kWords[] = {"um", "uh",  "er",  "erm", "hm", "hmm",
+                                         "mm", "mmm", "mhm", "ah",  "eh", "huh"};
     for (const char* k : kWords) {
         if (w == k) return true;
     }
@@ -115,8 +115,8 @@ inline std::vector<asr::Turn> TidyTranscript(std::vector<asr::Turn> turns) {
             if (gap <= kTidyMergeGapFrames) {
                 // A fragment after a finished sentence starts the next one; after
                 // a trail-off ("So I...") it continues the same one
-                const bool trail_off = prev.text.size() >= 3 &&
-                                       prev.text.compare(prev.text.size() - 3, 3, "...") == 0;
+                const bool trail_off =
+                    prev.text.size() >= 3 && prev.text.compare(prev.text.size() - 3, 3, "...") == 0;
                 prev.text += ' ';
                 prev.text += detail::EndsSentence(prev.text) && !trail_off
                                  ? detail::Capitalised(turn.text)

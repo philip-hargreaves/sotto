@@ -27,9 +27,11 @@ std::vector<float> Voice(std::uint64_t first, std::uint64_t /*end*/) {
 TEST(Resplit, ABorrowedHeadChunkGoesBackToItsSpeaker) {
     // The doctor's merged turn starts 3 s early with the patient's sentence
     const std::vector<LabelledSlice> turns{{50000, 200000, 0}};
-    const std::vector<std::string> texts{"but I just get that from the chemist. Okay, and how often?"};
+    const std::vector<std::string> texts{
+        "but I just get that from the chemist. Okay, and how often?"};
     const std::vector<std::vector<asr::Turn>> chunks{
-        {C(50000, 98000, "but I just get that from the chemist."), C(100000, 200000, "Okay, and how often?")}};
+        {C(50000, 98000, "but I just get that from the chemist."),
+         C(100000, 200000, "Okay, and how often?")}};
     const auto out = ResplitByEmbedding(turns, texts, chunks, Voice, kCentroids);
     ASSERT_EQ(out.size(), 2u);
     EXPECT_EQ(out[0].slice.cluster, 1);
@@ -43,11 +45,12 @@ TEST(Resplit, ABorrowedHeadChunkGoesBackToItsSpeaker) {
 TEST(Resplit, OnlyEdgeChunksMoveAndAShortOneStays) {
     const std::vector<LabelledSlice> turns{{50000, 300000, 0}};
     const std::vector<std::string> texts{"a b c d"};
-    const std::vector<std::vector<asr::Turn>> chunks{{C(50000, 56000, "a"),  // 0.4 s: too short to move
-                                                      C(60000, 98000, "b"), C(100000, 200000, "c"),
-                                                      C(200000, 300000, "d")}};
+    const std::vector<std::vector<asr::Turn>> chunks{
+        {C(50000, 56000, "a"),  // 0.4 s: too short to move
+         C(60000, 98000, "b"), C(100000, 200000, "c"), C(200000, 300000, "d")}};
     const auto out = ResplitByEmbedding(turns, texts, chunks, Voice, kCentroids);
-    ASSERT_EQ(out.size(), 1u) << "the short head chunk blocks the head run; the tail is the doctor's";
+    ASSERT_EQ(out.size(), 1u)
+        << "the short head chunk blocks the head run; the tail is the doctor's";
     EXPECT_EQ(out[0].text, "a b c d");
 }
 
@@ -56,7 +59,8 @@ TEST(Resplit, AChunkStampedPastTheTurnIsJudgedOnTheTurnsAudioOnly) {
     // judged on the turn's own audio it is the doctor's and stays
     const std::vector<LabelledSlice> turns{{100000, 140000, 0}};
     const std::vector<std::string> texts{"a b"};
-    const std::vector<std::vector<asr::Turn>> chunks{{C(100000, 120000, "a"), C(120000, 220000, "b")}};
+    const std::vector<std::vector<asr::Turn>> chunks{
+        {C(100000, 120000, "a"), C(120000, 220000, "b")}};
     std::vector<std::pair<std::uint64_t, std::uint64_t>> asked;
     const auto embed = [&](std::uint64_t first, std::uint64_t end) {
         asked.push_back({first, end});
@@ -70,7 +74,8 @@ TEST(Resplit, AChunkStampedPastTheTurnIsJudgedOnTheTurnsAudioOnly) {
 TEST(Resplit, NothingMovesWithoutAMarginOrWithOneCluster) {
     const std::vector<LabelledSlice> turns{{50000, 200000, 0}};
     const std::vector<std::string> texts{"x y"};
-    const std::vector<std::vector<asr::Turn>> chunks{{C(50000, 98000, "x"), C(100000, 200000, "y")}};
+    const std::vector<std::vector<asr::Turn>> chunks{
+        {C(50000, 98000, "x"), C(100000, 200000, "y")}};
     const auto same = [](std::uint64_t, std::uint64_t) { return std::vector<float>{0.7f, 0.714f}; };
     EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, same, kCentroids)[0].text, "x y");
     EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, Voice, {{1.0f, 0.0f}}).size(), 1u);

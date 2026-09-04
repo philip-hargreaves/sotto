@@ -20,7 +20,7 @@ namespace ambient::diar {
 // edge chunks move, inwards until one stays, so a turn loses a borrowed head or
 // tail but is never shuffled. Chunks under kResplitMinFrames embed too poorly to move
 inline constexpr std::uint64_t kResplitMinFrames = 9600;  // 0.6 s
-inline constexpr double kResplitMargin = 0.20;             // cosine; calibrated by cross-validation
+inline constexpr double kResplitMargin = 0.20;            // cosine; calibrated by cross-validation
 
 using EmbedSpanFn = std::function<std::vector<float>(std::uint64_t first, std::uint64_t end)>;
 
@@ -60,13 +60,11 @@ inline int BetterCluster(const std::vector<float>& e, int own,
 
 // dry_run: every edge chunk is scored and logged, nothing moves; the calibration
 // study reads the log against the reference
-inline std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& turns,
-                                                   const std::vector<std::string>& texts,
-                                                   const std::vector<std::vector<asr::Turn>>& chunks,
-                                                   const EmbedSpanFn& embed,
-                                                   const std::vector<std::vector<float>>& centroids,
-                                                   double margin = kResplitMargin,
-                                                   bool dry_run = false) {
+inline std::vector<ResplitTurn> ResplitByEmbedding(
+    const std::vector<LabelledSlice>& turns, const std::vector<std::string>& texts,
+    const std::vector<std::vector<asr::Turn>>& chunks, const EmbedSpanFn& embed,
+    const std::vector<std::vector<float>>& centroids, double margin = kResplitMargin,
+    bool dry_run = false) {
     std::vector<ResplitTurn> out;
     const bool debug = EnvFlag("AMBIENT_CUT_DEBUG") || dry_run;
     if (dry_run) margin = 0.0;
@@ -87,14 +85,15 @@ inline std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSli
             if (hi <= lo || hi - lo < kResplitMinFrames) return false;
             double own = 0.0;
             double best = 0.0;
-            const int other = detail::BetterCluster(embed(lo, hi), turn.cluster, centroids, margin,
-                                                    &own, &best);
+            const int other =
+                detail::BetterCluster(embed(lo, hi), turn.cluster, centroids, margin, &own, &best);
             if (debug) {
-                std::fprintf(stderr,
-                             "ambient-engine: resplit-candidate %.2f-%.2f s cluster %d own %.3f other "
-                             "%.3f %s '%s'\n",
-                             lo / 16000.0, hi / 16000.0, turn.cluster, own, best,
-                             other >= 0 ? "moves" : "stays", p.text.c_str());
+                std::fprintf(
+                    stderr,
+                    "ambient-engine: resplit-candidate %.2f-%.2f s cluster %d own %.3f other "
+                    "%.3f %s '%s'\n",
+                    lo / 16000.0, hi / 16000.0, turn.cluster, own, best,
+                    other >= 0 ? "moves" : "stays", p.text.c_str());
             }
             if (other < 0) return false;
             owner[j] = other;
@@ -111,8 +110,8 @@ inline std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSli
         // Rebuild: moved head chunks, the remaining middle as the turn, moved tail chunks
         const auto piece = [&](std::size_t from, std::size_t to, int cluster) {
             ResplitTurn r;
-            r.slice = {parts[from].first_frame, parts[to - 1].first_frame + parts[to - 1].frame_count,
-                       cluster};
+            r.slice = {parts[from].first_frame,
+                       parts[to - 1].first_frame + parts[to - 1].frame_count, cluster};
             for (std::size_t k = from; k < to; ++k) {
                 if (parts[k].text.empty()) continue;
                 if (!r.text.empty()) r.text += ' ';

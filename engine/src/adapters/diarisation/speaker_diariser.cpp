@@ -80,20 +80,9 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
     seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
                              turn_boundaries.end());
     if (EnvFlag("AMBIENT_CLIP_CUTS")) {
-        const std::string mode = EnvValue("AMBIENT_CLIP_CUTS");
-        const auto cuts = mode == "snap" || mode == "punct"
-                              ? SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points)
-                          : mode == "exact"
-                              ? SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points,
-                                             0, false)
-                              : capture.clip_cuts;
+        const auto cuts = SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points);
         LogClipCuts("finalise", capture.clip_cuts, cuts, probabilities);
         seg.change_points.insert(seg.change_points.end(), cuts.begin(), cuts.end());
-        if (mode == "punct") {
-            const auto sentence = SnapClipCuts(capture.punct_cuts, probabilities,
-                                               seg.change_points, kPunctCutSnapFrames);
-            seg.change_points.insert(seg.change_points.end(), sentence.begin(), sentence.end());
-        }
     }
     std::sort(seg.change_points.begin(), seg.change_points.end());
     const auto slices = RefineRegions(regions, seg.change_points);
@@ -218,8 +207,8 @@ std::vector<asr::Turn> SpeakerDiariser::SpeculativeTranscript() {
         asr::Turn turn;
         turn.first_frame = spec.turns[i].first_frame;
         turn.frame_count = spec.turns[i].end_frame - spec.turns[i].first_frame;
-        turn.speaker = cluster < roles.role_of_cluster.size() ? roles.role_of_cluster[cluster]
-                                                              : "unknown";
+        turn.speaker =
+            cluster < roles.role_of_cluster.size() ? roles.role_of_cluster[cluster] : "unknown";
         turn.text = spec.texts[i];
         out.push_back(std::move(turn));
     }

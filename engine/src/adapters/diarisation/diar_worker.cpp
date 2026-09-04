@@ -9,12 +9,11 @@
 
 #include "adapters/diarisation/speaker_clustering.hpp"
 #include "core/clip_cuts.hpp"
-#include "core/padded_decode.hpp"
-#include "core/resplit.hpp"
 #include "core/diar_capture.hpp"
 #include "core/diar_regions.hpp"
 #include "core/env_flag.hpp"
 #include "core/per_turn.hpp"
+#include "core/resplit.hpp"
 #include "core/slice_refinement.hpp"
 
 namespace ambient::diar {
@@ -108,21 +107,9 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
         }
     }
     if (EnvFlag("AMBIENT_CLIP_CUTS")) {
-        // =snap: onto a VAD pause and clear of other cuts; =punct: snap plus
-        // sentence ends within a wider window; anything else raw
-        const std::string mode = EnvValue("AMBIENT_CLIP_CUTS");
-        const auto cuts = mode == "snap" || mode == "punct"
-                              ? SnapClipCuts(s.clip_cuts, s.vad_probabilities, cps)
-                          : mode == "exact"
-                              ? SnapClipCuts(s.clip_cuts, s.vad_probabilities, cps, 0, false)
-                              : s.clip_cuts;
+        const auto cuts = SnapClipCuts(s.clip_cuts, s.vad_probabilities, cps);
         LogClipCuts("capture", s.clip_cuts, cuts, s.vad_probabilities);
         cps.insert(cps.end(), cuts.begin(), cuts.end());
-        if (mode == "punct") {
-            const auto sentence =
-                SnapClipCuts(s.punct_cuts, s.vad_probabilities, cps, kPunctCutSnapFrames);
-            cps.insert(cps.end(), sentence.begin(), sentence.end());
-        }
     }
     std::sort(cps.begin(), cps.end());
     auto regions =
@@ -204,19 +191,11 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
     int decoded = 0;
     int cached = 0;
     double decoded_audio = 0.0;
-    const auto pad = ClipPadFrames();
-    const auto cached_text = [&](std::size_t i) -> std::string {
-        if (i >= spans.size()) return {};
-        const auto it = s.turn_texts.find({spans[i].first_frame, spans[i].end_frame});
-        return it == s.turn_texts.end() ? std::string() : it->second;
-    };
-    // Long spans first so a short one can be padded with its neighbours' words
-    for (const bool short_pass : {false, true}) {
+    {
         for (std::size_t i = 0; i < spans.size(); ++i) {
             const auto a = spans[i].first_frame;
             const auto b = spans[i].end_frame;
-            if (a >= b || b - a < MinClipFrames()) continue;
-            if ((b - a < kPadBelowFrames) != short_pass) continue;
+            if (a >= b || b - a < kPerTurnMinClipFrames) continue;
             if (s.turn_texts.contains({a, b})) {
                 ++cached;
                 continue;
@@ -228,9 +207,7 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
                 continue;
             }
             if (budget-- <= 0) break;
-            auto chunks_of_span =
-                PaddedDecode(audio, a, b, pad, decode, i > 0 ? cached_text(i - 1) : std::string(),
-                             cached_text(i + 1));
+            auto chunks_of_span = decode(audio.subspan(a, b - a), a);
             const std::string text = JoinedText(chunks_of_span);
             ++decoded;
             decoded_audio += static_cast<double>(b - a) / audio::kSampleRate;
@@ -273,7 +250,8 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
                 if (embeds <= 0) break;
                 const auto& p = parts[j];
                 const std::uint64_t lo = std::max(p.first_frame, merged[i].first_frame);
-                const std::uint64_t hi = std::min(p.first_frame + p.frame_count, merged[i].end_frame);
+                const std::uint64_t hi =
+                    std::min(p.first_frame + p.frame_count, merged[i].end_frame);
                 if (hi <= lo || hi - lo < kResplitMinFrames) continue;
                 if (s.chunk_embeddings.contains({lo, hi})) continue;
                 s.chunk_embeddings[{lo, hi}] = embedder_.Embed(audio.subspan(lo, hi - lo));
@@ -290,7 +268,8 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
         const auto spec_spans = DecodeSpans(speculation_.turns, audio.size());
         std::vector<std::vector<asr::Turn>> chunks(speculation_.turns.size());
         for (std::size_t i = 0; i < spec_spans.size(); ++i) {
-            const auto it = s.turn_chunks.find({spec_spans[i].first_frame, spec_spans[i].end_frame});
+            const auto it =
+                s.turn_chunks.find({spec_spans[i].first_frame, spec_spans[i].end_frame});
             if (it != s.turn_chunks.end()) chunks[i] = it->second;
         }
         const std::string margin_env = EnvValue("AMBIENT_RESPLIT_MARGIN");

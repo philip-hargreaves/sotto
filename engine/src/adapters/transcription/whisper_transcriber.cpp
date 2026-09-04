@@ -28,24 +28,19 @@ std::string Trimmed(const std::string& text) {
 DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
                            const std::string& device_override, metrics::Registry* metrics,
                            const char* role = "asr") {
-    // AMBIENT_ASR_WORDTS: the word-timestamp export (cross-attention outputs)
-    const bool word_ts = EnvFlag("AMBIENT_ASR_WORDTS");
-    const models::ModelInfo& info = store.Resolve("asr", word_ts ? "wordts" : "default");
+    const models::ModelInfo& info = store.Resolve("asr", "default");
     store.Verify(info);
     const std::string device =
         runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
-    std::fprintf(stderr, "ambient-engine: %s on %s%s\n", role, device.c_str(),
-                 word_ts ? " (word timestamps)" : "");
+    std::fprintf(stderr, "ambient-engine: %s on %s\n", role, device.c_str());
     if (metrics != nullptr) metrics->RecordDevice(role, device);
 
     ov::AnyMap properties{{"CACHE_DIR", (info.dir / ".cache").string()}};
-    if (word_ts) properties.emplace("word_timestamps", true);
     auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(info.dir, device, properties);
     auto config = pipeline->get_generation_config();
     config.language = "<|en|>";
     config.task = "transcribe";
     config.return_timestamps = true;
-    config.word_timestamps = word_ts;
 
     // Transcript-tail conditioning (initial_prompt) was measured here and
     // rejected: it worsened WER even with register effects folded out
@@ -59,48 +54,17 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
         auto result = pipeline->generate(audio, config);
 
         std::vector<Turn> turns;
-        std::vector<Turn> words;
-        if (result.words.has_value()) {
-            // Word turns for the padded-clip trim; hyphenated words arrive in
-            // pieces and are rejoined
-            const bool dump = EnvFlag("AMBIENT_CUT_DEBUG");
-            const double base = static_cast<double>(first_frame) / audio::kSampleRate;
-            for (const auto& w : *result.words) {
-                if (dump) {
-                    std::fprintf(stderr, "word %.2f-%.2f%s\n", base + w.start_ts,
-                                 base + w.end_ts, w.word.c_str());
-                }
-                const std::string text = Trimmed(w.word);
-                if (text.empty()) continue;
-                if (!words.empty() && (text.front() == '-' || words.back().text.back() == '-')) {
-                    words.back().text += text;
-                    words.back().frame_count =
-                        first_frame + static_cast<std::uint64_t>(w.end_ts * audio::kSampleRate) -
-                        words.back().first_frame;
-                    continue;
-                }
-                Turn word;
-                {
-                    const float clip_end_s = static_cast<float>(frames.size()) / audio::kSampleRate;
-                    const float ws = std::min(std::max(0.0f, w.start_ts), clip_end_s);
-                    const float we = std::min(std::max(ws, w.end_ts), clip_end_s);
-                    word.first_frame = first_frame + static_cast<std::uint64_t>(ws * audio::kSampleRate);
-                    word.frame_count = static_cast<std::uint64_t>((we - ws) * audio::kSampleRate);
-                }
-                word.text = text;
-                words.push_back(std::move(word));
-            }
-        }
         if (result.chunks.has_value()) {
             const float clip_end = static_cast<float>(frames.size()) / audio::kSampleRate;
             for (const auto& chunk : *result.chunks) {
                 Turn turn;
                 // Stamps can overrun the clip (the window is padded to 30 s): clamp
                 const float start = std::min(std::max(0.0f, chunk.start_ts), clip_end);
-                turn.first_frame = first_frame + static_cast<std::uint64_t>(start * audio::kSampleRate);
+                turn.first_frame =
+                    first_frame + static_cast<std::uint64_t>(start * audio::kSampleRate);
                 // An open-ended last chunk reports end_ts -1
-                const float end = chunk.end_ts > chunk.start_ts ? std::min(chunk.end_ts, clip_end)
-                                                                : clip_end;
+                const float end =
+                    chunk.end_ts > chunk.start_ts ? std::min(chunk.end_ts, clip_end) : clip_end;
                 turn.frame_count =
                     static_cast<std::uint64_t>((end - chunk.start_ts) * audio::kSampleRate);
                 turn.text = Trimmed(chunk.text);
@@ -113,7 +77,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
             turn.text = Trimmed(result);
             if (!turn.text.empty()) turns.push_back(std::move(turn));
         }
-        return ClipDecode(std::move(turns), std::move(words));
+        return turns;
     };
 }
 
@@ -191,11 +155,6 @@ void WhisperTranscriber::Release() {
 std::vector<std::uint64_t> WhisperTranscriber::TakeClipCuts() {
     std::lock_guard<std::mutex> lock(mutex_);
     return std::exchange(clip_cuts_, {});
-}
-
-std::vector<std::uint64_t> WhisperTranscriber::TakePunctuationCuts() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return std::exchange(punct_cuts_, {});
 }
 
 std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
@@ -292,17 +251,14 @@ void WhisperTranscriber::WorkerLoop() {
             busy_ = true;
             lock.unlock();
             std::vector<Turn> chunks;
-            std::vector<Turn> words_of_clip;
             std::vector<std::uint64_t> cuts;
-            std::vector<std::uint64_t> punct_cuts;
             try {
                 // The burst pipeline when the live device is the slow one
                 const DecodeFn& decode = clip_decode_ ? clip_decode_ : decode_;
                 if (decode) {
                     const auto t0 = std::chrono::steady_clock::now();
                     const std::uint64_t clip_end = clip.first_frame + clip.frames.size();
-                    ClipDecode decoded = decode(clip.frames, clip.first_frame);
-                    for (const Turn& turn : decoded.chunks) {
+                    for (const Turn& turn : decode(clip.frames, clip.first_frame)) {
                         if (turn.text.empty()) continue;
                         chunks.push_back(turn);
                         // Chunk edges: where a short answer inside a long clip
@@ -311,32 +267,14 @@ void WhisperTranscriber::WorkerLoop() {
                              {turn.first_frame, turn.first_frame + turn.frame_count}) {
                             if (edge > clip.first_frame && edge < clip_end) cuts.push_back(edge);
                         }
-                        // Sentence ends, timed by character position; the
-                        // diariser snaps them onto a pause
-                        const std::string& words = turn.text;
-                        for (std::size_t i = 0; i + 1 < words.size(); ++i) {
-                            const char c = words[i];
-                            if ((c == '.' || c == '?' || c == '!') && words[i + 1] == ' ') {
-                                const double share =
-                                    static_cast<double>(i + 1) / static_cast<double>(words.size());
-                                const auto edge = turn.first_frame + static_cast<std::uint64_t>(
-                                                                         share * turn.frame_count);
-                                if (edge > clip.first_frame && edge < clip_end) {
-                                    punct_cuts.push_back(edge);
-                                }
-                            }
-                        }
                     }
-                    words_of_clip = std::move(decoded.words);
                     RecordDecode(clip.frames.size(), t0);
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
-            if (!words_of_clip.empty()) chunks = std::move(words_of_clip);
             clip.chunks.set_value(std::move(chunks));
             lock.lock();
             clip_cuts_.insert(clip_cuts_.end(), cuts.begin(), cuts.end());
-            punct_cuts_.insert(punct_cuts_.end(), punct_cuts.begin(), punct_cuts.end());
             busy_ = false;
             cv_.notify_all();
             continue;
@@ -356,7 +294,7 @@ void WhisperTranscriber::WorkerLoop() {
         try {
             if (decode_) {
                 const auto t0 = std::chrono::steady_clock::now();
-                auto turns = decode_(window.frames, window.first_frame).chunks;
+                auto turns = decode_(window.frames, window.first_frame);
                 RecordDecode(window.frames.size(), t0);
                 AnchorFirstTurn(turns, window.first_frame);
                 DropReheardTurns(turns, window.first_new_frame);
