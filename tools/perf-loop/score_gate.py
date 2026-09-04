@@ -59,6 +59,36 @@ def reference(consult):
     return ivs, words
 
 
+# NEG_SUBSTANTIVE=1: count a reference negation only when its utterance holds a content
+# word (or is a filler-only reply to the other speaker's question) and it is not an
+# immediate repeat ("no no no" counts once). Added negations always count.
+FILLER_NEG = {"ok", "okay", "yeah", "yep", "yup", "mm", "mhm", "hmm", "um", "uh", "er", "erm",
+              "sure", "right", "alright", "all", "fine", "good", "thank", "thanks", "you", "bye",
+              "hello", "hi", "oh", "ohh", "ah", "yes", "no", "nope", "not", "really", "so", "and",
+              "the", "a", "i", "it", "that", "is", "well", "just", "like", "nothing", "none",
+              "never", "dont", "cant", "havent", "didnt", "im", "its", "thats", "there", "at",
+              "all", "sorry", "please"}
+
+
+def substantive_flags(ivs):
+    # one flag per reference word, in reference() order
+    flags = []
+    last_text = {"doctor": "", "patient": ""}
+    for start, end, speaker, text in ivs:
+        other = "patient" if speaker == "doctor" else "doctor"
+        prev_other = last_text[other]
+        last_text[speaker] = text
+        ws = normalise(text)
+        content = any(w not in FILLER_NEG for w in ws)
+        answer = prev_other.strip().endswith("?")
+        keep = content or answer
+        prev = None
+        for w in ws:
+            flags.append(keep and w != prev)
+            prev = w
+    return flags
+
+
 def align(ref, hyp):
     # Levenshtein with backtrace; returns ops as (op, ref_i, hyp_j)
     n, m = len(ref), len(hyp)
@@ -107,11 +137,15 @@ def score(tag, consult, ref_ivs, ref_words):
         hyp_speaker += [t["speaker"]] * len(ws)
     ref_plain = [w for w, _ in ref_words]
     errors, ops = align(ref_plain, hyp_words)
+    substantive = os.environ.get("NEG_SUBSTANTIVE", "") == "1"
+    flags = substantive_flags(ref_ivs) if substantive else None
     neg = []
     for op, i, j in ops:
         rw = ref_plain[i] if i is not None else None
         hw = hyp_words[j] if j is not None else None
         if op == "ok":
+            continue
+        if substantive and i is not None and not flags[i]:
             continue
         if (rw in NEGATIONS) or (hw in NEGATIONS):
             kind = {"del": "lost", "ins": "added", "sub": "changed"}[op]
