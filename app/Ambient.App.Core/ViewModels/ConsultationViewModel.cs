@@ -504,7 +504,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
 
-    // ADR-0028: said once at start; power saving roughly halves finalise
+    // Said once at start; power saving roughly halves finalise
     // speed and the hint lets the clinician choose
     private string RecordingLabel() => _powerState().SavingPower
         ? "Recording - saving power, notes will be slower"

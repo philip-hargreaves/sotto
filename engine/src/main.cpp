@@ -303,7 +303,7 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "ambient-engine: no speaker labels (%s)\n", e.what());
         }
         // Generation runs in its own supervised process: a GPU driver fault there
-        // costs a respawn, never the engine (ADR-0027)
+        // costs a respawn, never the engine
         std::unique_ptr<ambient::note::INoteWriter> note_writer;
         try {
             model_store.Resolve("note", "default");
