@@ -57,6 +57,23 @@ TEST(WhisperWorker, ClipsBurstOnTheirOwnDecoderWhenGiven) {
     EXPECT_EQ(clip_calls.load(), 1) << "clips go to the burst device";
 }
 
+TEST(WhisperWorker, ClipSegmentEdgesInsideTheClipAreTakenAsCuts) {
+    // Two segments in a 3 s clip starting at frame 16000: the interior edge at
+    // 1.2 s (and the segment end short of the clip end) are cuts; the clip's own
+    // edges are not
+    WhisperTranscriber transcriber([](std::span<const float> f, std::uint64_t first) {
+        return std::vector<Turn>{{first, 19200, "", "have you had any clots"},
+                                 {first + 19200, static_cast<std::uint64_t>(f.size()) - 19200 - 800,
+                                  "", "not that I know of"}};
+    });
+    const std::vector<float> frames(48000, 0.1f);
+    ASSERT_EQ(transcriber.DecodeClip(frames, 16000), "have you had any clots not that I know of");
+    const auto cuts = transcriber.TakeClipCuts();
+    EXPECT_EQ(cuts,
+              (std::vector<std::uint64_t>{16000 + 19200, 16000 + 19200, 16000 + 48000 - 800}));
+    EXPECT_TRUE(transcriber.TakeClipCuts().empty()) << "taking drains";
+}
+
 TEST(WhisperWorker, SubmitDoesNotBlockWhileADecodeIsInFlight) {
     std::promise<void> release;
     auto released = release.get_future().share();
@@ -329,6 +346,35 @@ TEST(WhisperWorker, BeginPointsTurnsAtTheNewSink) {
 
     EXPECT_EQ(first_sink.turns.size(), 1u);
     EXPECT_EQ(second_sink.turns.size(), 1u);
+}
+
+}  // namespace
+}  // namespace ambient::asr
+
+namespace ambient::asr {
+namespace {
+
+Turn At(std::uint64_t first, std::uint64_t count, const char* text) {
+    Turn t;
+    t.first_frame = first;
+    t.frame_count = count;
+    t.text = text;
+    return t;
+}
+
+TEST(WhisperWorker, ChunksReachTheClipCallerAndTheirEdgesBecomeCuts) {
+    WhisperTranscriber transcriber(DecodeFn([](std::span<const float>, std::uint64_t first) {
+        return std::vector<Turn>{At(first, 16000, "have you had clots?"),
+                                 At(first + 16000, 8000, "No.")};
+    }));
+    const std::vector<float> clip(24000, 0.0f);
+    const auto chunks = transcriber.DecodeClipChunks(clip, 32000);
+    ASSERT_EQ(chunks.size(), 2u);
+    EXPECT_EQ(chunks[1].text, "No.");
+    const auto cuts = transcriber.TakeClipCuts();
+    EXPECT_EQ(cuts, (std::vector<std::uint64_t>{48000u, 48000u}))
+        << "the interior chunk edge, both sides";
+    EXPECT_EQ(transcriber.DecodeClip(clip, 32000), "have you had clots? No.");
 }
 
 }  // namespace

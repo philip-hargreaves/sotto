@@ -12,11 +12,24 @@
 
 namespace ambient::diar {
 
-// (clip, absolute first frame) -> transcribed text
-using DecodeClipFn = std::function<std::string(std::span<const float>, std::uint64_t)>;
+// (clip, absolute first frame) -> Whisper's chunks with absolute frames; the
+// text is their join
+using DecodeClipFn = std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
+
+inline std::string JoinedText(const std::vector<asr::Turn>& chunks) {
+    std::string text;
+    for (const auto& chunk : chunks) {
+        if (chunk.text.empty()) continue;
+        if (!text.empty()) text += ' ';
+        text += chunk.text;
+    }
+    return text;
+}
 
 // Exact decode span -> speculated text
 using TurnTexts = std::map<std::pair<std::uint64_t, std::uint64_t>, std::string>;
+// Exact decode span -> that decode's chunks
+using TurnChunks = std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<asr::Turn>>;
 
 struct LabelledSlice {
     std::uint64_t first_frame = 0;
@@ -62,11 +75,43 @@ class IDiariser {
     // optional - without it Diarise processes the whole recording
     virtual void Advance(std::span<const float>, std::span<const asr::Turn>, const DecodeClipFn&) {}
 
+    // Finalise's catch-up: Advance without a budget, so every settled span is
+    // decoded and cut before Diarise, however far capture lagged
+    virtual void Settle(std::span<const float>, std::span<const asr::Turn>, const DecodeClipFn&) {}
+
     // Turn texts speculated by Advance, keyed on exact decode spans; valid
     // after Diarise
     virtual TurnTexts TakeTurnTexts() {
         return {};
     }
+
+    // The chunks behind TakeTurnTexts, same keys; valid after Diarise
+    virtual TurnChunks TakeTurnChunks() {
+        return {};
+    }
+
+    // Cluster centroids (unit norm), valid after Diarise; the re-split judges
+    // edge chunks against them
+    virtual std::vector<std::vector<float>> ClusterCentroids() {
+        return {};
+    }
+
+    // Embedding of [first, end) of the session audio, unit norm; empty when
+    // too short. Served from the capture-phase cache where it has the span
+    virtual std::vector<float> EmbedSpan(std::span<const float>, std::uint64_t, std::uint64_t) {
+        return {};
+    }
+
+    // The sealed transcript's opening as far as capture can know it: settled
+    // turns with cached texts and provisional roles. Valid after Advance, on
+    // its thread; empty when nothing has settled
+    virtual std::vector<asr::Turn> SpeculativeTranscript() {
+        return {};
+    }
+
+    // Extra cut points (absolute frames) for the next Advance and Diarise;
+    // AMBIENT_CLIP_CUTS feeds Whisper's chunk edges here
+    virtual void AddCutPoints(std::span<const std::uint64_t>) {}
 
     // Drop capture state a finalise will never consume (cancel, abandon)
     virtual void DiscardCapture() {}

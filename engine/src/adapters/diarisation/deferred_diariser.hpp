@@ -36,8 +36,34 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().Advance(audio, turns, decode);
     }
 
+    void Settle(std::span<const float> audio, std::span<const asr::Turn> turns,
+                const DecodeClipFn& decode) override {
+        inner_.Get().Settle(audio, turns, decode);
+    }
+
     TurnTexts TakeTurnTexts() override {
         return inner_.Get().TakeTurnTexts();
+    }
+
+    TurnChunks TakeTurnChunks() override {
+        return inner_.Get().TakeTurnChunks();
+    }
+
+    std::vector<std::vector<float>> ClusterCentroids() override {
+        return inner_.Get().ClusterCentroids();
+    }
+
+    std::vector<float> EmbedSpan(std::span<const float> audio, std::uint64_t first,
+                                 std::uint64_t end) override {
+        return inner_.Get().EmbedSpan(audio, first, end);
+    }
+
+    std::vector<asr::Turn> SpeculativeTranscript() override {
+        return inner_.Get().SpeculativeTranscript();
+    }
+
+    void AddCutPoints(std::span<const std::uint64_t> cuts) override {
+        inner_.Get().AddCutPoints(cuts);
     }
 
     void DiscardCapture() override {

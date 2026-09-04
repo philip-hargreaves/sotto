@@ -28,6 +28,10 @@ TAG = os.environ.get("PERF_TAG", "")  # experiments keep their own result files
 RESULTS = os.path.join(HERE, f"runs{TAG}.jsonl")
 EVENTS = os.path.join(HERE, f"events{TAG}.jsonl")
 STOP_FILE = os.path.join(HERE, "STOP")
+PAUSE_FILE = os.path.join(HERE, "PAUSE")  # present: wait between runs; delete to continue
+# PERF_SKIP_DONE=1: a track whose saved transcript already exists under this tag is skipped,
+# so a killed sweep resumes where it stopped (needs PERF_SAVE; never for repeated-run tags)
+SKIP_DONE = os.environ.get("PERF_SKIP_DONE", "") == "1"
 
 TRACKS = [
     ("c02m_elbow.wav", 120),
@@ -532,8 +536,14 @@ def main():
             # background during the first capture, so the first run is cold
             log(f"cycle {cycle}")
             for track, duration in tracks:
+                while os.path.exists(PAUSE_FILE) and not os.path.exists(STOP_FILE):
+                    time.sleep(5)
                 if now() >= deadline or os.path.exists(STOP_FILE):
                     break
+                if SKIP_DONE and SAVE_DIR and os.path.exists(os.path.join(
+                        SAVE_DIR, f"{TAG.lstrip('-') or 'run'}-{track.rsplit('.', 1)[0]}.json")):
+                    log(f"  {track:<24} skipped (transcript saved)")
+                    continue
                 run_index += 1
                 outcome = run_session(engine, track, duration, cycle, run_index)
                 if outcome == "engine_died" or engine.exit_code() is not None:

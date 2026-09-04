@@ -1,5 +1,7 @@
 #include "adapters/note/worker_note_writer.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -35,6 +37,7 @@ struct WorkerNoteWriter::Impl {
     std::int64_t next_id = 1;
     int spawn_count = 0;
     bool closing = false;
+    std::atomic<bool> attempt_active{false};  // the note thread owns the pipe's read side
 
     // A generation streams partials constantly; this much silence means the
     // worker is wedged inside a driver call and only a respawn recovers it
@@ -174,8 +177,36 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
+    // Prefill acks pile up unread between attempts; drained here so the
+    // host's pipe writes never block. Only when no attempt owns the reads
+    void DrainAcks() {
+        DWORD available = 0;
+        while (PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr) && available > 0) {
+            char buffer[4096];
+            DWORD read = 0;
+            if (!ReadFile(pipe, buffer,
+                          static_cast<DWORD>(std::min<DWORD>(available, sizeof(buffer))), &read,
+                          nullptr) ||
+                read == 0) {
+                return;
+            }
+            decoder.Push({buffer, read});
+            while (decoder.Next()) {
+            }
+        }
+    }
+
     // One streamed attempt: request, then read until the worker settles it
     std::string Attempt(const std::string& method, const json& params, const Progress& progress) {
+        struct ActiveFlag {
+            std::atomic<bool>& flag;
+            explicit ActiveFlag(std::atomic<bool>& f) : flag(f) {
+                flag = true;
+            }
+            ~ActiveFlag() {
+                flag = false;
+            }
+        } active{attempt_active};
         EnsureWorker();
         Send(method, params);
         for (;;) {
@@ -251,11 +282,9 @@ void WorkerNoteWriter::Prepare() {
     }
 }
 
-std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
-                                    const NoteOptions& options, const Progress& progress) {
-    if (transcript.empty()) {
-        throw std::runtime_error("nothing to write: the transcript is empty");
-    }
+namespace {
+
+json TurnsJson(const std::vector<asr::Turn>& transcript) {
     json turns = json::array();
     for (const auto& turn : transcript) {
         turns.push_back({{"firstFrame", turn.first_frame},
@@ -263,9 +292,31 @@ std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
                          {"speaker", turn.speaker},
                          {"text", turn.text}});
     }
+    return turns;
+}
+
+}  // namespace
+
+void WorkerNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
+                               const NoteOptions& options) {
+    if (transcript.empty() || impl_->attempt_active.load()) return;
+    try {
+        impl_->EnsureWorker();
+        impl_->DrainAcks();
+        impl_->Send("prefill", {{"turns", TurnsJson(transcript)}, {"style", options.style}});
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "ambient-engine: note prefill not sent (%.100s)\n", e.what());
+    }
+}
+
+std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
+                                    const NoteOptions& options, const Progress& progress) {
+    if (transcript.empty()) {
+        throw std::runtime_error("nothing to write: the transcript is empty");
+    }
     return impl_->Run(
         "write",
-        {{"turns", std::move(turns)}, {"style", options.style}, {"detail", options.detail}},
+        {{"turns", TurnsJson(transcript)}, {"style", options.style}, {"detail", options.detail}},
         progress);
 }
 

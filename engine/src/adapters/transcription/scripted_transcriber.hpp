@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "ports/transcriber.hpp"
 
@@ -29,6 +31,13 @@ class ScriptedTranscriber : public ITranscriber {
     std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override {
         return "re-decoded " + std::to_string(frames.size()) + " frames at " +
                std::to_string(first_frame);
+    }
+
+    // Clip cuts a test scripts, handed over once like the worker's
+    std::vector<std::uint64_t> clip_cuts;
+
+    std::vector<std::uint64_t> TakeClipCuts() override {
+        return std::exchange(clip_cuts, {});
     }
 
    private:

@@ -11,6 +11,7 @@ param(
     [Parameter(Mandatory)] [string]$Task,
     [Parameter(Mandatory)] [string]$Tier,
     [Parameter(Mandatory)] [string]$Licence,
+    [string]$Name = "",   # display name for the shell, e.g. "Whisper Large v3 Turbo"
     [string]$Device = "GPU",
     [string]$Source,
     [string]$Repo,
@@ -53,6 +54,7 @@ if ($hashes.Count -eq 0) { throw "nothing staged from the source" }
 $manifest = [ordered]@{
     manifestVersion = 1
     id              = $Id
+    name            = $(if ($Name) { $Name } else { $Id })
     task            = $Task
     tier            = $Tier
     licence         = $Licence

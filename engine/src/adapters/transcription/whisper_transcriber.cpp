@@ -6,11 +6,14 @@
 #include <openvino/genai/whisper_pipeline.hpp>
 #include <utility>
 
+#include "adapters/host/gpu_lease.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
+#include "core/env_flag.hpp"
 #include "core/metrics.hpp"
 #include "core/turn_assembly.hpp"
 #include "ports/audio_source.hpp"
+#include "ports/diariser.hpp"
 
 namespace ambient::asr {
 
@@ -32,8 +35,8 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     std::fprintf(stderr, "ambient-engine: %s on %s\n", role, device.c_str());
     if (metrics != nullptr) metrics->RecordDevice(role, device);
 
-    auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(
-        info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
+    ov::AnyMap properties{{"CACHE_DIR", (info.dir / ".cache").string()}};
+    auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(info.dir, device, properties);
     auto config = pipeline->get_generation_config();
     config.language = "<|en|>";
     config.task = "transcribe";
@@ -43,18 +46,25 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     // rejected: it worsened WER even with register effects folded out
     return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
+        const auto lease = host::GpuLease::Global().Acquire();
+        if (lease.waited() > 0.25) {
+            std::fprintf(stderr, "ambient-engine: asr waited %.2f s for the GPU lease\n",
+                         lease.waited());
+        }
         auto result = pipeline->generate(audio, config);
 
         std::vector<Turn> turns;
         if (result.chunks.has_value()) {
+            const float clip_end = static_cast<float>(frames.size()) / audio::kSampleRate;
             for (const auto& chunk : *result.chunks) {
                 Turn turn;
+                // Stamps can overrun the clip (the window is padded to 30 s): clamp
+                const float start = std::min(std::max(0.0f, chunk.start_ts), clip_end);
                 turn.first_frame =
-                    first_frame + static_cast<std::uint64_t>(chunk.start_ts * audio::kSampleRate);
+                    first_frame + static_cast<std::uint64_t>(start * audio::kSampleRate);
                 // An open-ended last chunk reports end_ts -1
-                const float end = chunk.end_ts > chunk.start_ts
-                                      ? chunk.end_ts
-                                      : static_cast<float>(frames.size()) / audio::kSampleRate;
+                const float end =
+                    chunk.end_ts > chunk.start_ts ? std::min(chunk.end_ts, clip_end) : clip_end;
                 turn.frame_count =
                     static_cast<std::uint64_t>((end - chunk.start_ts) * audio::kSampleRate);
                 turn.text = Trimmed(chunk.text);
@@ -79,14 +89,9 @@ WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::
                              return MakeWhisperDecode(store, runtime, device, metrics);
                          }),
                          metrics,
-                         // Live off the GPU: clips burst on the manifest device (the GPU,
-                         // idle at stop) so finalise never pays the low-power decode rate
-                         device_override.empty() || device_override == "GPU"
-                             ? DecodeLoader{}
-                             : DecodeLoader([&store, &runtime, metrics] {
-                                   return MakeWhisperDecode(store, runtime, "", metrics,
-                                                            "asr finalise");
-                               })) {}
+                         // One Whisper on the chosen device; the low-power mode pays
+                         // the finalise burst at NPU speed rather than load a GPU copy
+                         DecodeLoader{}) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });
@@ -147,17 +152,27 @@ void WhisperTranscriber::Release() {
     cv_.wait(lock, [this] { return !release_requested_ || stopping_; });
 }
 
+std::vector<std::uint64_t> WhisperTranscriber::TakeClipCuts() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return std::exchange(clip_cuts_, {});
+}
+
 std::string WhisperTranscriber::DecodeClip(std::span<const float> frames,
                                            std::uint64_t first_frame) {
-    std::future<std::string> text;
+    return diar::JoinedText(DecodeClipChunks(frames, first_frame));
+}
+
+std::vector<Turn> WhisperTranscriber::DecodeClipChunks(std::span<const float> frames,
+                                                       std::uint64_t first_frame) {
+    std::future<std::vector<Turn>> chunks;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_) return {};  // the worker no longer serves clips
         clips_.push_back({{frames.begin(), frames.end()}, first_frame, {}});
-        text = clips_.back().text.get_future();
+        chunks = clips_.back().chunks.get_future();
     }
     cv_.notify_all();
-    return text.get();
+    return chunks.get();
 }
 
 // Load off the hot path; a failed load drains windows without turns, so
@@ -235,23 +250,31 @@ void WhisperTranscriber::WorkerLoop() {
             clips_.pop_front();
             busy_ = true;
             lock.unlock();
-            std::string text;
+            std::vector<Turn> chunks;
+            std::vector<std::uint64_t> cuts;
             try {
                 // The burst pipeline when the live device is the slow one
                 const DecodeFn& decode = clip_decode_ ? clip_decode_ : decode_;
                 if (decode) {
                     const auto t0 = std::chrono::steady_clock::now();
+                    const std::uint64_t clip_end = clip.first_frame + clip.frames.size();
                     for (const Turn& turn : decode(clip.frames, clip.first_frame)) {
                         if (turn.text.empty()) continue;
-                        if (!text.empty()) text += ' ';
-                        text += turn.text;
+                        chunks.push_back(turn);
+                        // Chunk edges: where a short answer inside a long clip
+                        // begins and ends
+                        for (const std::uint64_t edge :
+                             {turn.first_frame, turn.first_frame + turn.frame_count}) {
+                            if (edge > clip.first_frame && edge < clip_end) cuts.push_back(edge);
+                        }
                     }
                     RecordDecode(clip.frames.size(), t0);
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
-            clip.text.set_value(std::move(text));
+            clip.chunks.set_value(std::move(chunks));
             lock.lock();
+            clip_cuts_.insert(clip_cuts_.end(), cuts.begin(), cuts.end());
             busy_ = false;
             cv_.notify_all();
             continue;
@@ -294,7 +317,7 @@ void WhisperTranscriber::WorkerLoop() {
         cv_.notify_all();
     }
     // A caller may still be blocked on a pending clip at shutdown
-    for (auto& clip : clips_) clip.text.set_value({});
+    for (auto& clip : clips_) clip.chunks.set_value({});
 }
 
 }  // namespace ambient::asr

@@ -19,6 +19,9 @@ class WorkerNoteWriter : public INoteWriter {
 
     void Prepare() override;
 
+    // Sent without waiting; dropped while a generation is streaming
+    void Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) override;
+
     bool WritesPatient() const override {
         return true;
     }

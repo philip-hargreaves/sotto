@@ -1,12 +1,19 @@
 #include "adapters/diarisation/diar_worker.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <string>
 
 #include "adapters/diarisation/speaker_clustering.hpp"
+#include "core/clip_cuts.hpp"
 #include "core/diar_capture.hpp"
 #include "core/diar_regions.hpp"
+#include "core/env_flag.hpp"
 #include "core/per_turn.hpp"
+#include "core/resplit.hpp"
 #include "core/slice_refinement.hpp"
 
 namespace ambient::diar {
@@ -55,7 +62,7 @@ const std::vector<float>& DiarWorker::EmbedSlice(std::span<const float> audio,
 }
 
 void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
-                         const DecodeClipFn& decode) {
+                         const DecodeClipFn& decode, int budget) {
     auto& s = state_;
 
     // Whole hops only; finalise pads the final partial one
@@ -75,16 +82,34 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
         s.seg_done += kSegWindowFrames;
     }
 
-    const auto settled = SettledFrontier(s.seg_done, turns, audio.size());
+    const auto settled =
+        EnvFlag("AMBIENT_SEG_FRONTIER")
+            ? SegSettledFrontier(s.seg_done, s.vad_probabilities.size() * audio::kVadHopFrames)
+            : SettledFrontier(s.seg_done, turns, audio.size());
     if (settled == 0) return;
+    // Without a budget this is finalise's catch-up; its phases are logged
+    const bool catch_up = budget == std::numeric_limits<int>::max();
+    using Clock = std::chrono::steady_clock;
+    const auto t_start = Clock::now();
+    const auto seconds = [](Clock::time_point a, Clock::time_point b) {
+        return std::chrono::duration<double>(b - a).count();
+    };
 
     // Slices behind the frontier, cut exactly as finalise cuts them
+    // (including the AMBIENT_DIAR_SEG_CUTS_ONLY windowless ablation)
     auto cps = s.seg.change_points;
-    for (const auto& turn : turns) {
-        if (turn.first_frame <= settled) cps.push_back(turn.first_frame);
-        if (turn.first_frame + turn.frame_count <= settled) {
-            cps.push_back(turn.first_frame + turn.frame_count);
+    if (!EnvFlag("AMBIENT_DIAR_SEG_CUTS_ONLY")) {
+        for (const auto& turn : turns) {
+            if (turn.first_frame <= settled) cps.push_back(turn.first_frame);
+            if (turn.first_frame + turn.frame_count <= settled) {
+                cps.push_back(turn.first_frame + turn.frame_count);
+            }
         }
+    }
+    if (EnvFlag("AMBIENT_CLIP_CUTS")) {
+        const auto cuts = SnapClipCuts(s.clip_cuts, s.vad_probabilities, cps);
+        LogClipCuts("capture", s.clip_cuts, cuts, s.vad_probabilities);
+        cps.insert(cps.end(), cuts.begin(), cuts.end());
     }
     std::sort(cps.begin(), cps.end());
     auto regions =
@@ -95,6 +120,7 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
     std::vector<std::vector<float>> embeddings;
     std::vector<std::uint64_t> durations;
     std::vector<Region> kept;
+    const auto t_embed = Clock::now();
     for (const auto& slice : slices) {
         const auto& e = EmbedSlice(audio, slice);
         if (e.empty()) continue;
@@ -106,6 +132,7 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
 
     // Provisional labels, built exactly as finalise builds them; a span
     // that final clustering changes is simply never looked up
+    const auto t_cluster = Clock::now();
     const auto clusters = ClusterSpeakers(embeddings, durations);
     std::vector<LabelledSlice> labelled;
     for (std::size_t i = 0; i < kept.size(); ++i) {
@@ -148,22 +175,119 @@ void DiarWorker::Advance(std::span<const float> audio, std::span<const asr::Turn
                   });
     }
 
-    // Decode settled turns into the cache; the last turn may still grow
+    // Decode settled turns into the cache. The last turn may still grow unless
+    // closed; the catch-up decodes everything
     auto merged = MergeByCluster(labelled);
     if (merged.size() < 2) return;
-    merged.pop_back();
+    // A last turn closes on silence after it, or once the frontier is
+    // kTurnCloseFrames past its end (the next speaker may have started at once)
+    if (!catch_up) {
+        const auto end = merged.back().end_frame;
+        const bool frontier_past = settled > end && settled - end >= kTurnCloseFrames;
+        if (!frontier_past && !TurnClosed(s.vad_probabilities, end)) merged.pop_back();
+    }
     const auto spans = DecodeSpans(merged, audio.size());
-    int budget = kSpeculateBudget;
-    for (const auto& span : spans) {
-        const auto a = span.first_frame;
-        const auto b = span.end_frame;
-        if (a >= b || b - a < kPerTurnMinClipFrames) continue;
-        if (s.turn_texts.contains({a, b})) continue;
-        if (budget-- <= 0) break;
-        const std::string text = decode(audio.subspan(a, b - a), a);
-        if (text.empty()) continue;  // rejected, silent, or stopping
-        if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
-        s.turn_texts[{a, b}] = text;
+    const auto t_decode = Clock::now();
+    int decoded = 0;
+    int cached = 0;
+    double decoded_audio = 0.0;
+    {
+        for (std::size_t i = 0; i < spans.size(); ++i) {
+            const auto a = spans[i].first_frame;
+            const auto b = spans[i].end_frame;
+            if (a >= b || b - a < kPerTurnMinClipFrames) continue;
+            if (s.turn_texts.contains({a, b})) {
+                ++cached;
+                continue;
+            }
+            if (auto assembled = AssembleFromChunks(s.turn_chunks, a, b)) {
+                s.turn_texts[{a, b}] = JoinedText(*assembled);
+                s.turn_chunks[{a, b}] = std::move(*assembled);
+                ++cached;
+                continue;
+            }
+            if (budget-- <= 0) break;
+            auto chunks_of_span = decode(audio.subspan(a, b - a), a);
+            const std::string text = JoinedText(chunks_of_span);
+            ++decoded;
+            decoded_audio += static_cast<double>(b - a) / audio::kSampleRate;
+            if (catch_up || EnvFlag("AMBIENT_CUT_DEBUG")) {
+                std::fprintf(stderr, "ambient-engine: %s decoded %.1f-%.1f s\n",
+                             catch_up ? "catch-up" : "tick",
+                             static_cast<double>(a) / audio::kSampleRate,
+                             static_cast<double>(b) / audio::kSampleRate);
+            }
+            if (text.empty()) continue;  // rejected, silent, or stopping
+            if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
+            s.turn_texts[{a, b}] = text;
+            s.turn_chunks[{a, b}] = std::move(chunks_of_span);
+        }
+    }
+    if (catch_up) {
+        const auto t_end = Clock::now();
+        std::fprintf(stderr,
+                     "ambient-engine: catch-up frontier %.1f of %.1f s, slices %zu, "
+                     "segment+cuts %.2f s, embed %.2f s, cluster %.2f s, decode %d spans "
+                     "(%.1f s audio, %d cached) %.2f s, total %.2f s\n",
+                     static_cast<double>(settled) / audio::kSampleRate,
+                     static_cast<double>(audio.size()) / audio::kSampleRate, kept.size(),
+                     seconds(t_start, t_embed), seconds(t_embed, t_cluster),
+                     seconds(t_cluster, t_decode), decoded, decoded_audio, cached,
+                     seconds(t_decode, t_end), seconds(t_start, t_end));
+    }
+
+    // AMBIENT_RESPLIT: edge chunks are embedded now, a few per tick, so the
+    // finalise re-split only takes dot products
+    if (EnvFlag("AMBIENT_RESPLIT")) {
+        int embeds = catch_up ? std::numeric_limits<int>::max() : kEdgeEmbedBudget;
+        for (std::size_t i = 0; i < merged.size() && embeds > 0; ++i) {
+            const auto key = std::make_pair(spans[i].first_frame, spans[i].end_frame);
+            const auto it = s.turn_chunks.find(key);
+            if (it == s.turn_chunks.end() || it->second.size() < 2) continue;
+            const auto& parts = it->second;
+            const std::size_t idx[4] = {0, 1, parts.size() - 2, parts.size() - 1};
+            for (const std::size_t j : idx) {
+                if (embeds <= 0) break;
+                const auto& p = parts[j];
+                const std::uint64_t lo = std::max(p.first_frame, merged[i].first_frame);
+                const std::uint64_t hi =
+                    std::min(p.first_frame + p.frame_count, merged[i].end_frame);
+                if (hi <= lo || hi - lo < kResplitMinFrames) continue;
+                if (s.chunk_embeddings.contains({lo, hi})) continue;
+                s.chunk_embeddings[{lo, hi}] = embedder_.Embed(audio.subspan(lo, hi - lo));
+                --embeds;
+            }
+        }
+    }
+    speculation_.turns = SpeculatedTurns(merged, audio.size(), s.turn_texts, &speculation_.texts);
+    speculation_.centroids = clusters.centroids;
+    speculation_.cluster_count = clusters.count;
+    // The prefill reads this transcript; it must re-split as the seal does or
+    // the prompt diverges at the first move
+    if (EnvFlag("AMBIENT_RESPLIT") && clusters.count >= 2 && !speculation_.turns.empty()) {
+        const auto spec_spans = DecodeSpans(speculation_.turns, audio.size());
+        std::vector<std::vector<asr::Turn>> chunks(speculation_.turns.size());
+        for (std::size_t i = 0; i < spec_spans.size(); ++i) {
+            const auto it =
+                s.turn_chunks.find({spec_spans[i].first_frame, spec_spans[i].end_frame});
+            if (it != s.turn_chunks.end()) chunks[i] = it->second;
+        }
+        const std::string margin_env = EnvValue("AMBIENT_RESPLIT_MARGIN");
+        const double margin = margin_env.empty() ? kResplitMargin : std::atof(margin_env.c_str());
+        const auto pieces = ResplitByEmbedding(
+            speculation_.turns, speculation_.texts, chunks,
+            [&](std::uint64_t first, std::uint64_t end) -> std::vector<float> {
+                const auto it = s.chunk_embeddings.find({first, end});
+                if (it != s.chunk_embeddings.end()) return it->second;
+                return {};  // not yet embedded: judged next tick
+            },
+            clusters.centroids, margin);
+        speculation_.turns.clear();
+        speculation_.texts.clear();
+        for (const auto& piece : pieces) {
+            speculation_.turns.push_back(piece.slice);
+            speculation_.texts.push_back(piece.text);
+        }
     }
 }
 

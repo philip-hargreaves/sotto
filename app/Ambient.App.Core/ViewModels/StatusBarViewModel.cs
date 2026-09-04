@@ -53,8 +53,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
     private string _asrDevice = "";
     private string _noteDevice = "";
 
-    /// <summary>"whisper-turbo-int8" reads as "Whisper Turbo": the precision
-    /// suffix is build detail, size tokens keep their form.</summary>
+    /// <summary>Fallback when a manifest has no display name: "whisper-turbo-int8"
+    /// reads as "Whisper Turbo"; precision suffix dropped, size tokens kept.</summary>
     public static string FriendlyModelName(string id)
     {
         var words = id.Split('-')
@@ -80,16 +80,23 @@ public sealed partial class StatusBarViewModel : ObservableObject
             var response = await _engine
                 .RequestAsync("engine/models", null, TimeSpan.FromSeconds(5))
                 .ConfigureAwait(true);
-            foreach (var model in response.GetProperty("models").EnumerateArray())
+            // The default tier is what the engine loads; an ablation export
+            // beside it must not name the chip
+            foreach (var model in response.GetProperty("models").EnumerateArray()
+                         .OrderBy(m => m.GetProperty("tier").GetString() == "default" ? 0 : 1))
             {
                 var task = model.GetProperty("task").GetString();
-                var name = FriendlyModelName(model.GetProperty("id").GetString() ?? "");
+                var id = model.GetProperty("id").GetString() ?? "";
+                var name = model.TryGetProperty("name", out var given)
+                           && !string.IsNullOrWhiteSpace(given.GetString())
+                    ? given.GetString()!
+                    : FriendlyModelName(id);
                 var device = ShortDevice(model.GetProperty("device").GetString() ?? "");
-                if (task == "asr")
+                if (task == "asr" && _asrName.Length == 0)
                 {
                     (_asrName, _asrDevice) = (name, device);
                 }
-                else if (task == "note")
+                else if (task == "note" && _noteName.Length == 0)
                 {
                     (_noteName, _noteDevice) = (name, device);
                 }

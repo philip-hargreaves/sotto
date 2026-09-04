@@ -5,7 +5,10 @@
 
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
+#include "core/clip_cuts.hpp"
 #include "core/diar_regions.hpp"
+#include "core/env_flag.hpp"
+#include "core/role_naming.hpp"
 #include "core/slice_refinement.hpp"
 
 namespace ambient::diar {
@@ -57,6 +60,8 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         probabilities = std::move(capture.vad_probabilities);
         seg = std::move(capture.seg);
         texts_ = std::move(capture.turn_texts);
+        chunks_ = std::move(capture.turn_chunks);
+        chunk_embeddings_ = std::move(capture.chunk_embeddings);
     } else {
         vad_.Reset();
         std::vector<float> hop(audio::kVadHopFrames, 0.0f);
@@ -74,6 +79,11 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
     const auto regions = SpeechRegions(probabilities, audio.size());
     seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
                              turn_boundaries.end());
+    if (EnvFlag("AMBIENT_CLIP_CUTS")) {
+        const auto cuts = SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points);
+        LogClipCuts("finalise", capture.clip_cuts, cuts, probabilities);
+        seg.change_points.insert(seg.change_points.end(), cuts.begin(), cuts.end());
+    }
     std::sort(seg.change_points.begin(), seg.change_points.end());
     const auto slices = RefineRegions(regions, seg.change_points);
 
@@ -100,6 +110,7 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
 
     result.timing.embed_s = lap();
     const auto clusters = ClusterSpeakers(embeddings, durations);
+    centroids_ = clusters.centroids;
     result.timing.cluster_s = lap();
     std::vector<LabelledSlice> out;
     for (std::size_t i = 0; i < kept.size(); ++i) {
@@ -168,6 +179,40 @@ std::vector<double> SpeakerDiariser::AnchorSimilarities(std::span<const float> a
         voiceprints_[static_cast<std::size_t>(c)] = std::move(voiceprint);
     }
     return similarity;
+}
+
+std::vector<asr::Turn> SpeakerDiariser::SpeculativeTranscript() {
+    const Speculation& spec = worker_.LastSpeculation();
+    if (spec.turns.empty()) return {};
+    std::vector<double> similarity;
+    const auto anchor = anchors_.Anchor();
+    if (anchor && spec.centroids.size() == static_cast<std::size_t>(spec.cluster_count)) {
+        for (const auto& centroid : spec.centroids) {
+            double dot = 0.0;
+            for (std::size_t d = 0; d < centroid.size() && d < anchor->size(); ++d) {
+                dot += static_cast<double>(centroid[d]) * (*anchor)[d];
+            }
+            similarity.push_back(dot);
+        }
+    }
+    std::vector<RoleTurn> role_turns;
+    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
+        role_turns.push_back({spec.turns[i].cluster,
+                              spec.turns[i].end_frame - spec.turns[i].first_frame, spec.texts[i]});
+    }
+    const auto roles = NameRoles(role_turns, spec.cluster_count, similarity);
+    std::vector<asr::Turn> out;
+    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
+        const auto cluster = static_cast<std::size_t>(spec.turns[i].cluster);
+        asr::Turn turn;
+        turn.first_frame = spec.turns[i].first_frame;
+        turn.frame_count = spec.turns[i].end_frame - spec.turns[i].first_frame;
+        turn.speaker =
+            cluster < roles.role_of_cluster.size() ? roles.role_of_cluster[cluster] : "unknown";
+        turn.text = spec.texts[i];
+        out.push_back(std::move(turn));
+    }
+    return out;
 }
 
 void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,

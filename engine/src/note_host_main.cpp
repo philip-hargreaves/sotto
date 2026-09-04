@@ -121,6 +121,16 @@ int main(int argc, char* argv[]) {
             writer.Cancel();
             return json::object();
         });
+        // Inline: short, and a failure is only a lost guess, never an error
+        // the engine's next attempt could mistake for its own
+        server.RegisterMethod("prefill", [&writer](const json& params) {
+            try {
+                writer.Prefill(TurnsFrom(params), {params.value("style", "prose"), "standard"});
+            } catch (const std::exception& e) {
+                std::fprintf(stderr, "ambient-note-host: prefill dropped (%s)\n", e.what());
+            }
+            return json::object();
+        });
         server.RegisterMethod(
             "write", [&writer, &lane](const json& params) -> std::variant<json, Error> {
                 auto turns = TurnsFrom(params);

@@ -43,6 +43,7 @@ public class ModelsContractTest
             var models = result.GetProperty("models");
             Assert.Equal(1, models.GetArrayLength());
             Assert.Equal("silero-vad", models[0].GetProperty("id").GetString());
+            Assert.Equal("silero-vad", models[0].GetProperty("name").GetString());  // no display name: the id
             Assert.Equal("vad", models[0].GetProperty("task").GetString());
             Assert.Equal("default", models[0].GetProperty("tier").GetString());
             Assert.Equal("CPU", models[0].GetProperty("device").GetString());

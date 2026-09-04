@@ -17,6 +17,9 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 add_executable(engine_tests
     core/audio_ring_test.cpp
     core/cli_args_test.cpp
+    core/clip_cuts_test.cpp
+    core/tidy_transcript_test.cpp
+    core/resplit_test.cpp
     core/diar_capture_test.cpp
     core/diar_regions_test.cpp
     core/endpointer_test.cpp
@@ -40,6 +43,7 @@ add_executable(engine_tests
     adapters/db_test.cpp
     adapters/fbank_test.cpp
     adapters/framing_test.cpp
+    adapters/gpu_lease_test.cpp
     adapters/capture_devices_test.cpp
     adapters/handlers_test.cpp
     adapters/messages_test.cpp

@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "core/diar_regions.hpp"
+#include "core/env_flag.hpp"
 #include "ports/diariser.hpp"
 
 namespace ambient::diar {
@@ -76,30 +79,103 @@ inline std::vector<Region> DecodeSpans(const std::vector<LabelledSlice>& turns,
     return spans;
 }
 
+// AMBIENT_CHUNK_ASSEMBLE: a span whose edges sit on a cached decode's chunk edges
+// (a cut re-sliced a decoded turn) takes those chunks instead of a second decode
+inline constexpr std::uint64_t kAssembleTolFrames = 5600;  // 0.35 s: snap window plus span clamp
+
+inline std::optional<std::vector<asr::Turn>> AssembleFromChunks(const TurnChunks& cache,
+                                                                std::uint64_t a, std::uint64_t b) {
+    if (!EnvFlag("AMBIENT_CHUNK_ASSEMBLE")) return std::nullopt;
+    const auto close_to = [](std::uint64_t x, std::uint64_t y) {
+        return (x > y ? x - y : y - x) <= kAssembleTolFrames;
+    };
+    for (const auto& [span, chunks] : cache) {
+        if (span.first > a + kAssembleTolFrames || span.second + kAssembleTolFrames < b) continue;
+        if (chunks.empty()) continue;
+        std::vector<asr::Turn> inside;
+        for (const auto& c : chunks) {
+            const std::uint64_t mid = c.first_frame + c.frame_count / 2;
+            if (mid >= a && mid < b) inside.push_back(c);
+        }
+        if (inside.empty()) continue;
+        const auto& first = inside.front();
+        const auto& last = inside.back();
+        if (!close_to(first.first_frame, a) || !close_to(last.first_frame + last.frame_count, b))
+            continue;
+        if (EnvFlag("AMBIENT_CUT_DEBUG")) {
+            std::fprintf(
+                stderr,
+                "ambient-engine: assembled %.2f-%.2f s from decode %.2f-%.2f s (%zu chunks)\n",
+                a / 16000.0, b / 16000.0, span.first / 16000.0, span.second / 16000.0,
+                inside.size());
+        }
+        return inside;
+    }
+    return std::nullopt;
+}
+
 // Each merged turn gets the text of its own audio; empty means dropped.
 // Cached texts are used only on an exact key match, so any hit rate is safe
-inline std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns,
-                                                std::span<const float> audio,
-                                                const DecodeClipFn& decode,
-                                                const TurnTexts* cache = nullptr) {
+inline std::vector<std::string> DecodeTurnTexts(
+    const std::vector<LabelledSlice>& turns, std::span<const float> audio,
+    const DecodeClipFn& decode, const TurnTexts* cache = nullptr,
+    const TurnChunks* chunk_cache = nullptr,
+    std::vector<std::vector<asr::Turn>>* chunks_out = nullptr) {
     const auto spans = DecodeSpans(turns, audio.size());
     std::vector<std::string> texts(turns.size());
-    for (std::size_t i = 0; i < turns.size(); ++i) {
-        const auto [a, b] = spans[i];
-        if (a >= b || b - a < kPerTurnMinClipFrames) continue;
-        if (cache != nullptr) {
-            const auto it = cache->find({a, b});
-            if (it != cache->end()) {
-                texts[i] = it->second;
-                continue;
+    if (chunks_out != nullptr) chunks_out->assign(turns.size(), {});
+    {
+        for (std::size_t i = 0; i < turns.size(); ++i) {
+            const auto [a, b] = spans[i];
+            if (a >= b || b - a < kPerTurnMinClipFrames) continue;
+            if (cache != nullptr) {
+                const auto it = cache->find({a, b});
+                if (it != cache->end()) {
+                    texts[i] = it->second;
+                    if (chunks_out != nullptr && chunk_cache != nullptr) {
+                        const auto ct = chunk_cache->find({a, b});
+                        if (ct != chunk_cache->end()) (*chunks_out)[i] = ct->second;
+                    }
+                    continue;
+                }
             }
+            if (chunk_cache != nullptr) {
+                if (auto assembled = AssembleFromChunks(*chunk_cache, a, b)) {
+                    texts[i] = JoinedText(*assembled);
+                    if (chunks_out != nullptr) (*chunks_out)[i] = std::move(*assembled);
+                    continue;
+                }
+            }
+            auto chunks = decode(audio.subspan(a, b - a), a);
+            std::string text = JoinedText(chunks);
+            // A degenerate loop has no safe fallback; empty is the answer
+            if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
+            texts[i] = std::move(text);
+            if (chunks_out != nullptr) (*chunks_out)[i] = std::move(chunks);
         }
-        std::string text = decode(audio.subspan(a, b - a), a);
-        // A degenerate loop has no safe fallback; empty is the answer
-        if (detail::MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
-        texts[i] = std::move(text);
     }
     return texts;
+}
+
+// Merged turns whose text the cache already holds, in order, up to the first
+// span finalise would have to decode: from there on the sealed transcript is
+// unknowable. Spans below the clip floor are skipped as finalise skips them
+inline std::vector<LabelledSlice> SpeculatedTurns(const std::vector<LabelledSlice>& merged,
+                                                  std::uint64_t audio_frames,
+                                                  const TurnTexts& cache,
+                                                  std::vector<std::string>* texts) {
+    const auto spans = DecodeSpans(merged, audio_frames);
+    std::vector<LabelledSlice> known;
+    texts->clear();
+    for (std::size_t i = 0; i < merged.size(); ++i) {
+        const auto [a, b] = spans[i];
+        if (a >= b || b - a < kPerTurnMinClipFrames) continue;
+        const auto it = cache.find({a, b});
+        if (it == cache.end()) break;
+        known.push_back(merged[i]);
+        texts->push_back(it->second);
+    }
+    return known;
 }
 
 }  // namespace ambient::diar

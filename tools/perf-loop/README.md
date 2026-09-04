@@ -33,3 +33,8 @@ end a loop between runs. `PERF_TAG=-name` keeps an experiment's results in their
 
 The pipe client is single-threaded on purpose: a synchronous named-pipe handle serialises
 reads and writes, so it polls `PeekNamedPipe` and reads only what is waiting.
+
+Pause and resume: create `build/perf-loop/PAUSE` and the loop waits between runs until it is
+deleted; `PERF_SKIP_DONE=1` (with `PERF_SAVE`) skips any track whose transcript is already
+saved under the tag, so a killed sweep resumes where it stopped. Never set it for a tag that
+repeats one track.
