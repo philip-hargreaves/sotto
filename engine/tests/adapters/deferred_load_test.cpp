@@ -90,6 +90,28 @@ struct CountingDiariser : diar::IDiariser {
     std::vector<asr::Turn> SpeculativeTranscript() override {
         return {{0, 16000, "doctor", "guessed"}};
     }
+
+    std::vector<std::uint64_t> cuts;
+
+    void AddCutPoints(std::span<const std::uint64_t> c) override {
+        cuts.assign(c.begin(), c.end());
+    }
+
+    std::size_t settled_frames = 0;
+
+    void Settle(std::span<const float> audio, std::span<const asr::Turn>,
+                const diar::DecodeClipFn&) override {
+        settled_frames = audio.size();
+    }
+
+    std::vector<std::vector<float>> ClusterCentroids() override {
+        return {{1.0f, 0.0f}, {0.0f, 1.0f}};
+    }
+
+    std::vector<float> EmbedSpan(std::span<const float>, std::uint64_t first,
+                                 std::uint64_t end) override {
+        return {static_cast<float>(end - first), 0.0f};
+    }
 };
 
 // The engine only ever sees the wrapper; a method it does not forward is a
@@ -102,6 +124,48 @@ TEST(DeferredDiariser, ForwardsAnchorSimilarities) {
     const auto similarity = diariser.AnchorSimilarities({}, {}, 2);
 
     EXPECT_EQ(similarity, (std::vector<double>{0.75, 0.75}));
+}
+
+TEST(DeferredDiariser, ForwardsSettle) {
+    std::atomic<int> discards{0};
+    CountingDiariser* inner = nullptr;
+    diar::DeferredDiariser diariser([&discards, &inner] {
+        auto made = std::make_unique<CountingDiariser>(discards);
+        inner = made.get();
+        return made;
+    });
+    const std::vector<float> audio(320, 0.0f);
+
+    diariser.Settle(audio, {},
+                    [](std::span<const float>, std::uint64_t) { return std::vector<asr::Turn>{}; });
+
+    ASSERT_NE(inner, nullptr);
+    EXPECT_EQ(inner->settled_frames, 320u);
+}
+
+TEST(DeferredDiariser, ForwardsCentroidsAndSpanEmbedding) {
+    std::atomic<int> discards{0};
+    diar::DeferredDiariser diariser(
+        [&discards] { return std::make_unique<CountingDiariser>(discards); });
+    const std::vector<float> audio(640, 0.0f);
+
+    EXPECT_EQ(diariser.ClusterCentroids().size(), 2u);
+    EXPECT_EQ(diariser.EmbedSpan(audio, 0, 640)[0], 640.0f);
+    EXPECT_TRUE(diariser.TakeTurnChunks().empty());
+}
+
+TEST(DeferredDiariser, ForwardsCutPoints) {
+    std::atomic<int> discards{0};
+    CountingDiariser* inner = nullptr;
+    diar::DeferredDiariser diariser([&discards, &inner] {
+        auto built = std::make_unique<CountingDiariser>(discards);
+        inner = built.get();
+        return built;
+    });
+    const std::vector<std::uint64_t> cuts{16000, 32000};
+    diariser.AddCutPoints(cuts);
+    ASSERT_NE(inner, nullptr);
+    EXPECT_EQ(inner->cuts, cuts);
 }
 
 TEST(DeferredDiariser, ForwardsTheSpeculativeTranscript) {

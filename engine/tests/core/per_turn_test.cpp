@@ -15,7 +15,11 @@ DecodeClipFn Decoder(std::vector<std::pair<std::uint64_t, std::uint64_t>>* calls
                      std::string reply = "spoken") {
     return [calls, reply](std::span<const float> clip, std::uint64_t first) {
         if (calls != nullptr) calls->push_back({first, clip.size()});
-        return reply + " at " + std::to_string(first);
+        asr::Turn chunk;
+        chunk.first_frame = first;
+        chunk.frame_count = clip.size();
+        chunk.text = reply + " at " + std::to_string(first);
+        return std::vector<asr::Turn>{chunk};
     };
 }
 
@@ -72,9 +76,12 @@ TEST(DecodeTurnTexts, SubMinimumSpansAreSkippedNotDecoded) {
 TEST(DecodeTurnTexts, ADegenerateDecodeYieldsEmpty) {
     const std::vector<LabelledSlice> turns{{0, 30000, 0}};
     const auto texts = DecodeTurnTexts(turns, kAudio, [](std::span<const float>, std::uint64_t) {
-        return std::string(
+        asr::Turn chunk;
+        chunk.frame_count = 30000;
+        chunk.text =
             "the same five words again the same five words again "
-            "the same five words again the same five words again");
+            "the same five words again the same five words again";
+        return std::vector<asr::Turn>{chunk};
     });
     EXPECT_TRUE(texts[0].empty()) << "a repetition loop has no safe fallback";
 }
@@ -140,6 +147,29 @@ TEST(SpeculatedTurns, NothingKnownIsEmpty) {
     std::vector<std::string> texts;
     EXPECT_TRUE(SpeculatedTurns({{0, 30000, 0}}, 30000, {}, &texts).empty());
     EXPECT_TRUE(texts.empty());
+}
+
+}  // namespace
+}  // namespace ambient::diar
+
+namespace ambient::diar {
+namespace {
+
+TEST(AssembleFromChunks, ACutPieceOnChunkEdgesIsAssembledNotRedecoded) {
+    struct Flag {
+        Flag() { _putenv_s("AMBIENT_CHUNK_ASSEMBLE", "1"); }
+        ~Flag() { _putenv_s("AMBIENT_CHUNK_ASSEMBLE", ""); }
+    } flag;
+    TurnChunks cache;
+    asr::Turn c1, c2, c3;
+    c1.first_frame = 0; c1.frame_count = 40000; c1.text = "have you had clots?";
+    c2.first_frame = 41000; c2.frame_count = 12000; c2.text = "No.";
+    c3.first_frame = 54000; c3.frame_count = 30000; c3.text = "Anyone in your family?";
+    cache[{0, 84000}] = {c1, c2, c3};
+    const auto piece = AssembleFromChunks(cache, 40500, 53500);  // the cut around "No."
+    ASSERT_TRUE(piece.has_value());
+    EXPECT_EQ(JoinedText(*piece), "No.");
+    EXPECT_FALSE(AssembleFromChunks(cache, 20000, 53500).has_value()) << "not on a chunk edge";
 }
 
 }  // namespace

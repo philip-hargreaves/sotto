@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <limits>
+#include <map>
 #include <span>
 #include <utility>
 #include <vector>
@@ -40,17 +42,48 @@ class SpeakerDiariser : public IDiariser {
         worker_.Advance(audio, turns, decode);
     }
 
+    void Settle(std::span<const float> audio, std::span<const asr::Turn> turns,
+                const DecodeClipFn& decode) override {
+        worker_.Advance(audio, turns, decode, std::numeric_limits<int>::max());
+    }
+
     TurnTexts TakeTurnTexts() override {
         return std::exchange(texts_, {});
+    }
+
+    TurnChunks TakeTurnChunks() override {
+        return std::exchange(chunks_, {});
+    }
+
+    std::vector<std::vector<float>> ClusterCentroids() override {
+        return centroids_;
+    }
+
+    std::vector<float> EmbedSpan(std::span<const float> audio, std::uint64_t first,
+                                 std::uint64_t end) override {
+        const auto it = chunk_embeddings_.find({first, end});
+        if (it != chunk_embeddings_.end()) return it->second;
+        if (end <= first || end - first < 400 || end > audio.size()) return {};
+        return embedder_.Embed(audio.subspan(first, end - first));
     }
 
     // Roles named as finalise names them, with cluster centroids standing in
     // for the voiceprints against the anchor
     std::vector<asr::Turn> SpeculativeTranscript() override;
 
+    void AddCutPoints(std::span<const std::uint64_t> cuts) override {
+        worker_.AddCutPoints(cuts);
+    }
+
+    void AddPunctuationCuts(std::span<const std::uint64_t> cuts) override {
+        worker_.AddPunctuationCuts(cuts);
+    }
+
     void DiscardCapture() override {
         (void)worker_.Take();
         texts_.clear();
+        chunks_.clear();
+        chunk_embeddings_.clear();
         voiceprints_.clear();
     }
 
@@ -65,6 +98,9 @@ class SpeakerDiariser : public IDiariser {
     AnchorStore anchors_;
     DiarWorker worker_;
     TurnTexts texts_;
+    TurnChunks chunks_;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> chunk_embeddings_;
+    std::vector<std::vector<float>> centroids_;    // finalise clusters, from Diarise
     std::vector<std::vector<float>> voiceprints_;  // per cluster, from AnchorSimilarities
 };
 

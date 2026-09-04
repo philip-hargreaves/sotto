@@ -20,6 +20,8 @@
 #include "core/metrics.hpp"
 #include "core/note_label.hpp"
 #include "core/per_turn.hpp"
+#include "core/resplit.hpp"
+#include "core/tidy_transcript.hpp"
 #include "core/resume_source.hpp"
 #include "core/role_naming.hpp"
 #include "core/turn_reconcile.hpp"
@@ -514,20 +516,33 @@ class SessionController {
             // The same reconcile finalise runs, so turn spans agree
             diar::ReconcileTurns(turns);
             try {
-                diariser_->Advance(
-                    audio, turns,
-                    [this](std::span<const float> clip, std::uint64_t first) -> std::string {
-                        {
-                            std::lock_guard<std::mutex> guard(mutex_);
-                            // A stop must not wait behind a speculation pass
-                            if (diar_stop_) return {};
-                        }
-                        return transcriber_.DecodeClip(clip, first);
-                    });
+                const auto decode = [this](std::span<const float> clip,
+                                           std::uint64_t first) -> std::vector<asr::Turn> {
+                    {
+                        std::lock_guard<std::mutex> guard(mutex_);
+                        // A stop must not wait behind a speculation pass
+                        if (diar_stop_) return {};
+                    }
+                    return transcriber_.DecodeClipChunks(clip, first);
+                };
+                diariser_->Advance(audio, turns, decode);
+                // AMBIENT_CLIP_CUTS: this tick's chunk edges re-slice the audio;
+                // the pieces decode in the same tick, so a stop never waits for them
+                if (EnvFlag("AMBIENT_CLIP_CUTS")) {
+                    const auto cuts = transcriber_.TakeClipCuts();
+                    if (!cuts.empty()) diariser_->AddCutPoints(cuts);
+                    const auto sentence = transcriber_.TakePunctuationCuts();
+                    if (!sentence.empty()) diariser_->AddPunctuationCuts(sentence);
+                    if (!cuts.empty() || !sentence.empty()) {
+                        diariser_->Advance(audio, turns, decode);
+                    }
+                }
                 // AMBIENT_NOTE_PREFILL (windowless prototype): the note host
                 // extends its KV over the settled opening between whisper decodes
                 if (EnvFlag("AMBIENT_NOTE_PREFILL") && note_writer_ != nullptr) {
-                    const auto guess = diariser_->SpeculativeTranscript();
+                    auto guess = diariser_->SpeculativeTranscript();
+                    // The seal tidies its turns; the prefill's prefix must read the same
+                    if (EnvFlag("AMBIENT_TIDY")) guess = diar::TidyTranscript(std::move(guess));
                     if (!guess.empty()) note_writer_->Prefill(guess, CurrentNoteOptions());
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
@@ -607,6 +622,28 @@ class SessionController {
                      session_audio_.size() / 16000.0, diar_ticks_);
         if (metrics_ != nullptr) {
             metrics_->RecordSession(session_audio_.size() / 16000.0, lost_frames_, diar_ticks_);
+        }
+        // Capture decodes a few spans per tick and can lag; the rest decodes
+        // now, so the cuts reach the diariser at every replay speed
+        if (outcome == Outcome::kFinalise && diariser_ != nullptr && EnvFlag("AMBIENT_CLIP_CUTS")) {
+            std::vector<asr::Turn> turns;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                turns = session_turns_;
+            }
+            diar::ReconcileTurns(turns);
+            try {
+                diariser_->Settle(session_audio_, turns,
+                                  [this](std::span<const float> clip, std::uint64_t first) {
+                                      return transcriber_.DecodeClipChunks(clip, first);
+                                  });
+                const auto cuts = transcriber_.TakeClipCuts();
+                if (!cuts.empty()) diariser_->AddCutPoints(cuts);
+                const auto sentence = transcriber_.TakePunctuationCuts();
+                if (!sentence.empty()) diariser_->AddPunctuationCuts(sentence);
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
+            }
+            stage("capture settled");
         }
         // The tail window is transcribed unless discarding; every turn stores
         // before the outcome below
@@ -701,17 +738,41 @@ class SessionController {
                     });
                 // Each merged turn gets the text of its own audio; the
                 // speculation cache means this mostly decodes only the tail
-                const auto turns = diar::MergeByCluster(result.slices);
+                auto turns = diar::MergeByCluster(result.slices);
                 const auto cache = diariser_->TakeTurnTexts();
-                const auto turn_texts = diar::DecodeTurnTexts(
+                const auto chunk_cache = diariser_->TakeTurnChunks();
+                std::vector<std::vector<asr::Turn>> turn_chunks;
+                auto turn_texts = diar::DecodeTurnTexts(
                     turns, session_audio_,
                     [this](std::span<const float> clip, std::uint64_t first) {
-                        return transcriber_.DecodeClip(clip, first);
+                        return transcriber_.DecodeClipChunks(clip, first);
                     },
-                    &cache);
+                    &cache, &chunk_cache, &turn_chunks);
                 stage("turns decoded");
                 const auto similarity = anchor_similarity.get();
                 stage("voiceprints joined");
+                // AMBIENT_RESPLIT: edge chunks that sound like the other speaker
+                // become that speaker's turns. After the voiceprints join: the
+                // embedder is single-threaded
+                if (EnvFlag("AMBIENT_RESPLIT")) {
+                    const auto centroids = diariser_->ClusterCentroids();
+                    const std::string margin_ms = EnvValue("AMBIENT_RESPLIT_MARGIN");
+                    const double margin = margin_ms.empty() ? diar::kResplitMargin
+                                                            : std::atof(margin_ms.c_str());
+                    const auto pieces = diar::ResplitByEmbedding(
+                        turns, turn_texts, turn_chunks,
+                        [this](std::uint64_t first, std::uint64_t end) {
+                            return diariser_->EmbedSpan(session_audio_, first, end);
+                        },
+                        centroids, margin, EnvValue("AMBIENT_RESPLIT") == "dry");
+                    turns.clear();
+                    turn_texts.clear();
+                    for (const auto& piece : pieces) {
+                        turns.push_back(piece.slice);
+                        turn_texts.push_back(piece.text);
+                    }
+                    stage("re-split");
+                }
                 if (metrics_ != nullptr) {
                     metrics_->RecordStage("diarise voiceprints", voiceprint_seconds);
                 }
@@ -750,6 +811,9 @@ class SessionController {
                     turn.text = turn_texts[i];
                     attributed.push_back(std::move(turn));
                 }
+                // AMBIENT_TIDY: fragments merged, slivers dropped,
+                // capitals and full stops; no word changes speaker
+                if (EnvFlag("AMBIENT_TIDY")) attributed = diar::TidyTranscript(std::move(attributed));
                 if (!attributed.empty()) {
                     store_.ReplaceTurns(id, attributed);
                     note_input = attributed;

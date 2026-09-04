@@ -26,7 +26,18 @@ class Registry;
 
 namespace ambient::asr {
 
-using DecodeFn = std::function<std::vector<Turn>(std::span<const float>, std::uint64_t)>;
+// One decode: Whisper's chunks (the cut-point source) and, with the
+// word-timestamp export, its words (the padded-clip trim). A plain turn list
+// is chunks only
+struct ClipDecode {
+    std::vector<Turn> chunks;
+    std::vector<Turn> words;
+    ClipDecode() = default;
+    ClipDecode(std::vector<Turn> c) : chunks(std::move(c)) {}  // NOLINT(google-explicit-constructor)
+    ClipDecode(std::vector<Turn> c, std::vector<Turn> w) : chunks(std::move(c)), words(std::move(w)) {}
+};
+
+using DecodeFn = std::function<ClipDecode(std::span<const float>, std::uint64_t)>;
 
 using DecodeLoader = std::function<DecodeFn()>;
 
@@ -52,9 +63,14 @@ class WhisperTranscriber : public ITranscriber {
     // Same worker queue, after pending windows; blocks until decoded and never
     // touches the sink
     std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) override;
+    std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
+                                       std::uint64_t first_frame) override;
 
     // Frees the pipeline once the queues drain; the next Submit reloads it
     void Release() override;
+
+    std::vector<std::uint64_t> TakeClipCuts() override;
+    std::vector<std::uint64_t> TakePunctuationCuts() override;
 
    private:
     struct Window {
@@ -65,7 +81,7 @@ class WhisperTranscriber : public ITranscriber {
     struct Clip {
         std::vector<float> frames;
         std::uint64_t first_frame;
-        std::promise<std::string> text;
+        std::promise<std::vector<Turn>> chunks;
     };
 
     void WorkerLoop();
@@ -85,6 +101,8 @@ class WhisperTranscriber : public ITranscriber {
     std::deque<Clip> clips_;
     ITurnSink* sink_ = nullptr;
     std::optional<Turn> previous_turn_;  // for the boundary dedup backstop
+    std::vector<std::uint64_t> clip_cuts_;   // segment edges inside decoded clips
+    std::vector<std::uint64_t> punct_cuts_;  // sentence ends inside decoded clips, estimated
     bool busy_ = false;
     bool stopping_ = false;
     bool release_requested_ = false;

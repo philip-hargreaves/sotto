@@ -70,6 +70,16 @@ std::vector<ambient::asr::Turn> Transcribe(const ambient::models::ModelStore& st
     return sink.turns;
 }
 
+// The clip-decode contract hands back chunks; the probe's whole-clip text is one
+std::vector<ambient::asr::Turn> AsChunk(std::string text, std::span<const float> clip,
+                                        std::uint64_t first_frame) {
+    ambient::asr::Turn chunk;
+    chunk.first_frame = first_frame;
+    chunk.frame_count = clip.size();
+    chunk.text = std::move(text);
+    return {chunk};
+}
+
 std::string Decode(ambient::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
                    std::uint64_t first_frame) {
     CollectingSink sink;
@@ -106,7 +116,7 @@ void AmortiseProbe(const ambient::models::ModelStore& store, ambient::models::Ov
     std::size_t decodes = 0;
     const auto decode = [&whisper, &decodes](std::span<const float> clip, std::uint64_t first) {
         ++decodes;
-        return Decode(whisper, clip, first);
+        return AsChunk(Decode(whisper, clip, first), clip, first);
     };
 
     // Capture: the controller's cadence, completed turns only
@@ -261,7 +271,7 @@ int main(int argc, char** argv) {
         const auto pturns = ambient::diar::MergeByCluster(result.slices);
         const auto turn_texts = ambient::diar::DecodeTurnTexts(
             pturns, audio, [&whisper](std::span<const float> clip, std::uint64_t first) {
-                return Decode(*whisper, clip, first);
+                return AsChunk(Decode(*whisper, clip, first), clip, first);
             });
         const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - before);
         std::fprintf(stderr, "per-turn: %zu turns decoded in %.1f s\n", pturns.size(),

@@ -17,6 +17,7 @@ namespace ambient::diar {
 // Decodes per speculation pass; small so a long pass cannot stall the
 // causal stages that keep the settled frontier fresh
 inline constexpr int kSpeculateBudget = 4;
+inline constexpr int kEdgeEmbedBudget = 2;  // edge chunks embedded per capture tick
 
 // What capture accumulates for finalise to consume
 struct CaptureDiarisation {
@@ -26,6 +27,11 @@ struct CaptureDiarisation {
     // Slice span -> embedding; empty means too short to embed
     std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> embeddings;
     TurnTexts turn_texts;  // the speculation cache, keyed on exact decode spans
+    TurnChunks turn_chunks;  // the chunks behind it, same keys
+    // Edge-chunk span -> embedding, computed during capture (AMBIENT_RESPLIT)
+    std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> chunk_embeddings;
+    std::vector<std::uint64_t> clip_cuts;   // AMBIENT_CLIP_CUTS: segment edges from clip decodes
+    std::vector<std::uint64_t> punct_cuts;  // AMBIENT_CLIP_CUTS=punct: sentence ends, estimated
 };
 
 // What the last Advance could say about the sealed transcript's opening
@@ -42,9 +48,10 @@ class DiarWorker {
    public:
     DiarWorker(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder);
 
-    // audio and reconciled turns so far; decode re-transcribes a clip
+    // audio and reconciled turns so far; decode re-transcribes a clip, at most
+    // budget spans per call so a stop never waits long behind speculation
     void Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
-                 const DecodeClipFn& decode);
+                 const DecodeClipFn& decode, int budget = kSpeculateBudget);
 
     // The audio has ended: pad the final hop and segment the tail
     void Finish(std::span<const float> audio);
@@ -61,6 +68,14 @@ class DiarWorker {
 
     const Speculation& LastSpeculation() const {
         return speculation_;
+    }
+
+    void AddCutPoints(std::span<const std::uint64_t> cuts) {
+        state_.clip_cuts.insert(state_.clip_cuts.end(), cuts.begin(), cuts.end());
+    }
+
+    void AddPunctuationCuts(std::span<const std::uint64_t> cuts) {
+        state_.punct_cuts.insert(state_.punct_cuts.end(), cuts.begin(), cuts.end());
     }
 
    private:

@@ -22,6 +22,21 @@ namespace {
 
 constexpr auto kTestSettle = std::chrono::milliseconds(200);
 
+// The pipeline switches default to the single-decode product (env_flag.hpp);
+// tests of the retained two-pass arm (live windows, no cuts, no prefill) say so
+struct TwoPassArm {
+    static constexpr const char* kSwitches[] = {
+        "AMBIENT_DIAR_SEG_CUTS_ONLY", "AMBIENT_SEG_FRONTIER", "AMBIENT_NO_LIVE_ASR",
+        "AMBIENT_NOTE_PREFILL",       "AMBIENT_CLIP_CUTS",    "AMBIENT_RESPLIT",
+        "AMBIENT_TIDY",               "AMBIENT_CHUNK_ASSEMBLE"};
+    TwoPassArm() {
+        for (const char* name : kSwitches) _putenv_s(name, "0");
+    }
+    ~TwoPassArm() {
+        for (const char* name : kSwitches) _putenv_s(name, "");
+    }
+};
+
 // One 100 ms window at an amplitude the meter reads as full scale
 std::vector<float> Window() {
     return std::vector<float>(LevelMeter::kWindowFrames, 0.70710678F);
@@ -493,6 +508,7 @@ struct GatedVad : PassthroughVad {
 };
 
 TEST(SessionController, WindowsAreIdenticalWhenTheVadArrivesLate) {
+    TwoPassArm two_pass;
     const auto run = [](bool vad_ready) {
         RecordingEvents events;
         FakeSessionStore store;
@@ -514,6 +530,7 @@ TEST(SessionController, WindowsAreIdenticalWhenTheVadArrivesLate) {
 }
 
 TEST(SessionController, HopsBufferedWhileTheVadLoadsDrainMidSession) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     RecordingTranscriber transcriber;
@@ -559,6 +576,7 @@ TEST(SessionController, MetricsCarryTheSessionAndItsStages) {
 }
 
 TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     RecordingTranscriber transcriber;
@@ -582,6 +600,7 @@ TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
 }
 
 TEST(SessionController, TurnsReachTheStoreAndTheEvents) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -600,6 +619,7 @@ TEST(SessionController, TurnsReachTheStoreAndTheEvents) {
 }
 
 TEST(SessionController, TheNoteFollowsTheSeal) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1045,6 +1065,7 @@ TEST(SessionController, StartFailsWhenTheStoreRefusesASession) {
 }
 
 TEST(SessionController, StopFinalisesTheSession) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1119,6 +1140,20 @@ struct FakeDiariser : diar::IDiariser {
         advanced_turns = turns.size();
     }
 
+    int settles = 0;
+    std::size_t settled_frames = 0;
+    std::vector<std::uint64_t> cut_points;
+
+    void AddCutPoints(std::span<const std::uint64_t> cuts) override {
+        cut_points.insert(cut_points.end(), cuts.begin(), cuts.end());
+    }
+
+    void Settle(std::span<const float> audio, std::span<const asr::Turn>,
+                const diar::DecodeClipFn&) override {
+        ++settles;
+        settled_frames = audio.size();
+    }
+
     bool speculate_transcript = false;
 
     std::vector<asr::Turn> SpeculativeTranscript() override {
@@ -1156,6 +1191,7 @@ bool WaitForFrames(FakeSessionStore& store, std::size_t n) {
 }
 
 TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1181,6 +1217,7 @@ TEST(SessionController, StopReplacesTurnsWithTheAttributedTranscript) {
 }
 
 TEST(SessionController, AnchorSimilaritiesNameTheRolesAndAccrue) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1222,7 +1259,8 @@ TEST(SessionController, FinaliseDecodesEachTurnFromItsOwnAudio) {
 
     ASSERT_EQ(store.turns.size(), 2u) << "one merged turn per cluster";
     const auto half = diariser.audio_frames / 2;
-    EXPECT_EQ(store.turns[0].text, "re-decoded " + std::to_string(half) + " frames at 0");
+    EXPECT_EQ(store.turns[0].text, "Re-decoded " + std::to_string(half) + " frames at 0.")
+        << "tidied at the seal";
     EXPECT_EQ(store.turns[1].first_frame, half);
     EXPECT_NE(store.turns[0].speaker, store.turns[1].speaker);
 }
@@ -1251,16 +1289,15 @@ TEST(SessionController, DiarisationAdvancesDuringCapture) {
 
 TEST(SessionController, TheSpeculatedOpeningReachesTheNoteWriterOnlyBehindTheFlag) {
     struct FlagScope {
-        FlagScope() {
-            _putenv_s("AMBIENT_NOTE_PREFILL", "1");
+        explicit FlagScope(const char* value) {
+            _putenv_s("AMBIENT_NOTE_PREFILL", value);
         }
         ~FlagScope() {
             _putenv_s("AMBIENT_NOTE_PREFILL", "");
         }
     };
     for (const bool flag : {false, true}) {
-        std::optional<FlagScope> scope;
-        if (flag) scope.emplace();
+        FlagScope scope(flag ? "1" : "0");
         RecordingEvents events;
         FakeSessionStore store;
         asr::ScriptedTranscriber transcriber;
@@ -1284,6 +1321,66 @@ TEST(SessionController, TheSpeculatedOpeningReachesTheNoteWriterOnlyBehindTheFla
     }
 }
 
+TEST(SessionController, FinaliseSettlesTheRemainingAudioOnlyBehindTheClipCutsFlag) {
+    struct FlagScope {
+        explicit FlagScope(const char* value) {
+            _putenv_s("AMBIENT_CLIP_CUTS", value);
+        }
+        ~FlagScope() {
+            _putenv_s("AMBIENT_CLIP_CUTS", "");
+        }
+    };
+    for (const bool flag : {false, true}) {
+        FlagScope scope(flag ? "snap" : "0");
+        RecordingEvents events;
+        FakeSessionStore store;
+        asr::ScriptedTranscriber transcriber;
+        PassthroughVad vad;
+        FakeDiariser diariser;
+        SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped),
+                                     events, store, transcriber, vad, kTestSettle, &diariser,
+                                     LevelMeter::kWindowFrames);
+        ASSERT_TRUE(controller.Start());
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        controller.Stop();
+        if (flag) {
+            EXPECT_EQ(diariser.settles, 1) << "finalise decodes what capture had not reached";
+            EXPECT_EQ(diariser.settled_frames, store.frames.size());
+        } else {
+            EXPECT_EQ(diariser.settles, 0) << "shipped behaviour: no catch-up pass";
+        }
+        EXPECT_EQ(diariser.calls, 1);
+    }
+}
+
+TEST(SessionController, ATicksClipCutsAreAppliedInTheSameTick) {
+    struct FlagScope {
+        FlagScope() {
+            _putenv_s("AMBIENT_CLIP_CUTS", "snap");
+        }
+        ~FlagScope() {
+            _putenv_s("AMBIENT_CLIP_CUTS", "");
+        }
+    } scope;
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    transcriber.clip_cuts = {800, 2400};
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames);
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+
+    ASSERT_GT(diariser.advances, 0);
+    EXPECT_EQ(diariser.cut_points, (std::vector<std::uint64_t>{800, 2400}))
+        << "the cuts reach the diariser once";
+    EXPECT_GE(diariser.advances, 2) << "the tick that produced cuts advances again at once";
+}
+
 TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
     RecordingEvents events;
     FakeSessionStore store;
@@ -1302,8 +1399,8 @@ TEST(SessionController, ASpeculatedTurnTextIsUsedWithoutRedecoding) {
 
     EXPECT_EQ(diariser.takes, 1);
     ASSERT_EQ(store.turns.size(), 2u);
-    EXPECT_EQ(store.turns[0].text, "speculated words") << "the cache hit stands";
-    EXPECT_NE(store.turns[1].text.find("re-decoded"), std::string::npos)
+    EXPECT_EQ(store.turns[0].text, "Speculated words.") << "the cache hit stands, tidied";
+    EXPECT_NE(store.turns[1].text.find("e-decoded"), std::string::npos)
         << "the miss decodes fresh";
 }
 
@@ -1566,6 +1663,7 @@ TEST(SessionController, CancelErasesTheSession) {
 }
 
 TEST(SessionController, MidSessionDeathRaisesInterruptedAndAbandons) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1585,6 +1683,7 @@ TEST(SessionController, MidSessionDeathRaisesInterruptedAndAbandons) {
 }
 
 TEST(SessionController, AThrowingSourceIsGuardedAndReported) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;
@@ -1603,6 +1702,7 @@ TEST(SessionController, AThrowingSourceIsGuardedAndReported) {
 }
 
 TEST(SessionController, ACompletedReplayEndsQuietlyAndFinalises) {
+    TwoPassArm two_pass;
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;

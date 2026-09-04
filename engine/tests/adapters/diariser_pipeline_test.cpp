@@ -130,8 +130,12 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
         boundaries.push_back(f);
         boundaries.push_back(f + 96000);
     }
-    const DecodeClipFn decode = [](std::span<const float>, std::uint64_t) {
-        return std::string("re-decoded");
+    const DecodeClipFn decode = [](std::span<const float> clip, std::uint64_t first) {
+        asr::Turn chunk;
+        chunk.first_frame = first;
+        chunk.frame_count = clip.size();
+        chunk.text = "re-decoded";
+        return std::vector<asr::Turn>{chunk};
     };
     for (std::uint64_t fed_to = 80000; fed_to < audio.size(); fed_to += 80000) {  // 5 s steps
         fed.Advance(std::span(audio).first(fed_to), turns, decode);

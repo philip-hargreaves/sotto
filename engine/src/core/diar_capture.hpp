@@ -33,4 +33,20 @@ inline std::uint64_t SegSettledFrontier(std::uint64_t seg_done, std::uint64_t va
     return std::min(seg_done, vad_safe);
 }
 
+// A turn is closed, and decoded during capture, once the VAD has been silent
+// this long after its end; a stop right after the last words then has nothing
+// left to decode
+inline constexpr std::uint64_t kTurnCloseFrames = 9600;  // 0.6 s
+
+inline bool TurnClosed(std::span<const float> vad_probabilities, std::uint64_t end_frame,
+                       std::uint64_t close_frames = kTurnCloseFrames) {
+    const auto first = static_cast<std::size_t>(end_frame / audio::kVadHopFrames);
+    const auto last = static_cast<std::size_t>((end_frame + close_frames) / audio::kVadHopFrames);
+    if (last >= vad_probabilities.size()) return false;  // not enough audio yet
+    for (std::size_t hop = first; hop <= last; ++hop) {
+        if (vad_probabilities[hop] >= kEnter) return false;
+    }
+    return true;
+}
+
 }  // namespace ambient::diar

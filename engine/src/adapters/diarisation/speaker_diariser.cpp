@@ -5,7 +5,9 @@
 
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
+#include "core/clip_cuts.hpp"
 #include "core/diar_regions.hpp"
+#include "core/env_flag.hpp"
 #include "core/role_naming.hpp"
 #include "core/slice_refinement.hpp"
 
@@ -58,6 +60,8 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
         probabilities = std::move(capture.vad_probabilities);
         seg = std::move(capture.seg);
         texts_ = std::move(capture.turn_texts);
+        chunks_ = std::move(capture.turn_chunks);
+        chunk_embeddings_ = std::move(capture.chunk_embeddings);
     } else {
         vad_.Reset();
         std::vector<float> hop(audio::kVadHopFrames, 0.0f);
@@ -75,6 +79,22 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
     const auto regions = SpeechRegions(probabilities, audio.size());
     seg.change_points.insert(seg.change_points.end(), turn_boundaries.begin(),
                              turn_boundaries.end());
+    if (EnvFlag("AMBIENT_CLIP_CUTS")) {
+        const std::string mode = EnvValue("AMBIENT_CLIP_CUTS");
+        const auto cuts = mode == "snap" || mode == "punct"
+                              ? SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points)
+                          : mode == "exact"
+                              ? SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points,
+                                             0, false)
+                              : capture.clip_cuts;
+        LogClipCuts("finalise", capture.clip_cuts, cuts, probabilities);
+        seg.change_points.insert(seg.change_points.end(), cuts.begin(), cuts.end());
+        if (mode == "punct") {
+            const auto sentence = SnapClipCuts(capture.punct_cuts, probabilities,
+                                               seg.change_points, kPunctCutSnapFrames);
+            seg.change_points.insert(seg.change_points.end(), sentence.begin(), sentence.end());
+        }
+    }
     std::sort(seg.change_points.begin(), seg.change_points.end());
     const auto slices = RefineRegions(regions, seg.change_points);
 
@@ -101,6 +121,7 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
 
     result.timing.embed_s = lap();
     const auto clusters = ClusterSpeakers(embeddings, durations);
+    centroids_ = clusters.centroids;
     result.timing.cluster_s = lap();
     std::vector<LabelledSlice> out;
     for (std::size_t i = 0; i < kept.size(); ++i) {
