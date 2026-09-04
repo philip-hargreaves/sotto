@@ -23,7 +23,7 @@
             </StackPanel>
             <ScrollViewer Grid.Row="1">
                 <StackPanel
-                    MaxWidth="640"
+                    MaxWidth="760"
                     Margin="16,0,16,16"
                     HorizontalAlignment="Center"
                     Spacing="4">
@@ -33,7 +33,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Theme" />
@@ -54,7 +54,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Save consultation data" />
@@ -63,6 +63,7 @@
                         </StackPanel>
                         <ToggleSwitch
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             IsOn="{x:Bind ViewModel.KeepConsultations, Mode=TwoWay}"
                             OffContent="Off"
@@ -75,19 +76,20 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Low-power transcription" />
+                            <TextBlock Text="Low-power mode" />
                             <TextBlock Style="{StaticResource SettingsDescription}"
-                                       Text="Uses the NPU to save battery; the first switch takes a few minutes" />
+                                       Text="Runs speech recognition on the NPU to save battery. Transcripts may take a little longer." />
                         </StackPanel>
                         <ToggleSwitch
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             IsOn="{x:Bind ViewModel.NpuTranscription, Mode=TwoWay}"
-                            OffContent="GPU"
-                            OnContent="NPU" />
+                            OffContent="Off"
+                            OnContent="On" />
                     </Grid>
                 </Border>
 
@@ -96,7 +98,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Demo tray" />
@@ -105,6 +107,7 @@
                         </StackPanel>
                         <ToggleSwitch
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             IsOn="{x:Bind ViewModel.DemoTrayEnabled, Mode=TwoWay}"
                             OffContent="Hidden"
@@ -115,7 +118,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Performance metrics" />
@@ -124,6 +127,7 @@
                         </StackPanel>
                         <ToggleSwitch
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             IsOn="{x:Bind ViewModel.ShowPerformanceMetrics, Mode=TwoWay}"
                             OffContent="Hidden"
@@ -134,7 +138,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Collect performance data" />
@@ -143,6 +147,7 @@
                         </StackPanel>
                         <ToggleSwitch
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             IsOn="{x:Bind ViewModel.CollectPerformanceData, Mode=TwoWay}"
                             OffContent="Off"
@@ -153,7 +158,7 @@
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="160" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Export performance report" />
@@ -162,6 +167,7 @@
                         </StackPanel>
                         <Button
                             Grid.Column="1"
+                            MinWidth="160"
                             VerticalAlignment="Center"
                             Command="{x:Bind ViewModel.ExportPerformanceReportCommand}"
                             Content="Export" />

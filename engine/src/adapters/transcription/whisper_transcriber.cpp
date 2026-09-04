@@ -125,14 +125,9 @@ WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::
                              return MakeWhisperDecode(store, runtime, device, metrics);
                          }),
                          metrics,
-                         // Live off the GPU: clips burst on the manifest device (the GPU,
-                         // idle at stop) so finalise never pays the low-power decode rate
-                         device_override.empty() || device_override == "GPU"
-                             ? DecodeLoader{}
-                             : DecodeLoader([&store, &runtime, metrics] {
-                                   return MakeWhisperDecode(store, runtime, "", metrics,
-                                                            "asr finalise");
-                               })) {}
+                         // One Whisper on the chosen device; the low-power mode pays
+                         // the finalise burst at NPU speed rather than load a GPU copy
+                         DecodeLoader{}) {}
 
 WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
     worker_ = std::thread([this] { WorkerLoop(); });

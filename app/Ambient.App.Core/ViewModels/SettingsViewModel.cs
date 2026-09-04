@@ -249,8 +249,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (_engine is not null)
         {
             _status?.Append(value
-                ? "switching transcription to the NPU - the first switch can take a few minutes"
-                : "switching transcription to the GPU", busy: true);
+                ? "preparing the low-power model - the first switch can take a few minutes"
+                : "switching speech recognition to the GPU", busy: true);
             _engine.Shutdown();
             _engine.Start();
         }

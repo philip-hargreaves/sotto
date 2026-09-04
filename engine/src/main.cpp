@@ -184,8 +184,9 @@ int main(int argc, char* argv[]) {
         // Flags first, then positional: pipe name, store root, models root, replay wav
         std::vector<std::string> args(argv + 1, argv + argc);
         const std::string asr_device = ambient::TakeFlag(args, "--asr-device");
-        // AMBIENT_NOTE_PREFILL: whisper and the note host take turns on the GPU
-        if (ambient::EnvFlag("AMBIENT_NOTE_PREFILL")) {
+        // AMBIENT_NOTE_PREFILL: whisper and the note host take turns on the GPU;
+        // with whisper on the NPU there is nothing to share
+        if (ambient::EnvFlag("AMBIENT_NOTE_PREFILL") && asr_device != "NPU") {
             const std::string lease = "Local\\ambient-gpu-" + std::to_string(GetCurrentProcessId());
             _putenv_s("AMBIENT_GPU_LEASE", lease.c_str());
             std::fprintf(stderr, "ambient-engine: note prefill on, GPU lease %s\n", lease.c_str());
