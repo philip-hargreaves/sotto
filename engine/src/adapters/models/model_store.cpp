@@ -83,6 +83,7 @@ ModelInfo ParseManifest(const std::filesystem::path& dir) {
     info.dir = dir;
     try {
         info.id = manifest.at("id").get<std::string>();
+        info.name = manifest.value("name", info.id);
         info.task = manifest.at("task").get<std::string>();
         info.tier = manifest.at("tier").get<std::string>();
         info.licence = manifest.at("licence").get<std::string>();

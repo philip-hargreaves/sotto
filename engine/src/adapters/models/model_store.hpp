@@ -13,6 +13,7 @@ std::string Sha256File(const std::filesystem::path& path);
 
 struct ModelInfo {
     std::string id;
+    std::string name;     // display name; the id when the manifest has none
     std::string task;     // asr | vad | diarisation | notes
     std::string tier;     // default | accuracy | constrained
     std::string device;   // GPU | CPU | NPU

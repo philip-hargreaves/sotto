@@ -108,8 +108,10 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
             {
                 models = new object[]
                 {
-                    new { id = "whisper-turbo-int8", task = "asr", tier = "default", device = "GPU", licence = "MIT" },
-                    new { id = "qwen3.5-9b-int4", task = "note", tier = "default", device = "GPU", licence = "Apache-2.0" },
+                    // An ablation export listed first: the default tier must still win
+                    new { id = "whisper-turbo-int8-wordts", name = "", task = "asr", tier = "wordts", device = "GPU", licence = "MIT" },
+                    new { id = "whisper-turbo-int8", name = "Whisper Large v3 Turbo", task = "asr", tier = "default", device = "GPU", licence = "MIT" },
+                    new { id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", task = "note", tier = "default", device = "GPU", licence = "Apache-2.0" },
                 },
             }));
         }

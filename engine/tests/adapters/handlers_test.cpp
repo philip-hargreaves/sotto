@@ -89,8 +89,8 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "whisper-turbo-int8");
     std::ofstream(root / "whisper-turbo-int8" / "manifest.json")
-        << R"({"manifestVersion": 1, "id": "whisper-turbo-int8", "task": "asr",)"
-        << R"( "tier": "default", "licence": "MIT", "runtime": {"device": "GPU"},)"
+        << R"({"manifestVersion": 1, "id": "whisper-turbo-int8", "name": "Whisper Large v3 Turbo",)"
+        << R"( "task": "asr", "tier": "default", "licence": "MIT", "runtime": {"device": "GPU"},)"
         << R"( "files": {"model.xml": "00"}})";
 
     const ambient::models::ModelStore store(root);

@@ -104,33 +104,33 @@ public class StatusBarMetricsTest
         var (status, engine) = Create();
         await Task.Delay(50);  // the connect-time model fetch
 
-        Assert.Equal("Whisper Turbo · GPU", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU", status.AsrChip);
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
 
         // Recording: the realtime factor joins Whisper's chip
         status.SetMicVisible(true);
         await status.PollMetricsOnceAsync();
-        Assert.Equal("Whisper Turbo · GPU · 33× RT", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU · 33× RT", status.AsrChip);
 
         // A slow factor keeps a decimal
         engine.MetricsRealtimeFactor = 1.4;
         await status.PollMetricsOnceAsync();
-        Assert.Equal("Whisper Turbo · GPU · 1.4× RT", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU · 1.4× RT", status.AsrChip);
 
         // Stopped but still decoding the tail (the NPU's longest stage):
         // the figure stays until the transcript seals
         status.SetMicVisible(false);
         status.SetDecodeActive(true);
-        Assert.Equal("Whisper Turbo · GPU · 1.4× RT", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU · 1.4× RT", status.AsrChip);
         Assert.True(status.RealtimeLow);
 
         // Sealed: the session's average holds, labelled as what it is
         status.SetDecodeActive(false);
-        Assert.Equal("Whisper Turbo · GPU · Averaged 1.4× RT", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU · Averaged 1.4× RT", status.AsrChip);
         Assert.False(status.RealtimeLow);
 
         status.ResetThroughput();  // the next consultation starts clean
-        Assert.Equal("Whisper Turbo · GPU", status.AsrChip);
+        Assert.Equal("Whisper Large v3 Turbo · GPU", status.AsrChip);
     }
 
     [Fact]

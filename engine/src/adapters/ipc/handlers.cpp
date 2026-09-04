@@ -44,6 +44,7 @@ json HandleModels(const ambient::models::ModelStore& models) {
     json list = json::array();
     for (const auto& model : models.List()) {
         list.push_back({{"id", model.id},
+                        {"name", model.name},
                         {"task", model.task},
                         {"tier", model.tier},
                         {"device", model.device},

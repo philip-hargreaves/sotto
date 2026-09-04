@@ -5,6 +5,7 @@
         "models": [
             {
                 "id": "whisper-turbo-int8",
+                "name": "Whisper Large v3 Turbo",
                 "task": "asr",
                 "tier": "default",
                 "device": "GPU",
