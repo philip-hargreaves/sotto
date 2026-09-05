@@ -3,6 +3,7 @@
     x:Class="Ambient.App.Views.SessionControlsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Ambient.App.Controls"
     xmlns:vm="using:Ambient.App.Core.ViewModels">
 
     <!-- The centre holds the one action -->
@@ -28,40 +29,21 @@
             HorizontalAlignment="Center"
             Spacing="14"
             Visibility="{x:Bind ViewModel.RecordingVisible, Mode=OneWay}">
-            <Button
-                AutomationProperties.Name="Stop recording"
-                Command="{x:Bind ViewModel.StopRecordingCommand}"
-                Style="{StaticResource StopDisc}">
-                <FontIcon FontSize="28" Glyph="&#xE71A;" />
-            </Button>
+            <!-- The ring breathes with the microphone behind the disc -->
+            <Grid HorizontalAlignment="Center">
+                <controls:LevelRing Diameter="88" Level="{x:Bind ViewModel.Level, Mode=OneWay}" />
+                <Button
+                    AutomationProperties.Name="Stop recording"
+                    Command="{x:Bind ViewModel.StopRecordingCommand}"
+                    Style="{StaticResource StopDisc}">
+                    <FontIcon FontSize="28" Glyph="&#xE71A;" />
+                </Button>
+            </Grid>
             <TextBlock
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
 
-            <!-- Rolling level history -->
-            <ItemsControl HorizontalAlignment="Center" ItemsSource="{x:Bind ViewModel.Meter}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel
-                            Height="30"
-                            VerticalAlignment="Center"
-                            Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:LevelBar">
-                        <Rectangle
-                            Width="1.5"
-                            Height="{x:Bind Height, Mode=OneWay}"
-                            Margin="0.25,0"
-                            VerticalAlignment="Center"
-                            Fill="{ThemeResource AccentFillColorDefaultBrush}"
-                            RadiusX="0.75"
-                            RadiusY="0.75" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
 
             <Button
                 HorizontalAlignment="Center"
@@ -89,6 +71,32 @@
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+        </StackPanel>
+        <!-- No note: the same region says so and offers the way out -->
+        <StackPanel
+            MaxWidth="420"
+            HorizontalAlignment="Center"
+            Spacing="12"
+            Visibility="{x:Bind ViewModel.RefusedVisible, Mode=OneWay}">
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                TextAlignment="Center"
+                TextWrapping="Wrap"
+                Text="This recording did not contain enough clinical information to write a note." />
+            <StackPanel
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    Command="{x:Bind ViewModel.Note.WriteAnywayCommand}"
+                    Content="Write a note anyway"
+                    Visibility="{x:Bind ViewModel.Note.CanWriteAnyway, Mode=OneWay}" />
+                <Button
+                    Command="{x:Bind ViewModel.DoneCommand}"
+                    Content="Done"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
         </StackPanel>
     </Grid>
 </UserControl>

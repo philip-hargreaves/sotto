@@ -85,6 +85,7 @@ public partial class App : Application
         services.AddSingleton<SessionControlsViewModel>();
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<VoiceViewModel>();
         services.AddSingleton<SessionsViewModel>();
         services.AddSingleton<DemoTrayViewModel>();
         services.AddSingleton<CreditsViewModel>();

@@ -71,6 +71,38 @@
                     </Grid>
                 </Border>
 
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Your voice" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="160" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Your voice" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Style="{StaticResource SettingsDescription}"
+                                           VerticalAlignment="Center"
+                                           Text="{x:Bind Voice.Headline, Mode=OneWay}" />
+                                <!-- Forget is rare and irreversible: a link, not a second button -->
+                                <HyperlinkButton
+                                    Padding="0"
+                                    Margin="0,2,0,0"
+                                    VerticalAlignment="Center"
+                                    Command="{x:Bind Voice.ForgetVoiceCommand}"
+                                    Content="Forget"
+                                    Visibility="{x:Bind Voice.HasVoice, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            MinWidth="160"
+                            VerticalAlignment="Center"
+                            Command="{x:Bind Voice.SetUpVoiceCommand}"
+                            Content="{x:Bind Voice.SetUpLabel, Mode=OneWay}" />
+                    </Grid>
+                </Border>
+
                 <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Power" />
                 <Border Style="{StaticResource SettingsCard}">
                     <Grid ColumnSpacing="16">

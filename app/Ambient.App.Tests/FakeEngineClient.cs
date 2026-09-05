@@ -122,6 +122,24 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
                 new { devices = new { asr = "GPU.0" }, asrRealtimeFactor = MetricsRealtimeFactor }));
         }
 
+        if (method == "anchor/status")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(new
+            {
+                origin = AnchorOrigin,
+                sessions = AnchorSessions,
+                enrolledAt = AnchorEnrolledAt,
+            }));
+        }
+
+        if (method == "anchor/clear")
+        {
+            AnchorOrigin = "none";
+            AnchorSessions = 0;
+            AnchorEnrolledAt = null;
+            return Task.FromResult(Empty);
+        }
+
         if (method == "session/transcript")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(new
@@ -142,6 +160,13 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
     public double MetricsRealtimeFactor { get; set; } = 33.4;
 
     public List<Ambient.App.Core.ViewModels.MicDevice> AudioInputs { get; set; } = [];
+
+    /// <summary>Served by anchor/status; nothing learned by default.</summary>
+    public string AnchorOrigin { get; set; } = "none";
+
+    public int AnchorSessions { get; set; }
+
+    public long? AnchorEnrolledAt { get; set; }
 
     /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
     public bool FirstUse { get; set; }

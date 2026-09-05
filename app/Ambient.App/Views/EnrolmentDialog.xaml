@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="Ambient.App.Views.EnrolmentDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Ambient.App.Controls"
+    Title="Set up your voice"
+    PrimaryButtonText="{x:Bind ViewModel.PrimaryText, Mode=OneWay}"
+    CloseButtonText="{x:Bind ViewModel.CloseText, Mode=OneWay}"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimary"
+    CloseButtonClick="OnClose"
+    Closing="OnClosing">
+
+    <StackPanel MaxWidth="520" Spacing="16">
+        <TextBlock TextWrapping="Wrap"
+                   Text="Optional. Ambient learns your voice automatically from consultations; reading this passage gets you recognised from the first one." />
+        <TextBlock Style="{StaticResource SettingsDescription}"
+                   Text="Read it aloud in your normal voice, as you would speak to a patient. Only a voiceprint is kept; the recording is not saved." />
+
+        <!-- The passage, set larger than body text so it reads from a normal sitting distance -->
+        <Border Style="{StaticResource SettingsCard}" Padding="20,16">
+            <TextBlock
+                FontSize="17"
+                LineHeight="26"
+                TextWrapping="Wrap"
+                Text="{x:Bind ViewModel.PassageText}" />
+        </Border>
+
+        <!-- The ring breathes with the microphone while it listens -->
+        <Grid Height="112" HorizontalAlignment="Center">
+            <controls:LevelRing Diameter="64" Level="{x:Bind ViewModel.Level, Mode=OneWay}" />
+            <Border
+                Width="64"
+                Height="64"
+                Background="{ThemeResource ColorAccentBrush}"
+                CornerRadius="32">
+                <FontIcon FontSize="26" Foreground="{ThemeResource WhiteBrush}" Glyph="&#xE720;" />
+            </Border>
+        </Grid>
+
+        <ProgressBar
+            Maximum="1"
+            Value="{x:Bind ViewModel.Progress, Mode=OneWay}"
+            Visibility="{x:Bind ViewModel.Recording, Mode=OneWay}" />
+
+        <TextBlock
+            HorizontalAlignment="Center"
+            TextAlignment="Center"
+            TextWrapping="Wrap"
+            Text="{x:Bind ViewModel.StatusLine, Mode=OneWay}" />
+    </StackPanel>
+</ContentDialog>
