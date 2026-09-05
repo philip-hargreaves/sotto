@@ -149,9 +149,11 @@ std::string QwenNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
+    // The confirmation sits after everything the capture-phase prefill covered
     return Generate(LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
                         TranscriptBlock(transcript) + "\n" +
-                        LoadPrompt(impl_->prompt_dir / ("detail-" + options.detail + ".md")),
+                        LoadPrompt(impl_->prompt_dir / ("detail-" + options.detail + ".md")) +
+                        (options.confirmed ? LoadPrompt(impl_->prompt_dir / "confirmed.md") : ""),
                     progress);
 }
 

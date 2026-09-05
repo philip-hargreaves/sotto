@@ -136,6 +136,7 @@ int main(int argc, char* argv[]) {
                 auto turns = TurnsFrom(params);
                 ambient::note::NoteOptions options{params.value("style", "prose"),
                                                    params.value("detail", "standard")};
+                options.confirmed = params.value("confirmed", false);
                 if (!lane.Run([&writer, turns = std::move(turns),
                                options = std::move(options)](const auto& progress) {
                         return writer.Write(turns, options, progress);
