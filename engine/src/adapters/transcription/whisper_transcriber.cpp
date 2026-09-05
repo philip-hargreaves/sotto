@@ -46,7 +46,14 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     // rejected: it worsened WER even with register effects folded out
     return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
-        const auto lease = host::GpuLease::Global().Acquire();
+        // Bound: the longest legitimate hold, a cold 35B load; past it the holder is wedged
+        auto& gpu = host::GpuLease::Global();
+        const bool was_broken = gpu.Broken();
+        const auto lease = gpu.Acquire(std::chrono::minutes(10));
+        if (!was_broken && gpu.Broken()) {
+            std::fprintf(stderr,
+                         "ambient-engine: the GPU lease holder is wedged; decoding beside it\n");
+        }
         if (lease.waited() > 0.25) {
             std::fprintf(stderr, "ambient-engine: asr waited %.2f s for the GPU lease\n",
                          lease.waited());
