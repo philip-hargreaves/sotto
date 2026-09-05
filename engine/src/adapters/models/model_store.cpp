@@ -87,14 +87,34 @@ ModelInfo ParseManifest(const std::filesystem::path& dir) {
         info.task = manifest.at("task").get<std::string>();
         info.tier = manifest.at("tier").get<std::string>();
         info.licence = manifest.at("licence").get<std::string>();
-        info.device = manifest.at("runtime").at("device").get<std::string>();
+        const auto& runtime = manifest.at("runtime");
+        info.device = runtime.at("device").get<std::string>();
+        // Optional: absent means the LLM pipeline with no properties
+        info.pipeline = runtime.value("pipeline", "llm");
+        info.properties = runtime.value("properties", nlohmann::json::object());
         for (const auto& [name, hash] : manifest.at("files").items()) {
             info.file_hashes[name] = Lower(hash.get<std::string>());
+        }
+        // Optional: without sizes the load check is presence only. Named local:
+        // iterating the items of a temporary json dangles
+        const nlohmann::json sizes = manifest.value("bytes", nlohmann::json::object());
+        for (const auto& [name, bytes] : sizes.items()) {
+            info.file_bytes[name] = bytes.get<std::uintmax_t>();
         }
     } catch (const nlohmann::json::exception& e) {
         Broken(dir, e.what());
     }
     if (info.file_hashes.empty()) Broken(dir, "no files listed");
+    // A pipeline this build cannot construct is a corrupt manifest for this build
+    if (info.pipeline != "llm" && info.pipeline != "vlm") {
+        Broken(dir, "unknown pipeline: " + info.pipeline);
+    }
+    if (!info.properties.is_object()) Broken(dir, "runtime.properties must be an object");
+    for (const auto& [key, value] : info.properties.items()) {
+        if (!value.is_primitive() || value.is_null()) {
+            Broken(dir, "runtime.properties." + key + " must be a number, string or bool");
+        }
+    }
     return info;
 }
 
@@ -138,8 +158,20 @@ void ModelStore::Verify(const ModelInfo& model) const {
         if (!std::filesystem::exists(path)) {
             throw std::runtime_error(model.id + ": missing file " + name);
         }
-        const std::string actual = Sha256File(path);
-        if (actual != expected) {
+        const auto bytes = model.file_bytes.find(name);
+        if (bytes != model.file_bytes.end() && std::filesystem::file_size(path) != bytes->second) {
+            throw std::runtime_error(model.id + ": " + name + " is " +
+                                     std::to_string(std::filesystem::file_size(path)) +
+                                     " bytes, the manifest says " +
+                                     std::to_string(bytes->second));
+        }
+    }
+}
+
+void ModelStore::VerifyHashes(const ModelInfo& model) const {
+    Verify(model);
+    for (const auto& [name, expected] : model.file_hashes) {
+        if (Sha256File(model.dir / name) != expected) {
             throw std::runtime_error(model.id + ": " + name + " does not match its manifest hash");
         }
     }
