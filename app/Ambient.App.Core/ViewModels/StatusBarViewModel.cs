@@ -68,10 +68,13 @@ public sealed partial class StatusBarViewModel : ObservableObject
             var response = await _engine
                 .RequestAsync("engine/models", null, TimeSpan.FromSeconds(5))
                 .ConfigureAwait(true);
-            // The default tier is what the engine loads; an ablation export
-            // beside it must not name the chip
+            // The chip names the model the engine marks active for the role, not
+            // the first listed; older engines send no flag, so the default tier is assumed
+            _asrName = _noteName = "";
             foreach (var model in response.GetProperty("models").EnumerateArray()
-                         .OrderBy(m => m.GetProperty("tier").GetString() == "default" ? 0 : 1))
+                         .OrderBy(m => m.TryGetProperty("active", out var active)
+                                       && active.ValueKind == JsonValueKind.True ? 0
+                             : m.GetProperty("tier").GetString() == "default" ? 1 : 2))
             {
                 var task = model.GetProperty("task").GetString();
                 var id = model.GetProperty("id").GetString() ?? "";
@@ -196,6 +199,12 @@ public sealed partial class StatusBarViewModel : ObservableObject
                 case "note/failed" or "patient/failed" or "translate/failed":
                     _meter.End(Now());
                     PublishThroughput(null);
+                    break;
+                // A tier switch changes which model the chip names
+                case "note/model" when parameters.ValueKind == JsonValueKind.Object
+                    && parameters.TryGetProperty("state", out var laneState)
+                    && laneState.GetString() == "ready":
+                    _ = LoadModelsAsync();
                     break;
                 default:
                     break;

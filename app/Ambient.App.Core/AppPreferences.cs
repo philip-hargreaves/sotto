@@ -9,7 +9,10 @@ public sealed class AppPreferences(string path)
         bool DemoTrayEnabled, bool NpuTranscription, bool CollectPerformanceData,
         string? NoteStyle = null, string? NoteDetail = null,
         bool KeepConsultations = false, bool ShowPerformanceMetrics = false,
-        string? MicId = null, string? Theme = null);
+        string? MicId = null, string? Theme = null, string? NoteTier = null);
+
+    /// <summary>The note model tiers the engine's store can resolve, in ladder order.</summary>
+    public static readonly IReadOnlyList<string> NoteTiers = ["constrained", "default", "accuracy"];
 
     public bool DemoTrayEnabled { get; set; }
 
@@ -36,6 +39,12 @@ public sealed class AppPreferences(string path)
 
     public string NoteDetail { get; set; } = "standard";
 
+    /// <summary>
+    /// Which note model the engine loads, as a role ("default", "accuracy",
+    /// "constrained"); the engine's store resolves it to a model.
+    /// </summary>
+    public string NoteTier { get; set; } = "default";
+
     public static AppPreferences Load(string path)
     {
         var preferences = new AppPreferences(path);
@@ -55,6 +64,8 @@ public sealed class AppPreferences(string path)
                 ? stored.NoteStyle : "prose";
             preferences.NoteDetail = stored?.NoteDetail is "concise" or "standard" or "detailed"
                 ? stored.NoteDetail : "standard";
+            preferences.NoteTier = stored?.NoteTier is not null && NoteTiers.Contains(stored.NoteTier)
+                ? stored.NoteTier : "default";
         }
         catch (Exception)
         {
@@ -71,7 +82,7 @@ public sealed class AppPreferences(string path)
             File.WriteAllText(path, JsonSerializer.Serialize(new Stored(
                 DemoTrayEnabled, NpuTranscription, CollectPerformanceData,
                 NoteStyle, NoteDetail, KeepConsultations, ShowPerformanceMetrics, MicId,
-                Theme)));
+                Theme, NoteTier)));
         }
         catch (Exception)
         {

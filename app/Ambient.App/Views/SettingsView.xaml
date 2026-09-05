@@ -103,7 +103,29 @@
                     </Grid>
                 </Border>
 
-                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Power" />
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Performance" />
+                <Border Style="{StaticResource SettingsCard}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="160" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Note model" />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="Larger models write more faithful notes and need more memory. Switching loads the model now; the first time takes a few minutes." />
+                            <TextBlock Style="{StaticResource SettingsDescription}"
+                                       Text="{x:Bind ViewModel.NoteModelStatus, Mode=OneWay}" />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            MinWidth="160"
+                            VerticalAlignment="Center"
+                            IsEnabled="{x:Bind ViewModel.NoteModelEnabled, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.NoteModelOptions}"
+                            SelectedIndex="{x:Bind ViewModel.NoteModelIndex, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
                 <Border Style="{StaticResource SettingsCard}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
