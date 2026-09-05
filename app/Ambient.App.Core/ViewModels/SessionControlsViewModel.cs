@@ -26,6 +26,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
                 OnPropertyChanged(nameof(FinalisingVisible));
+                OnPropertyChanged(nameof(RefusedVisible));
+                DoneCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(FinalisingLabel));
                 StartRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
@@ -37,7 +39,17 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(ElapsedLabel));
             }
         };
+        _session.Status.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(StatusBarViewModel.MicLevel))
+            {
+                OnPropertyChanged(nameof(Level));
+            }
+        };
     }
+
+    /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
+    public double Level => _session.Status.MicLevel;
 
     /// <summary>The centre-stage caption for the current finalise phase.</summary>
     public string FinalisingLabel => _session.Phase switch
@@ -58,6 +70,11 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public bool ReviewVisible => _session.State == SessionState.Review;
 
+    public bool RefusedVisible => _session.State == SessionState.Refused;
+
+    /// <summary>The refusal card reads its reason and override from here.</summary>
+    public NoteViewModel Note => _session.Note;
+
     // One negation of ReviewVisible, so the picker and New consultation
     // can never both appear
     public bool MicPickerVisible => !ReviewVisible;
@@ -67,17 +84,13 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     // The centre holds until the note streams; panes and centre never coexist
     public bool CentreStageVisible =>
-        _session.State is SessionState.Idle or SessionState.Recording
+        _session.State is SessionState.Idle or SessionState.Recording or SessionState.Refused
         || _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
 
     public bool PanesVisible => !CentreStageVisible;
 
     public bool FinalisingVisible =>
         _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
-
-    /// <summary>The status bar owns the level data; the centre stage shows it.</summary>
-    public System.Collections.ObjectModel.ObservableCollection<LevelBar> Meter =>
-        _session.Status.Meter;
 
     public string ElapsedLabel =>
         TimeSpan.FromSeconds(_session.AudioSeconds).ToString(@"mm\:ss",
@@ -103,4 +116,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private void NewConsultation() => _session.StartNewConsultation();
 
     private bool CanNewConsultation() => _session.State == SessionState.Review;
+
+    [RelayCommand(CanExecute = nameof(CanDone))]
+    private Task Done() => _session.CloseReviewAsync();
+
+    private bool CanDone() => _session.State == SessionState.Refused;
 }

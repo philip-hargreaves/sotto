@@ -34,6 +34,16 @@
                     Visibility="{x:Bind ViewModel.Edited, Mode=OneWay}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <!-- A refusal shows its reason and one way past it -->
+                <TextBlock
+                    Style="{StaticResource MicroText}"
+                    VerticalAlignment="Center"
+                    Text="{x:Bind ViewModel.RefusalReason, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.NoteRefused, Mode=OneWay}" />
+                <Button
+                    Command="{x:Bind ViewModel.WriteAnywayCommand}"
+                    Content="Write a note anyway"
+                    Visibility="{x:Bind ViewModel.CanWriteAnyway, Mode=OneWay}" />
                 <ComboBox
                     x:Name="StyleBox"
                     MinWidth="104"

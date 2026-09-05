@@ -6,4 +6,5 @@ public enum SessionState
     Recording,
     Finalising,
     Review,
+    Refused,
 }
