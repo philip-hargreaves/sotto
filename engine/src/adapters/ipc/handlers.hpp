@@ -3,6 +3,7 @@
 #include <variant>
 
 #include "adapters/audio/capture_devices.hpp"
+#include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
@@ -27,6 +28,12 @@ json HandleModels(const ambient::models::ModelStore& models);
 
 json HandleAudioInputs(const std::vector<ambient::audio::CaptureDevice>& devices);
 
+// The clinician's voiceprint: where it came from and how many consultations
+// refined it. Clearing is refused while a session runs
+json HandleAnchorStatus(const ambient::diar::AnchorStore& anchors);
+std::variant<json, Error> HandleAnchorClear(ambient::diar::AnchorStore& anchors,
+                                            bool session_active);
+
 json HandleSessionList(ambient::store::ISessionStore& sessions);
 
 std::variant<json, Error> HandleSessionNote(ambient::store::ISessionStore& sessions,
@@ -50,6 +57,6 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                      ambient::models::OvRuntime* runtime = nullptr,
                      ambient::translate::ITranslator* translator = nullptr,
                      ambient::translate::TranslateLane* translate_lane = nullptr,
-                     bool first_use = false);
+                     bool first_use = false, ambient::diar::AnchorStore* anchors = nullptr);
 
 }  // namespace ambient::ipc

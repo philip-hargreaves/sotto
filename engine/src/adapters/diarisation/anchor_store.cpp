@@ -15,46 +15,106 @@
 
 namespace ambient::diar {
 
+namespace detail {
+
 namespace {
 
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;
+constexpr std::size_t kHeaderV1 = 16;  // version, dims, sessions
+constexpr std::size_t kHeaderV2 = 24;  // + enrolled_at
 
 }  // namespace
+
+std::vector<std::uint8_t> SerializeAnchor(const AnchorRecord& record) {
+    std::vector<std::uint8_t> plain(kHeaderV2 + record.sum.size() * 4);
+    const auto dims = static_cast<std::uint32_t>(record.sum.size());
+    std::memcpy(plain.data(), &kVersion, 4);
+    std::memcpy(plain.data() + 4, &dims, 4);
+    std::memcpy(plain.data() + 8, &record.sessions, 8);
+    std::memcpy(plain.data() + 16, &record.enrolled_at, 8);
+    std::memcpy(plain.data() + kHeaderV2, record.sum.data(), record.sum.size() * 4);
+    return plain;
+}
+
+std::optional<AnchorRecord> ParseAnchor(std::span<const std::uint8_t> plain) {
+    if (plain.size() < kHeaderV1) return std::nullopt;
+    std::uint32_t version = 0, dims = 0;
+    std::memcpy(&version, plain.data(), 4);
+    std::memcpy(&dims, plain.data() + 4, 4);
+    const std::size_t header = version == 1 ? kHeaderV1 : version == kVersion ? kHeaderV2 : 0;
+    if (header == 0 || plain.size() != header + static_cast<std::size_t>(dims) * 4) {
+        return std::nullopt;
+    }
+    AnchorRecord record;
+    std::memcpy(&record.sessions, plain.data() + 8, 8);
+    if (version == kVersion) std::memcpy(&record.enrolled_at, plain.data() + 16, 8);
+    record.sum.resize(dims);
+    std::memcpy(record.sum.data(), plain.data() + header, static_cast<std::size_t>(dims) * 4);
+    return record;
+}
+
+}  // namespace detail
 
 AnchorStore::AnchorStore(const std::filesystem::path& root) : path_(root / "anchor.bin") {
     Load();
 }
 
 std::optional<std::vector<float>> AnchorStore::Anchor() const {
-    if (count_ == 0) return std::nullopt;
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (record_.sum.empty()) return std::nullopt;
     double norm = 0.0;
-    for (const float x : sum_) norm += static_cast<double>(x) * x;
+    for (const float x : record_.sum) norm += static_cast<double>(x) * x;
     norm = std::sqrt(norm) + 1e-9;
-    std::vector<float> anchor(sum_.size());
-    for (std::size_t i = 0; i < sum_.size(); ++i) {
-        anchor[i] = static_cast<float>(sum_[i] / norm);
+    std::vector<float> anchor(record_.sum.size());
+    for (std::size_t i = 0; i < anchor.size(); ++i) {
+        anchor[i] = static_cast<float>(record_.sum[i] / norm);
     }
     return anchor;
 }
 
 std::uint64_t AnchorStore::Sessions() const {
-    return count_;
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return record_.sessions;
+}
+
+AnchorStatus AnchorStore::Status() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    AnchorStatus status;
+    status.sessions = record_.sessions;
+    status.enrolled_at = record_.enrolled_at;
+    if (record_.enrolled_at != 0) {
+        status.origin = AnchorOrigin::kEnrolled;
+    } else if (!record_.sum.empty()) {
+        status.origin = AnchorOrigin::kAccrued;
+    }
+    return status;
 }
 
 void AnchorStore::Accrue(std::span<const float> voiceprint) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     if (voiceprint.empty()) return;
-    if (sum_.size() != voiceprint.size()) {
-        sum_.assign(voiceprint.size(), 0.0f);
-        count_ = 0;
+    if (record_.sum.size() != voiceprint.size()) {
+        record_ = {};
+        record_.sum.assign(voiceprint.size(), 0.0f);
     }
-    for (std::size_t i = 0; i < voiceprint.size(); ++i) sum_[i] += voiceprint[i];
-    count_ += 1;
+    for (std::size_t i = 0; i < voiceprint.size(); ++i) record_.sum[i] += voiceprint[i];
+    record_.sessions += 1;
+    Save();
+}
+
+void AnchorStore::Replace(std::span<const float> voiceprint, std::uint64_t enrolled_at) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (voiceprint.empty()) return;
+    record_ = {};
+    record_.sum.assign(voiceprint.begin(), voiceprint.end());
+    for (float& x : record_.sum) x *= static_cast<float>(kEnrolWeight);
+    record_.enrolled_at = enrolled_at;
     Save();
 }
 
 void AnchorStore::Clear() {
-    sum_.clear();
-    count_ = 0;
+    const std::lock_guard<std::mutex> lock(mutex_);
+    record_ = {};
     std::error_code ec;
     std::filesystem::remove(path_, ec);
 }
@@ -72,34 +132,18 @@ void AnchorStore::Load() {
         std::fprintf(stderr, "ambient-engine: anchor unreadable, starting fresh\n");
         return;
     }
-    const std::uint8_t* p = blob_out.pbData;
-    const std::size_t size = blob_out.cbData;
-    std::uint32_t version = 0, dims = 0;
-    if (size >= 16) {
-        std::memcpy(&version, p, 4);
-        std::memcpy(&dims, p + 4, 4);
-        std::uint64_t count = 0;
-        std::memcpy(&count, p + 8, 8);
-        if (version == kVersion && size == 16 + static_cast<std::size_t>(dims) * 4) {
-            sum_.resize(dims);
-            std::memcpy(sum_.data(), p + 16, static_cast<std::size_t>(dims) * 4);
-            count_ = count;
-        } else {
-            std::fprintf(stderr, "ambient-engine: anchor format mismatch, starting fresh\n");
-        }
+    const auto record = detail::ParseAnchor({blob_out.pbData, blob_out.cbData});
+    if (record.has_value()) {
+        record_ = *record;
+    } else {
+        std::fprintf(stderr, "ambient-engine: anchor format mismatch, starting fresh\n");
     }
     SecureZeroMemory(blob_out.pbData, blob_out.cbData);
     LocalFree(blob_out.pbData);
 }
 
 void AnchorStore::Save() const {
-    std::vector<std::uint8_t> plain(16 + sum_.size() * 4);
-    const auto dims = static_cast<std::uint32_t>(sum_.size());
-    std::memcpy(plain.data(), &kVersion, 4);
-    std::memcpy(plain.data() + 4, &dims, 4);
-    std::memcpy(plain.data() + 8, &count_, 8);
-    std::memcpy(plain.data() + 16, sum_.data(), sum_.size() * 4);
-
+    std::vector<std::uint8_t> plain = detail::SerializeAnchor(record_);
     DATA_BLOB blob_in{static_cast<DWORD>(plain.size()), plain.data()};
     DATA_BLOB blob_out{};
     if (!CryptProtectData(&blob_in, L"ambient clinician anchor", nullptr, nullptr, nullptr,

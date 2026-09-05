@@ -14,6 +14,11 @@ namespace ambient::diar {
 // margin range, not swept; revisit first if it abstains too often
 inline constexpr double kRoleMinMargin = 0.5;
 
+// Below this the stored print is someone else's and the content decides
+// instead. Measured on the 57 with an enrolled print: the enrolled clinician's
+// own consultations scored 0.84 and up, every other clinician 0.75 and below
+inline constexpr double kAnchorMinSimilarity = 0.80;
+
 struct RoleTurn {
     int cluster = 0;
     std::uint64_t frame_count = 0;
@@ -25,6 +30,7 @@ struct RoleResult {
     int doctor_cluster = -1;                   // -1: abstained
     int patient_cluster = -1;
     double margin = 0.0;
+    bool from_anchor = false;  // the print decided; else the content did or abstained
 };
 
 namespace detail {
@@ -153,11 +159,16 @@ inline RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_coun
     const int top2 = cluster_count > 1 ? order[1] : order[0];
 
     int doctor;
-    if (anchor_similarity.size() == static_cast<std::size_t>(cluster_count) && top1 != top2) {
+    const bool anchored =
+        anchor_similarity.size() == static_cast<std::size_t>(cluster_count) && top1 != top2 &&
+        std::max(anchor_similarity[static_cast<std::size_t>(top1)],
+                 anchor_similarity[static_cast<std::size_t>(top2)]) >= kAnchorMinSimilarity;
+    if (anchored) {
         const double sim1 = anchor_similarity[static_cast<std::size_t>(top1)];
         const double sim2 = anchor_similarity[static_cast<std::size_t>(top2)];
         result.margin = std::abs(sim1 - sim2);
-        doctor = sim1 >= sim2 ? top1 : top2;  // relative match; no abstention
+        result.from_anchor = true;
+        doctor = sim1 >= sim2 ? top1 : top2;  // relative match once someone resembles the print
     } else {
         double sum1 = 0.0, sum2 = 0.0;
         int n1 = 0, n2 = 0;

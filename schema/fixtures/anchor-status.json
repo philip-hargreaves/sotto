@@ -1,0 +1,9 @@
+{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+        "origin": "none",
+        "sessions": 0,
+        "enrolledAt": null
+    }
+}

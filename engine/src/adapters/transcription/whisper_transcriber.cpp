@@ -272,9 +272,13 @@ void WhisperTranscriber::WorkerLoop() {
                 }
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
-            clip.chunks.set_value(std::move(chunks));
+            // The cuts land before the caller is released, so a TakeClipCuts
+            // right after the decode sees them
             lock.lock();
             clip_cuts_.insert(clip_cuts_.end(), cuts.begin(), cuts.end());
+            lock.unlock();
+            clip.chunks.set_value(std::move(chunks));
+            lock.lock();
             busy_ = false;
             cv_.notify_all();
             continue;

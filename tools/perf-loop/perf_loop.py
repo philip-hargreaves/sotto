@@ -307,11 +307,12 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
     note_first = note_ready = patient_first = patient_ready = None
     note_text = patient_text = ""
     note_failed = patient_failed = None
+    note_refused = False
 
     def drain(until, stop_on=None):
         # Consume notifications until wall time `until` or a named method
         nonlocal levels, interrupted, note_first, note_ready, patient_first
-        nonlocal patient_ready, note_text, patient_text, note_failed, patient_failed
+        nonlocal patient_ready, note_text, patient_text, note_failed, patient_failed, note_refused
         while True:
             remaining = until - now()
             if remaining <= 0:
@@ -339,6 +340,10 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
                 note_text = params.get("text", note_text)
             elif method == "note/failed":
                 note_failed = params.get("detail", "?")
+                note_ready = t
+            elif method == "note/refused":
+                note_failed = "refused: " + params.get("reason", "?")
+                note_refused = True
                 note_ready = t
             elif method == "patient/partial":
                 patient_first = patient_first or t
@@ -376,9 +381,11 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         rec["stop_at_s"] = round(t_stop - t_start, 1)
         rec["finalise_s"] = round(stop_rtt, 2)
         # Note lane
-        reached = drain(t_stop + NOTE_TIMEOUT, stop_on={"note/ready", "note/failed"})
+        reached = drain(t_stop + NOTE_TIMEOUT, stop_on={"note/ready", "note/failed", "note/refused"})
         if reached is None:
             rec["outcome"] = "note_timeout"
+        elif note_refused:
+            rec["outcome"] = "note_refused"
         else:
             reached = drain(t_stop + NOTE_TIMEOUT, stop_on={"patient/ready", "patient/failed"})
             if reached is None:
@@ -394,7 +401,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         rec["patient_chars"] = len(patient_text)
         rec["note_failed"] = note_failed
         rec["patient_failed"] = patient_failed
-        if note_failed or patient_failed:
+        if (note_failed or patient_failed) and not note_refused:
             rec["outcome"] = "note_failed" if note_failed else "patient_failed"
         # Engine-side numbers for this session (Take() resets them)
         try:

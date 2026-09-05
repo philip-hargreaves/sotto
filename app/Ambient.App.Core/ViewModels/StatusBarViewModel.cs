@@ -6,21 +6,9 @@ using Ambient.Client;
 
 namespace Ambient.App.Core.ViewModels;
 
-/// <summary>One bar of the level history; mutated in place, never replaced.</summary>
-public sealed partial class LevelBar : ObservableObject
-{
-    [ObservableProperty]
-    public partial double Height { get; set; } = 2;
-}
-
 public sealed partial class StatusBarViewModel : ObservableObject
 {
     private const int MaxLogEntries = 200;
-    private const int MeterBars = 40;
-
-    /// <summary>Rolling RMS history; fixed objects so layout never thrashes.</summary>
-    public ObservableCollection<LevelBar> Meter { get; } =
-        [.. Enumerable.Range(0, MeterBars).Select(_ => new LevelBar())];
 
     // Clinician-facing: no engine, model or process vocabulary
     [ObservableProperty]
@@ -381,12 +369,6 @@ public sealed partial class StatusBarViewModel : ObservableObject
     {
         MicLevel = level;
         MicClipped = clipped;
-        for (var i = 0; i < Meter.Count - 1; i++)
-        {
-            Meter[i].Height = Meter[i + 1].Height;
-        }
-
-        Meter[^1].Height = 2 + Math.Clamp(level, 0, 1) * 26;
     }
 
     public void SetMicVisible(bool visible)

@@ -66,6 +66,24 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().AddCutPoints(cuts);
     }
 
+    std::vector<float> DoctorVoiceprint(std::span<const float> audio,
+                                        const std::vector<LabelledSlice>& slices,
+                                        int doctor_cluster) override {
+        return inner_.Get().DoctorVoiceprint(audio, slices, doctor_cluster);
+    }
+
+    void AccrueVoiceprint(std::span<const float> voiceprint) override {
+        inner_.Get().AccrueVoiceprint(voiceprint);
+    }
+
+    std::vector<float> EmbedVoice(std::span<const float> audio) override {
+        return inner_.Get().EmbedVoice(audio);
+    }
+
+    void ReplaceAnchor(std::span<const float> voiceprint, std::uint64_t enrolled_at) override {
+        inner_.Get().ReplaceAnchor(voiceprint, enrolled_at);
+    }
+
     void DiscardCapture() override {
         if (inner_.Loaded()) {
             inner_.Get().DiscardCapture();

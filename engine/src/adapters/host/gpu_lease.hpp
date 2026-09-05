@@ -15,9 +15,9 @@
 
 namespace ambient::host {
 
-// AMBIENT_NOTE_PREFILL prototype: one named mutex serialises the engine's Whisper
-// decodes against the note host's capture-phase prefills, so the two GPU models
-// never run concurrently (the ADR-0027 fault configuration). Named by
+// AMBIENT_NOTE_PREFILL: one named mutex serialises the engine's Whisper decodes
+// against the note host's capture-phase prefills, so the two GPU models never run
+// concurrently (the driver fault configuration). Named by
 // AMBIENT_GPU_LEASE, which the engine sets and the host inherits; inert when unset
 class GpuLease {
    public:

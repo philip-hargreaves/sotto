@@ -47,6 +47,27 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public Func<Task>? RegenerateRequested { get; set; }
 
+    /// <summary>The clinician overrides a refusal; the session view model wires it.</summary>
+    public Func<Task>? WriteAnywayRequested { get; set; }
+
+    /// <summary>Why the model refused, in its words; empty unless refused.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoteRefused))]
+    public partial string RefusalReason { get; set; } = "";
+
+    public bool NoteRefused => PipelineState == NotePipelineState.NoteRefused;
+
+    /// <summary>False when the recording was too short: insisting would make the model fabricate.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanWriteAnyway))]
+    [NotifyCanExecuteChangedFor(nameof(WriteAnywayCommand))]
+    public partial bool WriteAnywayAvailable { get; set; } = true;
+
+    public bool CanWriteAnyway => NoteRefused && WriteAnywayAvailable;
+
+    [RelayCommand(CanExecute = nameof(CanWriteAnyway))]
+    private Task WriteAnyway() => WriteAnywayRequested!();
+
     public Func<Task>? RegeneratePatientRequested { get; set; }
 
     /// <summary>The staleness hint's action: rewrite the sheet from the edited note.</summary>
@@ -232,6 +253,7 @@ public sealed partial class NoteViewModel : ObservableObject
     {
         NoteEditing = false;
         PatientEditing = false;
+        RefusalReason = "";
         PipelineState = NotePipelineState.NoteWriting;
         ClinicalNoteText = "";
         PatientInfoText = "";
@@ -312,6 +334,7 @@ public sealed partial class NoteViewModel : ObservableObject
     {
         NotePipelineState.NoteWriting => "Writing the note",
         NotePipelineState.NoteFailed => "The note could not be written - see the status bar",
+        NotePipelineState.NoteRefused => "No note: the recording was too short or did not contain enough clinical information",
         _ => "",
     };
 
@@ -347,6 +370,9 @@ public sealed partial class NoteViewModel : ObservableObject
         OnPropertyChanged(nameof(NotePreparing));
         OnPropertyChanged(nameof(PatientPreparing));
         OnPropertyChanged(nameof(NoteStateCaption));
+        OnPropertyChanged(nameof(NoteRefused));
+        OnPropertyChanged(nameof(CanWriteAnyway));
+        WriteAnywayCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(PatientStateCaption));
         OnPropertyChanged(nameof(NoteCaptionVisible));
         OnPropertyChanged(nameof(PatientCaptionVisible));
@@ -376,6 +402,10 @@ public sealed partial class NoteViewModel : ObservableObject
                 => NotePipelineState.NoteReadyPatientWriting,
             (NotePipelineState.NoteWriting, NotePipelineEvent.NoteFailed)
                 => NotePipelineState.NoteFailed,
+            (NotePipelineState.NoteWriting, NotePipelineEvent.NoteRefused)
+                => NotePipelineState.NoteRefused,
+            (NotePipelineState.NoteRefused, NotePipelineEvent.NoteWritingStarted)
+                => NotePipelineState.NoteWriting,
             (NotePipelineState.NoteReadyPatientWriting, NotePipelineEvent.PatientInfoReady)
                 => NotePipelineState.AllReady,
             (NotePipelineState.NoteReadyPatientWriting, NotePipelineEvent.PatientInfoFailed)
@@ -393,6 +423,8 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public void Reset()
     {
+        RefusalReason = "";
+        WriteAnywayAvailable = true;
         NoteEditing = false;
         PatientEditing = false;
         PipelineState = NotePipelineState.Pending;

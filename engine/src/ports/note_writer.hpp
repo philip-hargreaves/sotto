@@ -13,6 +13,7 @@ namespace ambient::note {
 struct NoteOptions {
     std::string style = "prose";      // prose | soap
     std::string detail = "standard";  // concise | standard | detailed
+    bool confirmed = false;           // the clinician says it is a consultation: no refusal
 };
 
 // Streams partials, returns the note, throws on failure; Cancel

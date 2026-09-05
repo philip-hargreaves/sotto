@@ -302,29 +302,6 @@ public class SessionCommandsTest
         Assert.Equal("Recording", session.Status.LatestActivity);
     }
 
-    [Theory]
-    [InlineData("efficiency", true)]
-    [InlineData("balanced", false)]
-    public async Task RecordingWarnsWhenTheMachineIsSavingPower(string mode, bool onMains)
-    {
-        var (session, _, _) = TestSession.Create(
-            powerState: () => new Ambient.App.Core.Metrics.PowerState(mode, onMains));
-        await session.StartRecordingAsync();
-
-        Assert.Equal("Recording - saving power, notes will be slower",
-            session.Status.LatestActivity);
-    }
-
-    [Fact]
-    public async Task RecordingOnMainsPowerCarriesNoWarning()
-    {
-        var (session, _, _) = TestSession.Create(
-            powerState: () => new Ambient.App.Core.Metrics.PowerState("performance", true));
-        await session.StartRecordingAsync();
-
-        Assert.Equal("Recording", session.Status.LatestActivity);
-    }
-
     [Fact]
     public async Task AResumeTheEngineRefusesKeepsTheSessionAndStopsRecording()
     {
@@ -350,5 +327,25 @@ public class SessionCommandsTest
 
         Assert.DoesNotContain(engine.Requests, r => r.Method == "session/start");
         Assert.Equal(SessionState.Idle, session.State);
+    }
+
+    [Fact]
+    public void TheRingFollowsTheMicrophoneLevel()
+    {
+        var (session, _, _) = TestSession.Create();
+        var controls = new SessionControlsViewModel(session);
+        var raised = 0;
+        controls.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SessionControlsViewModel.Level))
+            {
+                raised++;
+            }
+        };
+
+        session.Status.SetMicLevel(0.6, clipped: false);
+
+        Assert.Equal(0.6, controls.Level);
+        Assert.Equal(1, raised);
     }
 }

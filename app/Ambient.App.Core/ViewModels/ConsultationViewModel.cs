@@ -19,7 +19,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     private readonly IEngineClient _engine;
     private readonly Metrics.PerformanceCollector? _metrics;
     private readonly AppPreferences? _preferences;
-    private readonly Func<Metrics.PowerState> _powerState;
 
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
@@ -78,12 +77,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         IEngineClient engine, IUiDispatcher dispatcher,
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
         Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
-        AppPreferences? preferences = null, Func<Metrics.PowerState>? powerState = null)
+        AppPreferences? preferences = null)
     {
         _engine = engine;
         _metrics = metrics;
         _preferences = preferences;
-        _powerState = powerState ?? Metrics.PowerState.Read;
         _readinessPollInterval = readinessPollInterval ?? TimeSpan.FromSeconds(2);
         Transcript = transcript;
         Note = note;
@@ -91,6 +89,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         EngineReady = engine.Connected;
         Note.TranslateRequested = TranslateAsync;
         Note.RegenerateRequested = RegenerateNoteAsync;
+        Note.WriteAnywayRequested = WriteNoteAnywayAsync;
         Note.RegeneratePatientRequested = RegeneratePatientAsync;
         Note.SaveNoteRequested = SaveNoteAsync;
         Note.SavePatientRequested = SavePatientAsync;
@@ -280,6 +279,25 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         }
     }
 
+    /// <summary>The clinician says it was a consultation: the note lane runs with the refusal off.</summary>
+    public async Task WriteNoteAnywayAsync()
+    {
+        if (State is not (SessionState.Review or SessionState.Refused))
+        {
+            return;
+        }
+
+        var accepted = await RequestAsync(
+            "note/regenerate", new { style = Note.Style, detail = Note.Detail, confirmed = true })
+            .ConfigureAwait(true);
+        if (accepted)
+        {
+            _regenerating = true;
+            Note.BeginRegenerate();
+            State = SessionState.Review;  // insisted: the transcript and note are worth showing
+        }
+    }
+
     public async Task SaveNoteAsync()
     {
         if (_finalisedSessionId is null)
@@ -376,10 +394,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 : "";
     }
 
-    /// <summary>Leaves the review: edits saved, the engine told, panes cleared.</summary>
+    /// <summary>Leaves the review or a refusal: edits saved, the engine told
+    /// (which deletes a refused session), panes cleared.</summary>
     public async Task CloseReviewAsync()
     {
-        if (State != SessionState.Review)
+        if (State is not (SessionState.Review or SessionState.Refused))
         {
             return;
         }
@@ -445,7 +464,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 "session/start", parameters, TimeSpan.FromSeconds(60)).ConfigureAwait(true);
             _recordingSessionId = response.TryGetProperty("sessionId", out var id)
                 ? id.GetString() : null;
-            Status.Append(RecordingLabel());
+            Status.Append("Recording");
         }
         catch (Exception e) when (e is EngineErrorException or OperationCanceledException)
         {
@@ -498,17 +517,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         State = SessionState.Recording;
         Status.ResetThroughput();
         Status.SetMicVisible(true);
-        Status.Append(replay is null ? RecordingLabel() : "Replaying");
+        Status.Append(replay is null ? "Recording" : "Replaying");
         _metrics?.SessionStarted(
             replay is null ? "mic" : "replay", replay?.Speed ?? 0,
             replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
-
-    // ADR-0028: said once at start; power saving roughly halves finalise
-    // speed and the hint lets the clinician choose
-    private string RecordingLabel() => _powerState().SavingPower
-        ? "Recording - saving power, notes will be slower"
-        : "Recording";
 
     public async Task SetPausedAsync(bool paused)
     {
@@ -671,6 +684,25 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 if (_metrics is not null && !_regenerating)
                 {
                     _ = _metrics.SessionFinishedAsync(null, Note.ClinicalNoteText.Length);
+                }
+
+                break;
+            // Too short or not a consultation: nothing to review, so the record
+            // region says why and offers the override (unless it was too short);
+            // a refusal while already reviewing shows in the note pane instead
+            case "note/refused" when State is SessionState.Finalising or SessionState.Review:
+                Note.RefusalReason = parameters.ValueKind == JsonValueKind.Object
+                    ? parameters.GetProperty("reason").GetString() ?? ""
+                    : "";
+                Note.WriteAnywayAvailable = parameters.ValueKind != JsonValueKind.Object
+                    || !parameters.TryGetProperty("overridable", out var overridable)
+                    || overridable.GetBoolean();
+                Note.Apply(NotePipelineEvent.NoteRefused);
+                State = State == SessionState.Finalising ? SessionState.Refused : SessionState.Review;
+                Status.Append("No note - too short or not enough clinical information");
+                if (_metrics is not null && !_regenerating)
+                {
+                    _ = _metrics.SessionFinishedAsync("refused: " + Note.RefusalReason, 0);
                 }
 
                 break;

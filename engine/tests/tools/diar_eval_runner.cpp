@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
@@ -112,7 +113,8 @@ void AmortiseProbe(const ambient::models::ModelStore& store, ambient::models::Ov
 
     const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-eval-amortise";
     std::filesystem::create_directories(anchor_root);
-    ambient::diar::SpeakerDiariser fed(store, runtime, anchor_root);
+    ambient::diar::AnchorStore fed_anchors(anchor_root);
+    ambient::diar::SpeakerDiariser fed(store, runtime, fed_anchors);
     std::size_t decodes = 0;
     const auto decode = [&whisper, &decodes](std::span<const float> clip, std::uint64_t first) {
         ++decodes;
@@ -232,7 +234,8 @@ int main(int argc, char** argv) {
         // A throwaway anchor root: evaluation must never touch a real anchor
         const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-eval";
         std::filesystem::create_directories(anchor_root);
-        ambient::diar::SpeakerDiariser diariser(store, runtime, anchor_root);
+        ambient::diar::AnchorStore diariser_anchors(anchor_root);
+        ambient::diar::SpeakerDiariser diariser(store, runtime, diariser_anchors);
         const auto audio = LoadWav(argv[2]);
 
         std::vector<ambient::asr::Turn> turns;

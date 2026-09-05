@@ -18,6 +18,7 @@
 #include "core/env_flag.hpp"
 #include "core/level_meter.hpp"
 #include "core/metrics.hpp"
+#include "core/note_gate.hpp"
 #include "core/note_label.hpp"
 #include "core/per_turn.hpp"
 #include "core/resplit.hpp"
@@ -25,6 +26,7 @@
 #include "core/role_naming.hpp"
 #include "core/tidy_transcript.hpp"
 #include "core/turn_reconcile.hpp"
+#include "core/voice_enrolment.hpp"
 #include "ports/audio_source.hpp"
 #include "ports/diariser.hpp"
 #include "ports/note_writer.hpp"
@@ -48,10 +50,17 @@ class ISessionEvents {
     // stopping thread; fired only for work that actually runs
     virtual void OnProgress(const std::string&) {}
 
+    // Enrolment: the level and speech captured so far, then the outcome
+    virtual void OnEnrolProgress(const EnrolProgress&) {}
+    virtual void OnEnrolDone(bool, const std::string&, double) {}
+
     // The note lane, delivered on its own thread after finalise
     virtual void OnNotePartial(const std::string&) {}
     virtual void OnNoteReady(const std::string&) {}
     virtual void OnNoteFailed(const std::string&) {}
+    // No note, and why: too thin to write from (not overridable) or the model
+    // says it was not a consultation (the clinician can insist)
+    virtual void OnNoteRefused(const std::string&, bool) {}
 
     // Patient information follows the note on the same thread
     virtual void OnPatientPartial(const std::string&) {}
@@ -107,6 +116,8 @@ class SessionController {
 
     ~SessionController() {
         Stop();
+        CancelEnrolment();
+        if (enrol_thread_.joinable()) enrol_thread_.join();
         JoinNoteThread();
     }
     SessionController(const SessionController&) = delete;
@@ -119,7 +130,7 @@ class SessionController {
                const MicSelection& mic = {}) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (running_) {
+            if (running_ || enrolling_) {
                 return false;
             }
             running_ = true;
@@ -234,6 +245,51 @@ class SessionController {
         return running_ && !ended_;
     }
 
+    // One decode per turn needs a diariser to find the turns; without one the
+    // live windows are the transcript, whatever the switch says
+    bool SingleDecode() const {
+        return diariser_ != nullptr && EnvFlag("AMBIENT_NO_LIVE_ASR");
+    }
+
+    // Voice enrolment: the microphone until Finish (or `seconds` as a cap), the
+    // speech embedded, the anchor replaced. Refused while a consultation or
+    // another enrolment runs; progress and the outcome arrive on the events
+    bool StartEnrolment(double seconds, const MicSelection& mic = {},
+                        double min_speech_s = kEnrolMinSpeechSeconds) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (running_ || enrolling_) return false;
+            enrolling_ = true;
+            enrol_cancel_ = false;
+            enrol_finish_ = false;
+        }
+        if (enrol_thread_.joinable()) enrol_thread_.join();
+        enrol_thread_ = std::thread(
+            [this, seconds, mic, min_speech_s] { RunEnrolment(seconds, mic, min_speech_s); });
+        return true;
+    }
+
+    void CancelEnrolment() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!enrolling_) return;
+        enrol_cancel_ = true;
+        if (enrol_source_) enrol_source_->RequestStop();
+    }
+
+    // The clinician reached the end of the passage: stop listening and make
+    // the print from what was heard
+    void FinishEnrolment() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!enrolling_) return;
+        enrol_finish_ = true;
+        if (enrol_source_) enrol_source_->RequestStop();
+    }
+
+    bool Enrolling() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return enrolling_;
+    }
+
     SourceEnd LastEnd() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return end_;
@@ -265,17 +321,30 @@ class SessionController {
         std::lock_guard<std::mutex> lock(mutex_);
         last_finalised_ = id;
         reviewing_ = true;
+        refused_ = false;
         return true;
     }
 
     // Leaving the consultation: ends a review (regenerate refuses until the
-    // next seal or open) and erases what was recorded with retain off
+    // next seal or open), deletes a session that ended in a refusal, and
+    // erases what was recorded with retain off
     void Close() {
+        store::SessionId refused;
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            if (refused_) {
+                refused = std::exchange(last_finalised_, {});
+                refused_ = false;
+            }
             if (reviewing_) {
                 reviewing_ = false;
                 last_finalised_.clear();
+            }
+        }
+        if (!refused.empty()) {
+            try {
+                store_.Delete(refused);
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
         if (!Running()) {
@@ -443,7 +512,7 @@ class SessionController {
                     // and seg-frontier flags): the endpointer still runs, its windows
                     // are never decoded - per-turn clips are the only ASR
                     for (const auto& window : controller.endpointer_->Push(frames)) {
-                        if (EnvFlag("AMBIENT_NO_LIVE_ASR")) continue;
+                        if (controller.SingleDecode()) continue;
                         controller.transcriber_.Submit(window.frames, window.first_frame,
                                                        window.first_new_frame);
                     }
@@ -573,9 +642,64 @@ class SessionController {
         }
         std::vector<float> backlog = std::exchange(vad_backlog_, {});
         for (const auto& window : endpointer_->Push(backlog)) {
-            if (EnvFlag("AMBIENT_NO_LIVE_ASR")) continue;
+            if (SingleDecode()) continue;
             transcriber_.Submit(window.frames, window.first_frame, window.first_new_frame);
         }
+    }
+
+    void RunEnrolment(double seconds, const MicSelection& mic, double min_speech_s) {
+        std::string why;
+        double speech_s = 0.0;
+        try {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                enrol_source_ = factory_(std::nullopt, mic.id);
+            }
+            const auto frames = static_cast<std::uint64_t>(seconds * kSampleRate);
+            EnrolmentSink sink(
+                vad_, frames,
+                [this] {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    if (enrol_source_) enrol_source_->RequestStop();
+                },
+                [this](const EnrolProgress& progress) { events_.OnEnrolProgress(progress); });
+            try {
+                enrol_source_->Run(sink);
+            } catch (const std::exception& e) {
+                sink.OnEnd({SourceEndReason::kFailed, e.what()});
+            }
+            auto capture = sink.Take();
+            speech_s = static_cast<double>(capture.speech.size()) / kSampleRate;
+            bool cancelled = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                cancelled = enrol_cancel_ && !enrol_finish_;
+            }
+            why = EnrolRejection(capture, cancelled, min_speech_s);
+            if (why.empty()) {
+                if (diariser_ == nullptr) {
+                    why = "speaker models not available";
+                } else {
+                    const auto voiceprint = diariser_->EmbedVoice(capture.speech);
+                    if (voiceprint.empty()) {
+                        why = "could not build a voiceprint from the recording";
+                    } else {
+                        const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+                                             std::chrono::system_clock::now().time_since_epoch())
+                                             .count();
+                        diariser_->ReplaceAnchor(voiceprint, static_cast<std::uint64_t>(now));
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            why = std::string("microphone unavailable: ") + e.what();
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            enrol_source_.reset();
+            enrolling_ = false;
+        }
+        events_.OnEnrolDone(why.empty(), why, speech_s);
     }
 
     void EndCapture() {
@@ -649,7 +773,7 @@ class SessionController {
         if (outcome != Outcome::kCancel && endpointer_.has_value()) {
             DrainVadBacklog();  // a stop can land before the VAD does
             if (const auto tail = endpointer_->Flush()) {
-                if (!EnvFlag("AMBIENT_NO_LIVE_ASR")) {
+                if (!SingleDecode()) {
                     transcriber_.Submit(tail->frames, tail->first_frame, tail->first_new_frame);
                 }
             }
@@ -663,6 +787,7 @@ class SessionController {
             id = std::exchange(session_id_, {});
             if (outcome == Outcome::kFinalise) {
                 last_finalised_ = id;
+                refused_ = false;
             }
         }
         if (id.empty()) {
@@ -796,6 +921,21 @@ class SessionController {
                                           turn_texts[i]});
                 }
                 const auto roles = diar::NameRoles(role_turns, result.cluster_count, similarity);
+                // How much each speaker resembled the stored print, and what was decided:
+                // the record a wrong role can be diagnosed from
+                {
+                    std::string sims;
+                    for (const double s : similarity) {
+                        char one[16];
+                        std::snprintf(one, sizeof one, " %.3f", s);
+                        sims += one;
+                    }
+                    std::fprintf(
+                        stderr,
+                        "ambient-engine: roles anchor sims%s margin %.3f -> doctor %d by %s\n",
+                        sims.empty() ? " none" : sims.c_str(), roles.margin, roles.doctor_cluster,
+                        roles.from_anchor ? "print" : "content");
+                }
                 std::vector<asr::Turn> attributed;
                 for (std::size_t i = 0; i < turns.size(); ++i) {
                     if (turn_texts[i].empty()) continue;
@@ -816,9 +956,18 @@ class SessionController {
                     note_input = attributed;
                 }
                 stage("transcript sealed");
-                // The anchor learns only from named sessions, never a guess
-                if (roles.doctor_cluster >= 0) {
-                    diariser_->AccrueDoctor(session_audio_, result.slices, roles.doctor_cluster);
+                // The print learns only from named sessions, never a guess, and
+                // only once the note lane agrees this was a consultation
+                // AMBIENT_ANCHOR_FREEZE: evaluation only, the print never learns
+                if (roles.doctor_cluster >= 0 && !EnvFlag("AMBIENT_ANCHOR_FREEZE")) {
+                    auto voiceprint = diariser_->DoctorVoiceprint(session_audio_, result.slices,
+                                                                  roles.doctor_cluster);
+                    if (note_writer_ != nullptr) {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        pending_voiceprint_ = std::move(voiceprint);
+                    } else {
+                        diariser_->AccrueVoiceprint(voiceprint);
+                    }
                 }
                 stage("anchor accrued");
             } catch (...) {  // NOLINT(bugprone-empty-catch)
@@ -926,28 +1075,28 @@ class SessionController {
     // a note still writing
     void StartNoteLane(store::SessionId id, std::vector<asr::Turn> transcript) {
         JoinNoteThread();
-        // Too thin: the model would write from its prompt (measured); the engine
-        // authors a plain statement instead
+        // Too thin: the model would write from its prompt (measured), so it is
+        // refused without asking the model and without an override
         auto options = CurrentNoteOptions();  // before the lock: same mutex
-        if (TranscriptWords(transcript) < min_note_words_) {
-            const std::string note =
-                "The recording was too short or did not contain enough clinical "
-                "information to generate an accurate note.";
-            SaveNote(id, note, options);
-            events_.OnNoteReady(note);
-            if (note_writer_->WritesPatient()) {
-                const std::string patient =
-                    "The recording was too short or did not contain enough clinical "
-                    "information to generate a patient information sheet.";
-                SavePatient(id, patient);
-                events_.OnPatientReady(patient);
+        std::vector<float> pending;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pending = std::exchange(pending_voiceprint_, {});
+        }
+        if (const auto words = TranscriptWords(transcript); words < min_note_words_) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                refused_ = true;
             }
+            events_.OnNoteRefused(std::to_string(words) + " words; a note needs at least " +
+                                      std::to_string(min_note_words_),
+                                  false);
             return;
         }
         std::lock_guard<std::mutex> lock(mutex_);
         note_busy_ = true;
         note_thread_ = std::thread([this, id = std::move(id), turns = std::move(transcript),
-                                    options = std::move(options)] {
+                                    options = std::move(options), pending = std::move(pending)] {
             struct BusyGuard {
                 std::atomic<bool>& flag;
                 ~BusyGuard() {
@@ -966,11 +1115,30 @@ class SessionController {
             }
             std::string note;
             try {
-                note = note_writer_->Write(turns, options, [this](const std::string& partial) {
-                    events_.OnNotePartial(partial);
-                });
+                // A refusal never streams as if it were the note
+                note::RefusalFilter forward(
+                    [this](const std::string& partial) { events_.OnNotePartial(partial); });
+                note = note_writer_->Write(
+                    turns, options, [&forward](const std::string& partial) { forward(partial); });
+                if (const auto reason = note::RefusalReason(note);
+                    reason.has_value() && !options.confirmed) {
+                    std::fprintf(stderr, "ambient-engine: note refused: %s\n", reason->c_str());
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        refused_ = true;
+                    }
+                    events_.OnNoteRefused(*reason, true);
+                    return;  // no note, no sheet, no label, and the print learns nothing
+                }
                 SaveNote(id, note, options);
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    refused_ = false;
+                }
                 events_.OnNoteReady(note);
+                if (!pending.empty() && diariser_ != nullptr) {
+                    diariser_->AccrueVoiceprint(pending);
+                }
             } catch (const std::exception& e) {
                 events_.OnNoteFailed(e.what());
                 return;
@@ -1025,12 +1193,18 @@ class SessionController {
     std::uint64_t diar_advance_frames_;
     std::chrono::milliseconds settle_timeout_;
     std::size_t min_note_words_;
+    std::vector<float> pending_voiceprint_;  // under mutex_: learned once the note lane agrees
     std::unique_ptr<IAudioSource> source_;
     std::thread worker_;
     std::thread diar_thread_;
-    std::thread note_thread_;  // moved out under mutex_, joined outside it
-    bool diar_stop_ = false;   // under mutex_
-    int diar_ticks_ = 0;       // under mutex_; diagnostics
+    std::thread note_thread_;                     // moved out under mutex_, joined outside it
+    std::unique_ptr<IAudioSource> enrol_source_;  // under mutex_
+    std::thread enrol_thread_;
+    bool enrolling_ = false;     // under mutex_
+    bool enrol_cancel_ = false;  // under mutex_
+    bool enrol_finish_ = false;  // under mutex_
+    bool diar_stop_ = false;     // under mutex_
+    int diar_ticks_ = 0;         // under mutex_; diagnostics
     LevelMeter meter_;
     std::optional<Endpointer> endpointer_;
     std::vector<float> vad_backlog_;  // capture thread, then finalise
@@ -1050,6 +1224,7 @@ class SessionController {
     bool note_prepared_ = false;  // diar thread only
     store::SessionId last_finalised_;
     bool reviewing_ = false;  // last_finalised_ came from Open, not a seal
+    bool refused_ = false;    // last_finalised_ has no note; deleted at Close
     // Appended under mutex_ (the diarisation thread snapshots it); finalise
     // reads it after every other thread has joined
     std::vector<float> session_audio_;

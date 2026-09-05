@@ -12,6 +12,7 @@ public enum NotePipelineState
     AllReady,
     NoteFailed,
     PatientFailed,
+    NoteRefused,
 }
 
 /// <summary>Engine-reported progress; the view model projects, never sequences.</summary>
@@ -20,6 +21,7 @@ public enum NotePipelineEvent
     NoteWritingStarted,
     NoteReady,
     NoteFailed,
+    NoteRefused,
     PatientInfoReady,
     PatientInfoFailed,
 }

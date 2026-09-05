@@ -108,13 +108,25 @@ TEST(NameRoles, AThirdClusterIsNeverACandidate) {
 }
 
 TEST(NameRoles, TheAnchorOutranksTheLexicalSignal) {
-    // Anchor similarities name the lexically patient-looking cluster as the
-    // doctor: content-blind, rank not threshold, so even a small gap decides
-    const std::vector<double> sims{0.41, 0.44};
+    // Someone resembles the print: it names the lexically patient-looking
+    // cluster as the doctor, content-blind, rank not margin
+    const std::vector<double> sims{0.41, 0.84};
     const auto result = NameRoles(Consultation(), 2, sims);
+    EXPECT_TRUE(result.from_anchor);
     EXPECT_EQ(result.doctor_cluster, 1);
     EXPECT_EQ(result.role_of_cluster[1], "doctor");
     EXPECT_EQ(result.role_of_cluster[0], "patient");
+}
+
+TEST(NameRoles, AForeignPrintYieldsToTheContent) {
+    // Nobody in the room resembles the print (another clinician's): the
+    // content decides as if there were no print, so a stale print cannot
+    // invert the record
+    const std::vector<double> sims{0.41, 0.44};
+    const auto result = NameRoles(Consultation(), 2, sims);
+    EXPECT_FALSE(result.from_anchor);
+    EXPECT_EQ(result.doctor_cluster, NameRoles(Consultation(), 2).doctor_cluster);
+    EXPECT_EQ(result.role_of_cluster[0], "doctor");
 }
 
 TEST(NameRoles, ASingleClusterAbstains) {

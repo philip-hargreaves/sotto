@@ -314,10 +314,12 @@ std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
-    return impl_->Run(
-        "write",
-        {{"turns", TurnsJson(transcript)}, {"style", options.style}, {"detail", options.detail}},
-        progress);
+    return impl_->Run("write",
+                      {{"turns", TurnsJson(transcript)},
+                       {"style", options.style},
+                       {"detail", options.detail},
+                       {"confirmed", options.confirmed}},
+                      progress);
 }
 
 std::string WorkerNoteWriter::WritePatient(const std::string& note, const Progress& progress) {

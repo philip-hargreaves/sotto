@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -81,6 +82,74 @@ TEST(AnchorStore, ACorruptFileResetsToEmpty) {
     EXPECT_FALSE(store.Anchor().has_value());
     store.Accrue(Unit(1, 0));  // and it can accrue again afterwards
     EXPECT_EQ(store.Sessions(), 1u);
+}
+
+TEST(AnchorStore, AnEnrolmentSeedsThePrintAndConsultationsRefineIt) {
+    TempDir dir;
+    AnchorStore store(dir.path);
+    store.Accrue(Unit(0, 1));  // an earlier accrual is discarded by the enrolment
+    store.Replace(Unit(1, 0), 1'757'000'000);
+    auto status = store.Status();
+    EXPECT_EQ(status.origin, AnchorOrigin::kEnrolled);
+    EXPECT_EQ(status.sessions, 0u);
+    EXPECT_EQ(status.enrolled_at, 1'757'000'000u);
+    EXPECT_NEAR((*store.Anchor())[0], 1.0f, 1e-5);
+
+    store.Accrue(Unit(0, 1));
+    status = store.Status();
+    EXPECT_EQ(status.origin, AnchorOrigin::kEnrolled) << "refined, still enrolled";
+    EXPECT_EQ(status.sessions, 1u);
+    const auto anchor = *store.Anchor();
+    EXPECT_GT(anchor[0], anchor[1]) << "the enrolment outweighs one consultation";
+    EXPECT_GT(anchor[1], 0.0f) << "but the consultation moved it";
+}
+
+TEST(AnchorStore, StatusNamesTheOrigin) {
+    TempDir dir;
+    AnchorStore store(dir.path);
+    EXPECT_EQ(store.Status().origin, AnchorOrigin::kNone);
+    store.Accrue(Unit(1, 0));
+    EXPECT_EQ(store.Status().origin, AnchorOrigin::kAccrued);
+    EXPECT_EQ(store.Status().sessions, 1u);
+    store.Clear();
+    EXPECT_EQ(store.Status().origin, AnchorOrigin::kNone);
+    EXPECT_EQ(store.Status().enrolled_at, 0u);
+}
+
+TEST(AnchorStore, EnrolmentSurvivesAReload) {
+    TempDir dir;
+    {
+        AnchorStore store(dir.path);
+        store.Replace(Unit(3, 4), 42);
+        store.Accrue(Unit(3, 4));
+    }
+    AnchorStore reloaded(dir.path);
+    const auto status = reloaded.Status();
+    EXPECT_EQ(status.origin, AnchorOrigin::kEnrolled);
+    EXPECT_EQ(status.sessions, 1u);
+    EXPECT_EQ(status.enrolled_at, 42u);
+}
+
+TEST(AnchorRecord, AVersionOneRecordStillParses) {
+    // version 1: version, dims, sessions, then the sum; no enrolment fields
+    std::vector<std::uint8_t> v1(16 + 8);
+    const std::uint32_t version = 1, dims = 2;
+    const std::uint64_t sessions = 5;
+    const float sum[2] = {0.6f, 0.8f};
+    std::memcpy(v1.data(), &version, 4);
+    std::memcpy(v1.data() + 4, &dims, 4);
+    std::memcpy(v1.data() + 8, &sessions, 8);
+    std::memcpy(v1.data() + 16, sum, 8);
+    const auto record = detail::ParseAnchor(v1);
+    ASSERT_TRUE(record.has_value());
+    EXPECT_EQ(record->sessions, 5u);
+    EXPECT_EQ(record->enrolled_at, 0u);
+    EXPECT_FLOAT_EQ(record->sum[1], 0.8f);
+
+    const auto again = detail::ParseAnchor(detail::SerializeAnchor(*record));
+    ASSERT_TRUE(again.has_value());
+    EXPECT_EQ(again->sum, record->sum);
+    EXPECT_FALSE(detail::ParseAnchor(std::vector<std::uint8_t>(10)).has_value()) << "too short";
 }
 
 TEST(VoiceprintRanges, StopAtTheCapAndRefuseUnderASecond) {
