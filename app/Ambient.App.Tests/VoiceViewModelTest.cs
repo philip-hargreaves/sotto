@@ -18,9 +18,9 @@ public class VoiceViewModelTest
 
         await voice.RefreshAsync();
         Assert.False(voice.HasVoice);
-        Assert.StartsWith("Learns automatically", voice.Headline);
-        Assert.EndsWith("set it up manually.", voice.Headline);
-        Assert.Equal("Set up now", voice.SetUpLabel);
+        Assert.StartsWith("Tells you apart", voice.Headline);
+        Assert.EndsWith("or set up now.", voice.Headline);
+        Assert.Equal("Set up", voice.SetUpLabel);
 
         engine.AnchorOrigin = "accrued";
         engine.AnchorSessions = 3;
@@ -30,7 +30,7 @@ public class VoiceViewModelTest
         engine.AnchorSessions = 12;
         await voice.RefreshAsync();
         Assert.Equal("Learned automatically from 12 consultations", voice.Headline);
-        Assert.Equal("Set up again", voice.SetUpLabel);
+        Assert.Equal("Redo", voice.SetUpLabel);
 
         engine.AnchorOrigin = "enrolled";
         engine.AnchorSessions = 0;
@@ -108,7 +108,7 @@ public class VoiceViewModelTest
 
         Assert.Equal("enrolled", voice.Origin);
         Assert.StartsWith("Set up on", voice.Headline);
-        Assert.Contains("set up", status.LatestActivity);
+        Assert.Contains("enrolment complete", status.LatestActivity);
         Assert.False(voice.Busy);
     }
 }

@@ -99,7 +99,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         EnrolmentState.Recording when EnoughCaptured =>
             "Enough captured. Finish whenever you reach the end.",
         EnrolmentState.Recording => "Listening. Read to the end, then press Finish.",
-        EnrolmentState.Succeeded => "Your voice is set up.",
+        EnrolmentState.Succeeded => "Voice enrolment complete.",
         _ => Detail.Length > 0 ? $"That did not work: {Detail}." : "That did not work.",
     };
 

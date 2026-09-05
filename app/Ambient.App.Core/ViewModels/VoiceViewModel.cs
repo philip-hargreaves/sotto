@@ -66,7 +66,7 @@ public sealed partial class VoiceViewModel : ObservableObject
 
     public bool HasVoice => Origin != "none";
 
-    public string SetUpLabel => HasVoice ? "Set up again" : "Set up now";
+    public string SetUpLabel => HasVoice ? "Redo" : "Set up";
 
     public string Headline => Origin switch
     {
@@ -74,7 +74,7 @@ public sealed partial class VoiceViewModel : ObservableObject
         "accrued" when Sessions < LearnedAfterSessions =>
             $"Learning automatically, {Plural(Sessions, "consultation")} so far",
         "accrued" => $"Learned automatically from {Plural(Sessions, "consultation")}",
-        _ => "Learns automatically from your consultations. You can also set it up manually.",
+        _ => "Tells you apart from the patient. Learned automatically, or set up now.",
     };
 
     public async Task RefreshAsync()
@@ -107,7 +107,7 @@ public sealed partial class VoiceViewModel : ObservableObject
     {
         if (_session?.ConsultationActive == true)
         {
-            _status?.Append("finish the consultation before setting up your voice");
+            _status?.Append("finish the consultation before voice enrolment");
             return;
         }
 
@@ -118,7 +118,7 @@ public sealed partial class VoiceViewModel : ObservableObject
             await RefreshAsync().ConfigureAwait(true);
             if (made)
             {
-                _status?.Append("your voice is set up");
+                _status?.Append("voice enrolment complete");
             }
         }
         finally
@@ -134,7 +134,7 @@ public sealed partial class VoiceViewModel : ObservableObject
     {
         if (_session?.ConsultationActive == true)
         {
-            _status?.Append("finish the consultation before forgetting your voice");
+            _status?.Append("finish the consultation before forgetting voice enrolment");
             return;
         }
 
@@ -149,11 +149,11 @@ public sealed partial class VoiceViewModel : ObservableObject
             await _engine.RequestAsync("anchor/clear", null, TimeSpan.FromSeconds(5))
                 .ConfigureAwait(true);
             await RefreshAsync().ConfigureAwait(true);
-            _status?.Append("your voice has been forgotten");
+            _status?.Append("voice enrolment forgotten");
         }
         catch (Exception e)
         {
-            _status?.Append($"could not forget your voice: {e.Message}");
+            _status?.Append($"could not forget voice enrolment: {e.Message}");
         }
         finally
         {
