@@ -46,17 +46,25 @@ class GenerationLane {
         thread_ = std::thread([this, generate = std::move(generate)] {
             try {
                 const auto t0 = std::chrono::steady_clock::now();
-                bool first = true;
-                const std::string text = generate([this, &t0, &first](const std::string& partial) {
-                    if (first) {
-                        first = false;
-                        std::fprintf(
-                            stderr, "ambient-note-host: first token in %.1f s\n",
-                            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-                                .count());
-                    }
-                    server_.PushNotification("partial", {{"text", partial}});
-                });
+                auto first_at = t0;
+                std::size_t pieces = 0;  // one streamed piece per decoded token
+                const std::string text =
+                    generate([this, &t0, &first_at, &pieces](const std::string& partial) {
+                        if (pieces++ == 0) {
+                            first_at = std::chrono::steady_clock::now();
+                            std::fprintf(
+                                stderr, "ambient-note-host: first token in %.1f s\n",
+                                std::chrono::duration<double>(first_at - t0).count());
+                        }
+                        server_.PushNotification("partial", {{"text", partial}});
+                    });
+                const double decode_s =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - first_at)
+                        .count();
+                if (pieces > 1 && decode_s > 0) {
+                    std::fprintf(stderr, "ambient-note-host: %zu tokens in %.1f s, %.1f tok/s\n",
+                                 pieces, decode_s, (pieces - 1) / decode_s);
+                }
                 server_.PushNotification("ready", {{"text", text}});
             } catch (const std::exception& e) {
                 server_.PushNotification("failed", {{"detail", e.what()}});
@@ -95,7 +103,8 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         if (argc < 4) {
-            std::fprintf(stderr, "usage: ambient_note_host <pipe> <models> <prompts-dir>\n");
+            std::fprintf(stderr,
+                         "usage: ambient_note_host <pipe> <models> <prompts-dir> [tier]\n");
             return 2;
         }
         std::fprintf(stderr, "ambient-note-host: power throttling %s\n",
@@ -103,16 +112,30 @@ int main(int argc, char* argv[]) {
         const std::wstring pipe_name = std::filesystem::path(argv[1]).wstring();
         const std::filesystem::path models_root = argv[2];
         const std::filesystem::path prompt_path = argv[3];
+        // The tier is a role; the store inside this process resolves it
+        const std::string tier = argc > 4 ? argv[4] : "default";
 
         ambient::ipc::PipeServer server(pipe_name);
         ambient::models::ModelStore store(models_root);
         ambient::models::OvRuntime runtime;
-        ambient::note::QwenNoteWriter writer(store, runtime, prompt_path);
+        ambient::note::QwenNoteWriter writer(store, runtime, prompt_path, nullptr, tier);
         GenerationLane lane(server);
 
         using ambient::ipc::Error;
         using ambient::ipc::json;
         using ambient::ipc::kSessionError;
+        // The engine supervises the load through these two, never by polling
+        writer.SetLoadListener([&server](const ambient::note::QwenNoteWriter::LoadReport& r) {
+            if (r.ok) {
+                server.PushNotification("loaded", {{"id", r.id},
+                                                   {"name", r.name},
+                                                   {"seconds", r.seconds},
+                                                   {"firstUse", r.first_use}});
+            } else {
+                server.PushNotification("loadFailed",
+                                        {{"id", r.id}, {"name", r.name}, {"detail", r.detail}});
+            }
+        });
         server.RegisterMethod("prepare", [&writer](const json&) {
             writer.Prepare();
             return json::object();

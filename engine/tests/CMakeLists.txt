@@ -50,6 +50,7 @@ add_executable(engine_tests
     adapters/handlers_test.cpp
     adapters/messages_test.cpp
     adapters/model_store_test.cpp
+    adapters/note_lane_test.cpp
     adapters/note_prompt_test.cpp
     adapters/ov_smoke_test.cpp
     adapters/pipe_security_test.cpp
@@ -70,9 +71,17 @@ add_executable(store_crash_helper
     adapters/store_crash_helper.cpp)
 target_link_libraries(store_crash_helper PRIVATE ambient_storage ambient_warnings)
 add_dependencies(engine_tests store_crash_helper)
+
+# The note lane's stand-in host: the protocol without the model
+add_executable(fake_note_host
+    adapters/fake_note_host.cpp)
+target_link_libraries(fake_note_host PRIVATE ambient_ipc ambient_models ambient_warnings)
+add_dependencies(engine_tests fake_note_host)
+target_compile_definitions(engine_tests PRIVATE
+    AMBIENT_FAKE_NOTE_HOST="$<TARGET_FILE:fake_note_host>")
 target_link_libraries(engine_tests PRIVATE
-    ambient_ipc ambient_audio ambient_diarisation ambient_models ambient_storage ambient_transcription
-    ambient_warnings openvino::genai GTest::gtest_main)
+    ambient_ipc ambient_audio ambient_diarisation ambient_models ambient_note ambient_storage
+    ambient_transcription ambient_warnings openvino::genai GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute
