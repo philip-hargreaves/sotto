@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #include "adapters/transcription/scripted_transcriber.hpp"
@@ -151,6 +152,19 @@ struct RecordingEvents : ISessionEvents {
 
     std::vector<std::string> progress;
 
+    std::vector<EnrolProgress> enrol_progress;
+    std::optional<std::tuple<bool, std::string, double>> enrol_done;
+
+    void OnEnrolProgress(const EnrolProgress& p) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        enrol_progress.push_back(p);
+    }
+
+    void OnEnrolDone(bool ok, const std::string& detail, double speech_s) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        enrol_done = {ok, detail, speech_s};
+    }
+
     void OnNotePartial(const std::string& text) override {
         const std::lock_guard<std::mutex> lock(mutex);
         note_partials.push_back(text);
@@ -165,6 +179,16 @@ struct RecordingEvents : ISessionEvents {
     void OnNoteFailed(const std::string& detail) override {
         const std::lock_guard<std::mutex> lock(mutex);
         note_failed = detail;
+        note_done = true;
+    }
+
+    std::string note_refused;
+    bool note_refused_overridable = true;
+
+    void OnNoteRefused(const std::string& reason, bool overridable) override {
+        const std::lock_guard<std::mutex> lock(mutex);
+        note_refused = reason;
+        note_refused_overridable = overridable;
         note_done = true;
     }
 
@@ -455,8 +479,9 @@ struct FakeNoteWriter : note::INoteWriter {
             calls.push_back(transcript);
             last_options = options;
         }
-        progress("The patient");
-        progress("The patient presents");
+        // Partials are prefixes of the final text, as the real writer streams them
+        progress(result.substr(0, std::min<std::size_t>(11, result.size())));
+        progress(result.substr(0, std::min<std::size_t>(20, result.size())));
         while (block.load() && !cancelled.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -603,6 +628,19 @@ TEST(SessionController, EveryCapturedFrameReachesTheTranscriberByStop) {
     EXPECT_EQ(submitted, store.frames.size()) << "the tail must be flushed at stop";
 }
 
+TEST(SessionController, WithoutADiariserTheLiveWindowsAreTheTranscript) {
+    // The single-decode defaults, but no speaker models: the windows still decode
+    RecordingEvents events;
+    FakeSessionStore store;
+    RecordingTranscriber transcriber;
+    PassthroughVad vad;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle);
+    ASSERT_TRUE(controller.Start());
+    controller.Stop();
+    ASSERT_FALSE(transcriber.windows.empty()) << "no diariser: the live pass carries the words";
+}
+
 TEST(SessionController, TurnsReachTheStoreAndTheEvents) {
     TwoPassArm two_pass;
     RecordingEvents events;
@@ -643,8 +681,7 @@ TEST(SessionController, TheNoteFollowsTheSeal) {
     controller.Stop();
 
     ASSERT_TRUE(events.WaitForNote());
-    EXPECT_EQ(events.note_partials,
-              (std::vector<std::string>{"The patient", "The patient presents"}));
+    EXPECT_EQ(events.note_partials, (std::vector<std::string>{"the clinica", "the clinical note"}));
     EXPECT_EQ(events.note_ready, "the clinical note");
     EXPECT_TRUE(events.note_failed.empty());
     EXPECT_EQ(store.note, "the clinical note");
@@ -1099,6 +1136,21 @@ struct FakeDiariser : diar::IDiariser {
 
     // Written on the diarisation thread; read after the controller joins it
     int advances = 0;
+
+    std::vector<float> voiceprint{0.6f, 0.8f};  // what EmbedVoice answers; empty = too short
+    std::size_t embedded_frames = 0;
+    std::vector<float> replaced;
+    std::uint64_t replaced_at = 0;
+
+    std::vector<float> EmbedVoice(std::span<const float> audio) override {
+        embedded_frames = audio.size();
+        return voiceprint;
+    }
+
+    void ReplaceAnchor(std::span<const float> vp, std::uint64_t at) override {
+        replaced.assign(vp.begin(), vp.end());
+        replaced_at = at;
+    }
     std::size_t advanced_frames = 0;
     std::size_t advanced_turns = 0;
     int takes = 0;
@@ -1135,6 +1187,20 @@ struct FakeDiariser : diar::IDiariser {
                       int doctor_cluster) override {
         ++accruals;
         accrued_cluster = doctor_cluster;
+    }
+
+    int voiceprint_cluster = -1;
+
+    std::vector<float> DoctorVoiceprint(std::span<const float>,
+                                        const std::vector<diar::LabelledSlice>&,
+                                        int doctor_cluster) override {
+        voiceprint_cluster = doctor_cluster;
+        return {1.0f};
+    }
+
+    void AccrueVoiceprint(std::span<const float>) override {
+        ++accruals;
+        accrued_cluster = voiceprint_cluster;
     }
 
     void Advance(std::span<const float> audio, std::span<const asr::Turn> turns,
@@ -1848,7 +1914,7 @@ TEST(SessionController, RegenerateRefusedWhileRecordingOrWithNothingFinalised) {
     controller.Stop();
 }
 
-TEST(SessionController, AThinTranscriptWritesAPlainStatementInsteadOfFabricating) {
+TEST(SessionController, AThinTranscriptIsRefusedWithoutAskingTheModel) {
     RecordingEvents events;
     FakeSessionStore store;
     asr::ScriptedTranscriber transcriber;  // one 5-word turn, far below the floor
@@ -1864,11 +1930,12 @@ TEST(SessionController, AThinTranscriptWritesAPlainStatementInsteadOfFabricating
 
     ASSERT_TRUE(events.WaitForNote());
     EXPECT_TRUE(writer.calls.empty()) << "the model must never see a transcript this thin";
-    EXPECT_NE(events.note_ready.find("too short or did not contain enough clinical"),
-              std::string::npos);
-    EXPECT_NE(events.patient_ready.find("patient information sheet"), std::string::npos);
+    EXPECT_NE(events.note_refused.find("words; a note needs at least 25"), std::string::npos);
+    EXPECT_FALSE(events.note_refused_overridable) << "insisting would make the model fabricate";
+    EXPECT_TRUE(events.note_ready.empty());
+    EXPECT_TRUE(events.patient_ready.empty()) << "no sheet without a note";
     EXPECT_TRUE(events.note_failed.empty()) << "a thin recording is not an error state";
-    EXPECT_EQ(store.note, events.note_ready) << "the statement is the session's record";
+    EXPECT_TRUE(store.note.empty());
 }
 
 TEST(SessionController, AResumedSessionReplaysStoredAudioThenSupersedesTheOld) {
@@ -1907,4 +1974,263 @@ TEST(SessionController, AResumeOfAMissingSessionFailsTheStart) {
 }
 
 }  // namespace
+namespace {
+
+std::optional<std::tuple<bool, std::string, double>> WaitEnrol(RecordingEvents& events,
+                                                               SessionController& controller) {
+    for (int i = 0; i < 400 && controller.Enrolling(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const std::lock_guard<std::mutex> lock(events.mutex);
+    return events.enrol_done;
+}
+
+TEST(SessionController, EnrolmentEmbedsTheSpeechAndReplacesTheAnchor) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+    ASSERT_TRUE(controller.StartEnrolment(0.5, {}, 0.1));
+    const auto done = WaitEnrol(events, controller);
+    ASSERT_TRUE(done.has_value());
+    EXPECT_TRUE(std::get<0>(*done)) << std::get<1>(*done);
+    EXPECT_GE(std::get<2>(*done), 0.1);
+    EXPECT_EQ(diariser.replaced, diariser.voiceprint);
+    EXPECT_GT(diariser.replaced_at, 1'700'000'000u) << "stamped with the wall clock";
+    EXPECT_GE(diariser.embedded_frames, 1600u) << "the gated speech reached the embedder";
+    {
+        const std::lock_guard<std::mutex> lock(events.mutex);
+        EXPECT_FALSE(events.enrol_progress.empty()) << "the level was reported";
+        EXPECT_TRUE(events.levels.empty()) << "not as session levels";
+    }
+    EXPECT_TRUE(store.Calls().empty()) << "an enrolment stores nothing";
+}
+
+TEST(SessionController, EnrolmentIsRefusedDuringASessionAndViceVersa) {
+    TwoPassArm two_pass;
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+    ASSERT_TRUE(controller.Start());
+    EXPECT_FALSE(controller.StartEnrolment(0.5));
+    controller.Stop();
+
+    ASSERT_TRUE(controller.StartEnrolment(2.0, {}, 0.1));
+    EXPECT_FALSE(controller.Start()) << "the microphone is the enrolment's";
+    controller.CancelEnrolment();
+    const auto done = WaitEnrol(events, controller);
+    ASSERT_TRUE(done.has_value());
+    EXPECT_FALSE(std::get<0>(*done));
+    EXPECT_EQ(std::get<1>(*done), "cancelled");
+    EXPECT_TRUE(diariser.replaced.empty()) << "a cancelled enrolment changes nothing";
+    ASSERT_TRUE(controller.Start()) << "and the microphone is free again";
+    controller.Stop();
+}
+
+TEST(SessionController, FinishEndsTheReadingEarlyAndKeepsThePrint) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+    ASSERT_TRUE(controller.StartEnrolment(120.0, {}, 0.1));  // the cap, never reached
+    for (int i = 0; i < 200 && diariser.embedded_frames == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::lock_guard<std::mutex> lock(events.mutex);
+        if (!events.enrol_progress.empty() && events.enrol_progress.back().speech_s >= 0.2) break;
+    }
+    controller.FinishEnrolment();
+    const auto done = WaitEnrol(events, controller);
+    ASSERT_TRUE(done.has_value());
+    EXPECT_TRUE(std::get<0>(*done)) << std::get<1>(*done);
+    EXPECT_LT(std::get<2>(*done), 60.0) << "stopped at Finish, not at the cap";
+    EXPECT_EQ(diariser.replaced, diariser.voiceprint);
+}
+
+TEST(SessionController, TooLittleSpeechLeavesTheAnchorAlone) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser);
+    ASSERT_TRUE(controller.StartEnrolment(0.3, {}, 20.0));
+    const auto done = WaitEnrol(events, controller);
+    ASSERT_TRUE(done.has_value());
+    EXPECT_FALSE(std::get<0>(*done));
+    EXPECT_NE(std::get<1>(*done).find("not enough clear speech"), std::string::npos);
+    EXPECT_TRUE(diariser.replaced.empty());
+}
+
+TEST(SessionController, AMicrophoneThatDiesFailsTheEnrolmentWithTheReason) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kDieAfterAudio), events, store,
+                                 transcriber, vad, kTestSettle, &diariser);
+    ASSERT_TRUE(controller.StartEnrolment(5.0, {}, 0.01));
+    const auto done = WaitEnrol(events, controller);
+    ASSERT_TRUE(done.has_value());
+    EXPECT_FALSE(std::get<0>(*done));
+    EXPECT_EQ(std::get<1>(*done), "microphone unplugged");
+    EXPECT_TRUE(diariser.replaced.empty());
+}
+
+}  // namespace
+
+namespace {
+
+bool WaitNote(RecordingEvents& events) {
+    for (int i = 0; i < 600; ++i) {
+        {
+            const std::lock_guard<std::mutex> lock(events.mutex);
+            if (events.note_done) return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+
+TEST(SessionController, ARefusedNoteIsReportedNotSavedAndTeachesThePrintNothing) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.9, 0.3};
+    FakeNoteWriter writer;
+    writer.result = "NOT A CONSULTATION: a cooking video with one speaker";
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames, &writer, nullptr, 0);
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+    ASSERT_TRUE(WaitNote(events));
+    const std::lock_guard<std::mutex> lock(events.mutex);
+    EXPECT_EQ(events.note_refused, "a cooking video with one speaker");
+    EXPECT_TRUE(events.note_ready.empty()) << "no note reached the shell";
+    EXPECT_TRUE(events.note_partials.empty()) << "the refusal never streamed as a note";
+    EXPECT_EQ(writer.patient_input, "") << "no sheet";
+    EXPECT_EQ(writer.label_calls.load(), 0) << "no title";
+    EXPECT_EQ(diariser.accruals, 0) << "the print learned nothing";
+    EXPECT_FALSE(store.Calls().empty());
+    for (const auto& call : store.Calls()) {
+        EXPECT_EQ(call.find("note"), std::string::npos) << call;
+    }
+}
+
+TEST(SessionController, ARefusedSessionIsDeletedWhenTheConsultationCloses) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    FakeNoteWriter writer;
+    writer.result = "NOT A CONSULTATION: a cooking video";
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames, &writer, nullptr, 0);
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+    ASSERT_TRUE(WaitNote(events));
+    const auto id = controller.LastFinalised();
+    ASSERT_FALSE(id.empty());
+
+    controller.Close();
+
+    const auto calls = store.Calls();
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "delete " + id), calls.end())
+        << "a refused recording is not kept";
+    EXPECT_TRUE(controller.LastFinalised().empty());
+}
+
+TEST(SessionController, ARefusedSessionInsistedUponIsKept) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    FakeNoteWriter writer;
+    writer.result = "NOT A CONSULTATION: a cooking video";
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames, &writer, nullptr, 0);
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+    ASSERT_TRUE(WaitNote(events));
+    {
+        const std::lock_guard<std::mutex> lock(events.mutex);
+        events.note_done = false;
+    }
+    note::NoteOptions confirmed;
+    confirmed.confirmed = true;
+    ASSERT_TRUE(controller.RegenerateNote(confirmed));
+    ASSERT_TRUE(WaitNote(events));
+    const auto id = controller.LastFinalised();
+
+    controller.Close();
+
+    for (const auto& call : store.Calls()) {
+        EXPECT_NE(call, "delete " + id) << "the clinician insisted, so the session stays";
+    }
+}
+
+TEST(SessionController, AWrittenNoteLetsThePrintLearnAndAConfirmedRewriteCannotBeRefused) {
+    RecordingEvents events;
+    FakeSessionStore store;
+    asr::ScriptedTranscriber transcriber;
+    PassthroughVad vad;
+    FakeDiariser diariser;
+    diariser.clusters = 2;
+    diariser.similarities = {0.9, 0.3};
+    FakeNoteWriter writer;
+    SessionController controller(FactoryFor(ScriptedSource::Script::kStreamUntilStopped), events,
+                                 store, transcriber, vad, kTestSettle, &diariser,
+                                 LevelMeter::kWindowFrames, &writer, nullptr, 0);
+    ASSERT_TRUE(controller.Start());
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.Stop();
+    ASSERT_TRUE(WaitNote(events));
+    {
+        const std::lock_guard<std::mutex> lock(events.mutex);
+        ASSERT_FALSE(events.note_ready.empty());
+    }
+    EXPECT_EQ(diariser.accruals, 1) << "learned once the note was written";
+
+    // The clinician overrides a refusal: the same lane, told not to refuse
+    writer.result = "NOT A CONSULTATION: the model still says so";
+    {
+        const std::lock_guard<std::mutex> lock(events.mutex);
+        events.note_done = false;
+    }
+    note::NoteOptions confirmed;
+    confirmed.confirmed = true;
+    ASSERT_TRUE(controller.RegenerateNote(confirmed));
+    ASSERT_TRUE(WaitNote(events));
+    const std::lock_guard<std::mutex> lock(events.mutex);
+    EXPECT_TRUE(events.note_refused.empty());
+    EXPECT_EQ(events.note_ready, "NOT A CONSULTATION: the model still says so")
+        << "the confirmed rewrite is delivered as the note, whatever it says";
+}
+
+}  // namespace
+
 }  // namespace ambient::audio

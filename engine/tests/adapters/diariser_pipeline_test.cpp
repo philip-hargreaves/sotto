@@ -7,6 +7,7 @@
 #include <set>
 #include <vector>
 
+#include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 
@@ -38,7 +39,8 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
     models::OvRuntime runtime;
     const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-pipeline-test";
     std::filesystem::create_directories(anchor_root);
-    SpeakerDiariser diariser(store, runtime, anchor_root);
+    AnchorStore diariser_anchors(anchor_root);
+    SpeakerDiariser diariser(store, runtime, diariser_anchors);
 
     const auto start = std::chrono::steady_clock::now();
     const auto result = diariser.Diarise(audio);
@@ -73,7 +75,8 @@ TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReus
     const auto anchor_root = std::filesystem::temp_directory_path() / "ambient-diar-anchor-test";
     std::filesystem::remove_all(anchor_root);
     std::filesystem::create_directories(anchor_root);
-    SpeakerDiariser diariser(store, runtime, anchor_root);
+    AnchorStore diariser_anchors(anchor_root);
+    SpeakerDiariser diariser(store, runtime, diariser_anchors);
 
     // Session one teaches the anchor from cluster 0
     const auto first = diariser.Diarise(audio);
@@ -115,8 +118,10 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     models::OvRuntime runtime;
     const auto root = std::filesystem::temp_directory_path() / "ambient-diar-capture-test";
     std::filesystem::create_directories(root);
-    SpeakerDiariser batch(store, runtime, root / "a");
-    SpeakerDiariser fed(store, runtime, root / "b");
+    AnchorStore batch_anchors(root / "a");
+    SpeakerDiariser batch(store, runtime, batch_anchors);
+    AnchorStore fed_anchors(root / "b");
+    SpeakerDiariser fed(store, runtime, fed_anchors);
 
     // Synthetic reconciled turns, 6 s each; edges double as slice cuts
     std::vector<asr::Turn> turns;

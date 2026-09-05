@@ -7,6 +7,7 @@
 #include <fstream>
 #include <memory>
 
+#include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "core/version.hpp"
 
@@ -273,6 +274,46 @@ TEST(Handlers, NoMicrophonesIsAnEmptyListNotAnError) {
     const json result = HandleAudioInputs({});
     EXPECT_TRUE(result["devices"].is_array());
     EXPECT_TRUE(result["devices"].empty());
+}
+
+TEST(Handlers, AnchorStatusReportsOriginAndSessions) {
+    const auto root = std::filesystem::temp_directory_path() / "ambient-handlers-anchor";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    ambient::diar::AnchorStore anchors(root);
+    EXPECT_EQ(MakeResult(std::int64_t{3}, HandleAnchorStatus(anchors)),
+              LoadFixture("anchor-status.json"));
+
+    anchors.Accrue(std::vector<float>{1.0f, 0.0f});
+    auto status = HandleAnchorStatus(anchors);
+    EXPECT_EQ(status["origin"], "accrued");
+    EXPECT_EQ(status["sessions"], 1);
+
+    anchors.Replace(std::vector<float>{0.0f, 1.0f}, 1'757'000'000);
+    status = HandleAnchorStatus(anchors);
+    EXPECT_EQ(status["origin"], "enrolled");
+    EXPECT_EQ(status["sessions"], 0);
+    EXPECT_EQ(status["enrolledAt"], 1'757'000'000);
+    std::filesystem::remove_all(root);
+}
+
+TEST(Handlers, AnchorClearRefusesDuringASessionAndOtherwiseForgets) {
+    const auto root = std::filesystem::temp_directory_path() / "ambient-handlers-anchor-clear";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    ambient::diar::AnchorStore anchors(root);
+    anchors.Accrue(std::vector<float>{1.0f, 0.0f});
+
+    const auto refused = HandleAnchorClear(anchors, true);
+    ASSERT_TRUE(std::holds_alternative<Error>(refused));
+    EXPECT_EQ(std::get<Error>(refused).code, kSessionError);
+    EXPECT_TRUE(anchors.Anchor().has_value()) << "nothing changed";
+
+    const auto cleared = HandleAnchorClear(anchors, false);
+    ASSERT_TRUE(std::holds_alternative<json>(cleared));
+    EXPECT_FALSE(anchors.Anchor().has_value());
+    EXPECT_EQ(HandleAnchorStatus(anchors)["origin"], "none");
+    std::filesystem::remove_all(root);
 }
 
 TEST(Handlers, AnEmptyModelStoreListsNothing) {

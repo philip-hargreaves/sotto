@@ -19,6 +19,8 @@ add_executable(engine_tests
     core/cli_args_test.cpp
     core/clip_cuts_test.cpp
     core/tidy_transcript_test.cpp
+    core/voice_enrolment_test.cpp
+    core/note_gate_test.cpp
     core/resplit_test.cpp
     core/diar_capture_test.cpp
     core/diar_regions_test.cpp

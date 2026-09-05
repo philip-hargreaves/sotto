@@ -23,6 +23,7 @@
 #include "adapters/audio/capture_devices.hpp"
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
+#include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/deferred_diariser.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/host/power_throttling.hpp"
@@ -72,6 +73,18 @@ class WireEvents : public ambient::audio::ISessionEvents {
         server_.PushNotification("session/progress", {{"stage", stage}});
     }
 
+    void OnEnrolProgress(const ambient::audio::EnrolProgress& progress) override {
+        server_.PushNotification("anchor/progress", {{"elapsed", progress.elapsed_s},
+                                                     {"speech", progress.speech_s},
+                                                     {"level", progress.level.level},
+                                                     {"clipped", progress.level.clipped}});
+    }
+
+    void OnEnrolDone(bool ok, const std::string& detail, double speech_s) override {
+        server_.PushNotification("anchor/enrolled",
+                                 {{"ok", ok}, {"detail", detail}, {"speechSeconds", speech_s}});
+    }
+
     // Metered before the ~12 Hz notification cap, so tokensPerSecond is the
     // model's real rate (Intel-requested figure)
     void PushPartial(const std::string& method, nlohmann::json params) {
@@ -111,6 +124,11 @@ class WireEvents : public ambient::audio::ISessionEvents {
         std::lock_guard<std::mutex> lock(throttle_mutex_);
         meters_.erase(partial_method);
         last_partial_.erase(partial_method);
+    }
+
+    void OnNoteRefused(const std::string& reason, bool overridable) override {
+        server_.PushNotification("note/refused",
+                                 {{"reason", reason}, {"overridable", overridable}});
     }
 
     void OnNotePartial(const std::string& text) override {
@@ -285,15 +303,16 @@ int main(int argc, char* argv[]) {
         }
         // Diarisation needs both its models; without them turns simply keep
         // an empty speaker
+        ambient::diar::AnchorStore anchors(store_root);
         std::unique_ptr<ambient::diar::IDiariser> diariser;
         try {
             model_store.Resolve("diarisation", "default");
             model_store.Resolve("segmentation", "default");
             diariser = std::make_unique<ambient::diar::DeferredDiariser>([&model_store, &ov_runtime,
-                                                                          store_root, &metrics] {
+                                                                          &anchors, &metrics] {
                 const auto t0 = std::chrono::steady_clock::now();
-                auto built = std::make_unique<ambient::diar::SpeakerDiariser>(
-                    model_store, ov_runtime, store_root);
+                auto built = std::make_unique<ambient::diar::SpeakerDiariser>(model_store,
+                                                                              ov_runtime, anchors);
                 metrics.RecordLoad(
                     "diarisation",
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
@@ -373,7 +392,7 @@ int main(int argc, char* argv[]) {
 
         ambient::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
                                       &ov_runtime, translator.get(), translate_lane.get(),
-                                      first_use);
+                                      first_use, &anchors);
         server.ServeOneClient();
         controller.Stop();
         return 0;

@@ -113,6 +113,21 @@ class IDiariser {
     // AMBIENT_CLIP_CUTS feeds Whisper's chunk edges here
     virtual void AddCutPoints(std::span<const std::uint64_t>) {}
 
+    // A voiceprint of the given speech (unit norm), empty when too short or
+    // when no embedder is available; and the enrolment that replaces the anchor
+    virtual std::vector<float> EmbedVoice(std::span<const float>) {
+        return {};
+    }
+    virtual void ReplaceAnchor(std::span<const float>, std::uint64_t) {}
+
+    // The doctor cluster's voiceprint, and the print learning from it; split so
+    // the learning can wait until the note lane agrees this was a consultation
+    virtual std::vector<float> DoctorVoiceprint(std::span<const float>,
+                                                const std::vector<LabelledSlice>&, int) {
+        return {};
+    }
+    virtual void AccrueVoiceprint(std::span<const float>) {}
+
     // Drop capture state a finalise will never consume (cancel, abandon)
     virtual void DiscardCapture() {}
 };

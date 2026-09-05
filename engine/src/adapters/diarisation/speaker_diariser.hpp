@@ -22,7 +22,7 @@ namespace ambient::diar {
 class SpeakerDiariser : public IDiariser {
    public:
     SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,
-                    const std::filesystem::path& anchor_root);
+                    AnchorStore& anchors);
 
     DiariseResult Diarise(std::span<const float> audio,
                           std::span<const std::uint64_t> turn_boundaries = {}) override;
@@ -59,6 +59,20 @@ class SpeakerDiariser : public IDiariser {
         return centroids_;
     }
 
+    std::vector<float> EmbedVoice(std::span<const float> audio) override;
+
+    std::vector<float> DoctorVoiceprint(std::span<const float> audio,
+                                        const std::vector<LabelledSlice>& slices,
+                                        int doctor_cluster) override;
+
+    void AccrueVoiceprint(std::span<const float> voiceprint) override {
+        if (!voiceprint.empty()) anchors_.Accrue(voiceprint);
+    }
+
+    void ReplaceAnchor(std::span<const float> voiceprint, std::uint64_t enrolled_at) override {
+        anchors_.Replace(voiceprint, enrolled_at);
+    }
+
     std::vector<float> EmbedSpan(std::span<const float> audio, std::uint64_t first,
                                  std::uint64_t end) override {
         const auto it = chunk_embeddings_.find({first, end});
@@ -91,7 +105,7 @@ class SpeakerDiariser : public IDiariser {
     audio::SileroVad vad_;
     Segmenter segmenter_;
     SpeakerEmbedder embedder_;
-    AnchorStore anchors_;
+    AnchorStore& anchors_;
     DiarWorker worker_;
     TurnTexts texts_;
     TurnChunks chunks_;

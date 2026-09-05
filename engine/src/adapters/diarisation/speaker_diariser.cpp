@@ -29,11 +29,11 @@ std::vector<float> Gather(std::span<const float> audio, const std::vector<Region
 }  // namespace
 
 SpeakerDiariser::SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,
-                                 const std::filesystem::path& anchor_root)
+                                 AnchorStore& anchors)
     : vad_(store, runtime),
       segmenter_(store, runtime),
       embedder_(store, runtime),
-      anchors_(anchor_root),
+      anchors_(anchors),
       worker_(vad_, segmenter_, embedder_) {}
 
 DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio,
@@ -215,13 +215,25 @@ std::vector<asr::Turn> SpeakerDiariser::SpeculativeTranscript() {
     return out;
 }
 
+std::vector<float> SpeakerDiariser::DoctorVoiceprint(std::span<const float> audio,
+                                                     const std::vector<LabelledSlice>& slices,
+                                                     int doctor_cluster) {
+    const auto index = static_cast<std::size_t>(doctor_cluster);
+    return index < voiceprints_.size() && !voiceprints_[index].empty()
+               ? voiceprints_[index]
+               : ClusterVoiceprint(embedder_, audio, slices, doctor_cluster);
+}
+
 void SpeakerDiariser::AccrueDoctor(std::span<const float> audio,
                                    const std::vector<LabelledSlice>& slices, int doctor_cluster) {
-    const auto index = static_cast<std::size_t>(doctor_cluster);
-    const auto voiceprint = index < voiceprints_.size() && !voiceprints_[index].empty()
-                                ? voiceprints_[index]
-                                : ClusterVoiceprint(embedder_, audio, slices, doctor_cluster);
-    if (!voiceprint.empty()) anchors_.Accrue(voiceprint);
+    AccrueVoiceprint(DoctorVoiceprint(audio, slices, doctor_cluster));
+}
+
+std::vector<float> SpeakerDiariser::EmbedVoice(std::span<const float> audio) {
+    if (audio.size() < kVoiceprintMinFrames) return {};
+    // One long exposure, capped as a consultation's voiceprint is
+    return embedder_.Embed(
+        audio.subspan(0, std::min<std::size_t>(audio.size(), kVoiceprintCapFrames)));
 }
 
 }  // namespace ambient::diar

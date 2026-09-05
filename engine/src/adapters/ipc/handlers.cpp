@@ -40,6 +40,25 @@ json HandleAudioInputs(const std::vector<ambient::audio::CaptureDevice>& devices
     return json{{"devices", std::move(list)}};
 }
 
+json HandleAnchorStatus(const ambient::diar::AnchorStore& anchors) {
+    const auto status = anchors.Status();
+    const char* origin = status.origin == ambient::diar::AnchorOrigin::kEnrolled  ? "enrolled"
+                         : status.origin == ambient::diar::AnchorOrigin::kAccrued ? "accrued"
+                                                                                  : "none";
+    json result{{"origin", origin}, {"sessions", status.sessions}};
+    result["enrolledAt"] = status.enrolled_at == 0 ? json(nullptr) : json(status.enrolled_at);
+    return result;
+}
+
+std::variant<json, Error> HandleAnchorClear(ambient::diar::AnchorStore& anchors,
+                                            bool session_active) {
+    if (session_active) {
+        return Error{kSessionError, "Session error", json("finish the consultation first")};
+    }
+    anchors.Clear();
+    return json::object();
+}
+
 json HandleModels(const ambient::models::ModelStore& models) {
     json list = json::array();
     for (const auto& model : models.List()) {
@@ -161,7 +180,8 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                      ambient::store::ISessionStore& sessions, ambient::metrics::Registry* metrics,
                      ambient::models::OvRuntime* runtime,
                      ambient::translate::ITranslator* translator,
-                     ambient::translate::TranslateLane* translate_lane, bool first_use) {
+                     ambient::translate::TranslateLane* translate_lane, bool first_use,
+                     ambient::diar::AnchorStore* anchors) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
     // Ready when every staged model's compile cache exists: OpenVINO writes
@@ -205,6 +225,40 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
         });
     }
     server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
+    if (anchors != nullptr) {
+        server.RegisterMethod("anchor/status",
+                              [anchors](const json&) { return HandleAnchorStatus(*anchors); });
+        server.RegisterMethod("anchor/clear", [anchors, &controller](const json&) {
+            return HandleAnchorClear(*anchors, controller.Running());
+        });
+        // Enrolment runs on the controller's microphone path; progress and the
+        // outcome are notifications
+        server.RegisterMethod(
+            "anchor/enrol", [&controller](const json& params) -> std::variant<json, Error> {
+                const double seconds = params.value("seconds", 45.0);
+                ambient::audio::MicSelection mic;
+                if (params.contains("mic") && params["mic"].is_object()) {
+                    mic.id = params["mic"].value("id", "");
+                    mic.name = params["mic"].value("name", "");
+                }
+                if (seconds <= 0 || seconds > 300) {
+                    return Error{kInvalidParams, "Invalid params", json("seconds must be 1-300")};
+                }
+                if (!controller.StartEnrolment(seconds, mic)) {
+                    return Error{kSessionError, "Session error",
+                                 json("a consultation or an enrolment is already running")};
+                }
+                return json::object();
+            });
+        server.RegisterMethod("anchor/enrol/cancel", [&controller](const json&) {
+            controller.CancelEnrolment();
+            return json::object();
+        });
+        server.RegisterMethod("anchor/enrol/finish", [&controller](const json&) {
+            controller.FinishEnrolment();
+            return json::object();
+        });
+    }
     // Enumerated fresh per call, so a picker opened after a headset is
     // plugged in sees it without any notification plumbing
     server.RegisterMethod("audio/inputs", [](const json&) {
@@ -348,7 +402,9 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
             if (detail != "concise" && detail != "standard" && detail != "detailed") {
                 return Error{kInvalidParams, "Invalid params", json("unknown detail: " + detail)};
             }
-            if (!controller.RegenerateNote({style, detail})) {
+            ambient::note::NoteOptions options{style, detail};
+            options.confirmed = params.value("confirmed", false);
+            if (!controller.RegenerateNote(options)) {
                 return Error{kSessionError, "Session error",
                              json("no finalised session, or a note is already being written")};
             }
