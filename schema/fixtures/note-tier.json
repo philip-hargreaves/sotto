@@ -1,0 +1,19 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "note/tier",
+        "params": { "tier": "accuracy" }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "result": {
+            "tier": "accuracy",
+            "id": "qwen3.6-35b-a3b-int4",
+            "name": "Qwen3.6 35B",
+            "state": "loading",
+            "firstUse": false
+        }
+    }
+}

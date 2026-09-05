@@ -4,6 +4,7 @@
 #include <memory>
 #include <openvino/core/version.hpp>
 #include <optional>
+#include <stdexcept>
 
 #include "adapters/host/power_throttling.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -59,17 +60,61 @@ std::variant<json, Error> HandleAnchorClear(ambient::diar::AnchorStore& anchors,
     return json::object();
 }
 
-json HandleModels(const ambient::models::ModelStore& models) {
+json HandleModels(const ambient::models::ModelStore& models, const std::string& note_tier) {
     json list = json::array();
     for (const auto& model : models.List()) {
+        const bool active = model.tier == (model.task == "note" ? note_tier : "default");
         list.push_back({{"id", model.id},
                         {"name", model.name},
                         {"task", model.task},
                         {"tier", model.tier},
                         {"device", model.device},
-                        {"licence", model.licence}});
+                        {"licence", model.licence},
+                        {"active", active}});
     }
     return json{{"models", std::move(list)}};
+}
+
+json NoteModelJson(const ambient::note::NoteModelState& state) {
+    json result{{"tier", state.tier},
+                {"id", state.id},
+                {"name", state.name},
+                {"state", ambient::note::PhaseName(state.phase)}};
+    if (state.phase == ambient::note::NoteModelState::Phase::kLoading) {
+        result["firstUse"] = state.first_use;
+    }
+    if (state.phase == ambient::note::NoteModelState::Phase::kReady) {
+        result["seconds"] = state.seconds;
+    }
+    if (state.phase == ambient::note::NoteModelState::Phase::kFailed) {
+        result["detail"] = state.detail;
+    }
+    return result;
+}
+
+std::variant<json, Error> HandleNoteTier(ambient::note::INoteLane* lane, bool session_active,
+                                         const json& params) {
+    if (!params.contains("tier") || !params["tier"].is_string()) {
+        return Error{kInvalidParams, "Invalid params", json("tier must be a string")};
+    }
+    const std::string tier = params["tier"].get<std::string>();
+    if (tier != "default" && tier != "accuracy" && tier != "constrained") {
+        return Error{kInvalidParams, "Invalid params", json("unknown tier: " + tier)};
+    }
+    if (lane == nullptr) {
+        return Error{kSessionError, "Session error", json("no note model is staged")};
+    }
+    if (session_active) {
+        return Error{kSessionError, "Session error",
+                     json("finish the consultation before changing the note model")};
+    }
+    try {
+        return NoteModelJson(lane->Configure(tier));
+    } catch (const std::invalid_argument& e) {
+        return Error{kInvalidParams, "Invalid params", json(e.what())};
+    } catch (const std::exception& e) {
+        return Error{kSessionError, "Session error", json(e.what())};
+    }
 }
 
 namespace {
@@ -181,22 +226,34 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                      ambient::models::OvRuntime* runtime,
                      ambient::translate::ITranslator* translator,
                      ambient::translate::TranslateLane* translate_lane, bool first_use,
-                     ambient::diar::AnchorStore* anchors) {
+                     ambient::diar::AnchorStore* anchors, ambient::note::INoteLane* note_lane,
+                     bool stray_note_host) {
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
+    const auto note_tier = [note_lane] {
+        return note_lane != nullptr ? note_lane->State().tier : std::string("default");
+    };
     // Ready when every staged model's compile cache exists: OpenVINO writes
     // the blob exactly when a compile completes, so no event plumbing needed
-    server.RegisterMethod("engine/readiness", [&models, first_use](const json&) {
-        const auto ready = [&models](const char* role) {
-            try {
-                const auto cache = models.Resolve(role, "default").dir / ".cache";
-                return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
-            } catch (...) {
-                return true;  // role not staged: nothing to wait for
-            }
-        };
-        return json{{"firstUse", first_use},
-                    {"ready", ready("asr") && ready("note") && ready("translation")}};
+    // strayNoteHost: a note host from an earlier engine is still alive, wedged
+    // in the GPU driver; only a reboot ends it
+    server.RegisterMethod(
+        "engine/readiness", [&models, first_use, note_tier, stray_note_host](const json&) {
+            const auto ready = [&models](const char* role, const std::string& tier) {
+                try {
+                    const auto cache = models.Resolve(role, tier).dir / ".cache";
+                    return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
+                } catch (...) {
+                    return true;  // role not staged: nothing to wait for
+                }
+            };
+            return json{{"firstUse", first_use},
+                        {"ready", ready("asr", "default") && ready("note", note_tier()) &&
+                                      ready("translation", "default")},
+                        {"strayNoteHost", stray_note_host}};
+        });
+    server.RegisterMethod("note/tier", [note_lane, &controller](const json& params) {
+        return HandleNoteTier(note_lane, controller.Running(), params);
     });
     if (metrics != nullptr) {
         // Device names are enumerated once, on the first fetch
@@ -224,7 +281,9 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                 {"powerThrottling", host::Describe(host::ReadThrottling(GetCurrentProcess()))}};
         });
     }
-    server.RegisterMethod("engine/models", [&models](const json&) { return HandleModels(models); });
+    server.RegisterMethod("engine/models", [&models, note_tier](const json&) {
+        return HandleModels(models, note_tier());
+    });
     if (anchors != nullptr) {
         server.RegisterMethod("anchor/status",
                               [anchors](const json&) { return HandleAnchorStatus(*anchors); });

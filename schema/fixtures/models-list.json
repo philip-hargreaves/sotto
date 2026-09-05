@@ -9,7 +9,8 @@
                 "task": "asr",
                 "tier": "default",
                 "device": "GPU",
-                "licence": "MIT"
+                "licence": "MIT",
+                "active": true
             }
         ]
     }

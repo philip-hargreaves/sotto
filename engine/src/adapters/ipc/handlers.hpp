@@ -8,6 +8,7 @@
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
 #include "core/session_controller.hpp"
+#include "ports/note_lane.hpp"
 
 namespace ambient::models {
 class OvRuntime;
@@ -24,7 +25,18 @@ std::variant<json, Error> HandleHello(const json& params);
 
 std::variant<json, Error> HandleEcho(const json& params);
 
-json HandleModels(const ambient::models::ModelStore& models);
+// Every staged model; `active` marks the one each role loads, the note
+// role by its configured tier
+json HandleModels(const ambient::models::ModelStore& models,
+                  const std::string& note_tier = "default");
+
+json NoteModelJson(const ambient::note::NoteModelState& state);
+
+// note/tier: the shell names a tier, the lane resolves and loads it.
+// Refused during a consultation; an unknown or unstaged tier is a
+// parameter error naming what is staged
+std::variant<json, Error> HandleNoteTier(ambient::note::INoteLane* lane, bool session_active,
+                                         const json& params);
 
 json HandleAudioInputs(const std::vector<ambient::audio::CaptureDevice>& devices);
 
@@ -57,6 +69,8 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                      ambient::models::OvRuntime* runtime = nullptr,
                      ambient::translate::ITranslator* translator = nullptr,
                      ambient::translate::TranslateLane* translate_lane = nullptr,
-                     bool first_use = false, ambient::diar::AnchorStore* anchors = nullptr);
+                     bool first_use = false, ambient::diar::AnchorStore* anchors = nullptr,
+                     ambient::note::INoteLane* note_lane = nullptr,
+                     bool stray_note_host = false);
 
 }  // namespace ambient::ipc

@@ -27,6 +27,7 @@
 #include "adapters/diarisation/deferred_diariser.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/host/power_throttling.hpp"
+#include "adapters/host/process_scan.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
@@ -324,6 +325,15 @@ int main(int argc, char* argv[]) {
         // Generation runs in its own supervised process: a GPU driver fault there
         // costs a respawn, never the engine
         std::unique_ptr<ambient::note::INoteWriter> note_writer;
+        ambient::note::INoteLane* note_lane = nullptr;
+        // A note host alive before this engine spawned any is wedged from an
+        // earlier engine; only a reboot ends it
+        const bool stray_note_host = ambient::host::CountProcesses(L"ambient_note_host.exe") > 0;
+        if (stray_note_host) {
+            std::fprintf(stderr,
+                         "ambient-engine: a note host from an earlier engine is still running; "
+                         "the GPU is not ours until the computer restarts\n");
+        }
         try {
             model_store.Resolve("note", "default");
             const auto prompt = models_root.parent_path() / "prompts";
@@ -332,8 +342,15 @@ int main(int argc, char* argv[]) {
             const auto host =
                 std::filesystem::path(exe_path).parent_path() / "ambient_note_host.exe";
             if (std::filesystem::exists(host)) {
-                note_writer =
-                    std::make_unique<ambient::note::WorkerNoteWriter>(host, models_root, prompt);
+                auto worker = std::make_unique<ambient::note::WorkerNoteWriter>(
+                    host, models_root, prompt, &model_store);
+                // The shell configures the tier on connect; a non-default tier's
+                // first compile runs then
+                worker->SetListener([&server](const ambient::note::NoteModelState& state) {
+                    server.PushNotification("note/model", ambient::ipc::NoteModelJson(state));
+                });
+                note_lane = worker.get();
+                note_writer = std::move(worker);
                 // First use only: the one-off compile runs on an idle GPU, never inside a recording
                 const auto note_dir = model_store.Resolve("note", "default").dir;
                 if (!std::filesystem::exists(note_dir / ".cache")) {
@@ -392,7 +409,7 @@ int main(int argc, char* argv[]) {
 
         ambient::ipc::RegisterMethods(server, controller, model_store, session_store, &metrics,
                                       &ov_runtime, translator.get(), translate_lane.get(),
-                                      first_use, &anchors);
+                                      first_use, &anchors, note_lane, stray_note_host);
         server.ServeOneClient();
         controller.Stop();
         return 0;
