@@ -85,7 +85,7 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
 
         if (!_rotated)
         {
-            LogRotation.Rotate(stderrPath, keep: 5);
+            LogRotation.Rotate(stderrPath, keep: 12);
             _rotated = true;
         }
 
