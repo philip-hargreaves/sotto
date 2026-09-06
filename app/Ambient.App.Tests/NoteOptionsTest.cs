@@ -26,6 +26,40 @@ public class NoteOptionsTest
         Assert.Contains("detailed", push.Params);
     }
 
+    // The engine never reads a preference: the tier it loads is the one the
+    // shell names on connect, before the options and before readiness is asked
+    [Fact]
+    public void TheNoteTierIsPushedFirstAtStartup()
+    {
+        var preferences = new AppPreferences(Path.Combine(Path.GetTempPath(), "none.json"))
+        {
+            NoteTier = "accuracy",
+        };
+
+        var (_, engine, _) = TestSession.Create(preferences);
+
+        var methods = engine.Requests.Select(r => r.Method).ToList();
+        var tier = engine.Requests.Single(r => r.Method == "note/tier");
+        Assert.Contains("accuracy", tier.Params);
+        Assert.True(methods.IndexOf("note/tier") < methods.IndexOf("note/options"));
+        Assert.True(methods.IndexOf("note/tier") < methods.IndexOf("engine/readiness"));
+    }
+
+    [Fact]
+    public void AnUnknownStoredTierFallsBackToTheDefault()
+    {
+        var path = Path.Combine(
+            Path.GetTempPath(), $"ambient-test-{Guid.NewGuid():N}", "preferences.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{"NoteTier":"premium"}""");
+
+        Assert.Equal("default", AppPreferences.Load(path).NoteTier);
+
+        File.WriteAllText(path, """{"NoteTier":"accuracy"}""");
+        Assert.Equal("accuracy", AppPreferences.Load(path).NoteTier);
+        Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+    }
+
     [Fact]
     public void ChangingAnOptionPersistsItAndInformsTheEngine()
     {

@@ -86,19 +86,48 @@ TEST(ModelStore, VerifyPassesWhenEveryHashMatches) {
     MakeModel(root.path, "m", "asr", "default");
     const ModelStore store(root.path);
     EXPECT_NO_THROW(store.Verify(store.List()[0]));
+    EXPECT_NO_THROW(store.VerifyHashes(store.List()[0]));
 }
 
-TEST(ModelStore, ATamperedFileIsRefusedByName) {
+// Integrity is established when a model arrives; the load-time check reads
+// no bytes, so it is free at any size. The full hash stays for the tools
+TEST(ModelStore, TheLoadTimeCheckReadsNoBytesTheFullCheckDoes) {
     TempRoot root;
     MakeModel(root.path, "m", "asr", "default");
-    WriteFile(root.path / "m" / "weights.bin", "tampered");
+    WriteFile(root.path / "m" / "weights.bin", "jello");  // same size, different bytes
 
     const ModelStore store(root.path);
+    EXPECT_NO_THROW(store.Verify(store.List()[0]));
     try {
-        store.Verify(store.List()[0]);
-        FAIL() << "verification passed on tampered content";
+        store.VerifyHashes(store.List()[0]);
+        FAIL() << "the full check passed on changed content";
     } catch (const std::runtime_error& e) {
         EXPECT_NE(std::string(e.what()).find("weights.bin"), std::string::npos);
+    }
+}
+
+// A manifest that records sizes makes truncation and replacement loud at load
+TEST(ModelStore, AWrongSizeIsRefusedByNameWhenTheManifestRecordsSizes) {
+    TempRoot root;
+    const auto dir = root.path / "m";
+    std::filesystem::create_directories(dir);
+    WriteFile(dir / "weights.bin", "hello");
+    WriteFile(
+        dir / "manifest.json",
+        std::string(R"({"manifestVersion": 1, "id": "m", "task": "asr", "tier": "default",)") +
+            R"( "licence": "MIT", "runtime": {"device": "GPU"}, "files": {"weights.bin": ")" +
+            kHelloHash + R"("}, "bytes": {"weights.bin": 5}})");
+    const ModelStore store(root.path);
+    EXPECT_NO_THROW(store.Verify(store.List()[0]));
+
+    WriteFile(dir / "weights.bin", "hel");  // truncated
+    try {
+        store.Verify(store.List()[0]);
+        FAIL() << "a truncated file passed the load-time check";
+    } catch (const std::runtime_error& e) {
+        const std::string what = e.what();
+        EXPECT_NE(what.find("weights.bin"), std::string::npos);
+        EXPECT_NE(what.find("3 bytes"), std::string::npos);
     }
 }
 
@@ -220,6 +249,59 @@ TEST(ModelStore, AnAbsentRoleReportsWhatIsInstalled) {
         FAIL() << "an absent role must be refused";
     } catch (const std::runtime_error& e) {
         EXPECT_NE(std::string(e.what()).find("silero-vad"), std::string::npos);
+    }
+}
+
+// How a model loads is the manifest's fact: absent means the LLM pipeline
+// with no properties, so every manifest written before the fields existed
+// reads exactly as it did
+TEST(ModelStore, RuntimeFieldsDefaultToTheLlmPipeline) {
+    TempRoot root;
+    MakeModel(root.path, "qwen3.5-9b-int4", "note", "default");
+
+    const ModelStore store(root.path);
+    const auto& info = store.Resolve("note", "default");
+    EXPECT_EQ(info.pipeline, "llm");
+    EXPECT_TRUE(info.properties.is_object());
+    EXPECT_TRUE(info.properties.empty());
+}
+
+TEST(ModelStore, RuntimePipelineAndPropertiesAreRead) {
+    TempRoot root;
+    const auto dir = root.path / "qwen3.6-35b-a3b-int4";
+    std::filesystem::create_directories(dir);
+    WriteFile(dir / "weights.bin", "hello");
+    WriteFile(dir / "manifest.json",
+              R"({"manifestVersion": 1, "id": "qwen3.6-35b-a3b-int4", "task": "note",)"
+              R"( "tier": "accuracy", "licence": "Apache-2.0",)"
+              R"( "runtime": {"device": "GPU", "pipeline": "vlm",)"
+              R"(  "properties": {"ACTIVATIONS_SCALE_FACTOR": 32, "KV_CACHE_PRECISION": "u8"}},)"
+              R"( "files": {"weights.bin": ")" +
+                  std::string(kHelloHash) + R"("}})");
+
+    const ModelStore store(root.path);
+    const auto& info = store.Resolve("note", "accuracy");
+    EXPECT_EQ(info.pipeline, "vlm");
+    EXPECT_EQ(info.properties["ACTIVATIONS_SCALE_FACTOR"], 32);
+    EXPECT_EQ(info.properties["KV_CACHE_PRECISION"], "u8");
+}
+
+// A pipeline this build cannot construct, or a property it cannot pass, is
+// a corrupt manifest for this build: refused at scan, never best-effort
+TEST(ModelStore, AnUnknownPipelineOrANonScalarPropertyIsRefused) {
+    for (const char* runtime : {R"({"device": "GPU", "pipeline": "diffusion"})",
+                                R"({"device": "GPU", "properties": {"NESTED": {"a": 1}}})",
+                                R"({"device": "GPU", "properties": [1, 2]})"}) {
+        TempRoot root;
+        const auto dir = root.path / "broken";
+        std::filesystem::create_directories(dir);
+        WriteFile(dir / "weights.bin", "hello");
+        WriteFile(dir / "manifest.json",
+                  std::string(R"({"manifestVersion": 1, "id": "broken", "task": "note",)") +
+                      R"( "tier": "default", "licence": "MIT", "runtime": )" + runtime +
+                      R"(, "files": {"weights.bin": ")" + kHelloHash + R"("}})");
+
+        EXPECT_THROW(ModelStore{root.path}, std::runtime_error) << runtime;
     }
 }
 

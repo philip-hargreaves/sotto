@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,17 +14,21 @@ std::string Sha256File(const std::filesystem::path& path);
 
 struct ModelInfo {
     std::string id;
-    std::string name;     // display name; the id when the manifest has none
-    std::string task;     // asr | vad | diarisation | notes
-    std::string tier;     // default | accuracy | constrained
-    std::string device;   // GPU | CPU | NPU
-    std::string licence;  // SPDX id
+    std::string name;           // display name; the id when the manifest has none
+    std::string task;           // asr | vad | diarisation | notes
+    std::string tier;           // default | accuracy | constrained
+    std::string device;         // GPU | CPU | NPU
+    std::string licence;        // SPDX id
+    std::string pipeline;       // llm | vlm: which GenAI pipeline loads it; llm when absent
+    nlohmann::json properties;  // OpenVINO properties passed verbatim at compile; {} when absent
     std::filesystem::path dir;
-    std::map<std::string, std::string> file_hashes;  // filename -> sha256 hex
+    std::map<std::string, std::string> file_hashes;    // filename -> sha256 hex: provenance
+    std::map<std::string, std::uintmax_t> file_bytes;  // filename -> size, when the manifest says
 };
 
-// Per-model manifest.json dirs under one root; parsing fail-closed,
-// hashing on demand. No OpenVINO here
+// Per-model manifest.json dirs under one root; parsing fails closed. A load
+// checks presence and size; integrity is established at delivery (fetch,
+// staging, package signature). Hashes serve the tools. No OpenVINO here
 class ModelStore {
    public:
     explicit ModelStore(const std::filesystem::path& root);
@@ -35,8 +40,11 @@ class ModelStore {
     // The one model serving a role; ambiguity and absence are loud
     const ModelInfo& Resolve(std::string_view task, std::string_view tier) const;
 
-    // Throws naming the first file that is missing or does not match its hash
+    // Throws naming the first file missing or of the wrong size; reads no bytes
     void Verify(const ModelInfo& model) const;
+
+    // Full SHA-256 check, for tooling; throws naming the first mismatch
+    void VerifyHashes(const ModelInfo& model) const;
 
    private:
     std::vector<ModelInfo> models_;

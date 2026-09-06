@@ -5,15 +5,16 @@
 #include <cstdio>
 #include <memory>
 #include <mutex>
-#include <openvino/genai/llm_pipeline.hpp>
 #include <stdexcept>
 #include <thread>
 #include <utility>
 
 #include "adapters/host/gpu_lease.hpp"
+#include "adapters/host/power_request.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/note_prompt.hpp"
+#include "adapters/note/text_pipeline.hpp"
 #include "core/metrics.hpp"
 
 namespace ambient::note {
@@ -36,6 +37,10 @@ const char* StyleFile(const NoteOptions& options) {
     return options.style == "soap" ? "note-soap.md" : "note-narrative.md";
 }
 
+double Seconds(std::chrono::steady_clock::time_point since) {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - since).count();
+}
+
 }  // namespace
 
 struct QwenNoteWriter::Impl {
@@ -43,58 +48,81 @@ struct QwenNoteWriter::Impl {
     models::OvRuntime& runtime;
     std::filesystem::path prompt_dir;
     metrics::Registry* metrics;
+    std::string tier;
     std::mutex swap_mutex;      // guards pipeline
-    std::mutex state_mutex;     // guards loader, load_error, loading
+    std::mutex state_mutex;     // guards loader, load_error, loading, on_load
     std::mutex generate_mutex;  // one generate at a time: a prefill never overlaps a note
     std::string last_prefill;   // generate_mutex; the prompt the KV was last extended to
-    std::shared_ptr<ov::genai::LLMPipeline> pipeline;
+    std::shared_ptr<TextPipeline> pipeline;
     std::exception_ptr load_error;
     std::thread loader;
     std::atomic<bool> loading{false};
     std::atomic<bool> cancel{false};
+    LoadListener on_load;
 
-    void Load() {
-        const models::ModelInfo& info = store.Resolve("note", "default");
-        store.Verify(info);
-        const std::string device = runtime.ResolveDevice(info.device);
+    LoadReport Load() {
+        const models::ModelInfo& info = store.Resolve("note", tier);
+        LoadReport report;
+        report.id = info.id;
+        report.name = info.name;
+        report.first_use = !std::filesystem::exists(info.dir / ".cache");
         const auto t0 = std::chrono::steady_clock::now();
-        auto built = std::make_shared<ov::genai::LLMPipeline>(
-            info.dir, device, ov::AnyMap{{"CACHE_DIR", (info.dir / ".cache").string()}});
-        const double seconds =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "ambient-engine: note on %s, loaded in %.1f s\n", device.c_str(),
-                     seconds);
+        store.Verify(info);
+        const double verified = Seconds(t0);
+        const std::string device = runtime.ResolveDevice(info.device);
+        // Build and warm hold the GPU lease (nothing runs beside them) and a
+        // power request (no standby mid-load)
+        const host::AwakeRequest awake(L"Ambient: loading the note model");
+        const auto lease = host::GpuLease::Global().Acquire();
+        std::shared_ptr<TextPipeline> built = MakeTextPipeline(info, device);
+        report.seconds = Seconds(t0);
+        std::fprintf(stderr,
+                     "ambient-engine: note %s (%s, %s) on %s, checked in %.1f s, loaded in %.1f s, "
+                     "lease wait %.2f s\n",
+                     info.id.c_str(), tier.c_str(), info.pipeline.c_str(), device.c_str(), verified,
+                     report.seconds, lease.waited());
         if (metrics != nullptr) {
             metrics->RecordDevice("note", device);
-            metrics->RecordLoad("note", seconds);
+            metrics->RecordLoad("note", report.seconds);
         }
-        WarmPromptPrefix(*built);
+        if (built->ExtendsKv()) {
+            WarmPromptPrefix(*built);
+        }
         std::lock_guard<std::mutex> lock(swap_mutex);
         pipeline = std::move(built);
+        report.ok = true;
+        return report;
     }
 
     // One discarded token parks the instruction block's KV; only the transcript
     // prefills at stop (measured 2.1 -> 1.3 s). Notes equivalent, not byte-stable
-    void WarmPromptPrefix(ov::genai::LLMPipeline& built) {
+    void WarmPromptPrefix(TextPipeline& built) {
         try {
             const auto t0 = std::chrono::steady_clock::now();
             ov::genai::GenerationConfig config;
             config.max_new_tokens = 1;
             config.do_sample = false;
             config.apply_chat_template = false;
-            built.generate("<|im_start|>user\n" + LoadPrompt(prompt_dir / "note-narrative.md"),
-                           config);
-            std::fprintf(
-                stderr, "ambient-engine: note prefix warmed in %.1f s\n",
-                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+            built.Generate("<|im_start|>user\n" + LoadPrompt(prompt_dir / "note-narrative.md"),
+                           config, nullptr);
+            std::fprintf(stderr, "ambient-engine: note prefix warmed in %.1f s\n", Seconds(t0));
         } catch (const std::exception& e) {
             std::fprintf(stderr, "ambient-engine: note prefix warm failed (%s)\n", e.what());
         }
     }
 
-    std::shared_ptr<ov::genai::LLMPipeline> Pipeline() {
+    std::shared_ptr<TextPipeline> Pipeline() {
         std::lock_guard<std::mutex> lock(swap_mutex);
         return pipeline;
+    }
+
+    void Report(const LoadReport& report) {
+        LoadListener listener;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            listener = on_load;
+        }
+        if (listener) listener(report);
     }
 
     void JoinLoader() {
@@ -110,11 +138,17 @@ struct QwenNoteWriter::Impl {
 };
 
 QwenNoteWriter::QwenNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                               std::filesystem::path prompt_dir, metrics::Registry* metrics)
-    : impl_(new Impl{store, runtime, std::move(prompt_dir), metrics}) {}
+                               std::filesystem::path prompt_dir, metrics::Registry* metrics,
+                               std::string tier)
+    : impl_(new Impl{store, runtime, std::move(prompt_dir), metrics, std::move(tier)}) {}
 
 QwenNoteWriter::~QwenNoteWriter() {
     impl_->JoinLoader();
+}
+
+void QwenNoteWriter::SetLoadListener(LoadListener listener) {
+    std::lock_guard<std::mutex> lock(impl_->state_mutex);
+    impl_->on_load = std::move(listener);
 }
 
 // Starts the one background load; the ~14 s cost lands during capture, not
@@ -130,13 +164,20 @@ void QwenNoteWriter::Prepare() {
         impl_->load_error = nullptr;
         impl_->loading = true;
         impl_->loader = std::thread([impl = impl_.get()] {
+            LoadReport report;
             try {
-                impl->Load();
-            } catch (...) {
-                std::lock_guard<std::mutex> lock(impl->state_mutex);
-                impl->load_error = std::current_exception();
+                report = impl->Load();
+            } catch (const std::exception& e) {
+                {
+                    std::lock_guard<std::mutex> lock(impl->state_mutex);
+                    impl->load_error = std::current_exception();
+                }
+                report.ok = false;
+                report.detail = e.what();
+                std::fprintf(stderr, "ambient-engine: note load failed (%s)\n", e.what());
             }
             impl->loading = false;
+            impl->Report(report);
         });
     }
     if (finished.joinable()) {
@@ -174,7 +215,7 @@ std::string QwenNoteWriter::WriteLabel(const std::string& note) {
 void QwenNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) {
     if (transcript.empty()) return;
     const auto pipeline = impl_->Pipeline();
-    if (pipeline == nullptr) return;
+    if (pipeline == nullptr || !pipeline->ExtendsKv()) return;
     std::unique_lock<std::mutex> lock(impl_->generate_mutex, std::try_to_lock);
     if (!lock.owns_lock()) return;
     const std::string prompt = "<|im_start|>user\n" +
@@ -188,14 +229,12 @@ void QwenNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Not
         config.apply_chat_template = false;
         const auto lease = host::GpuLease::Global().Acquire();
         const auto t0 = std::chrono::steady_clock::now();
-        ov::genai::DecodedResults result = pipeline->generate(prompt, config);
-        const double seconds =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        const TextPipeline::Result result = pipeline->Generate(prompt, config, nullptr);
         std::fprintf(stderr,
                      "ambient-note-host: prefill %zu turns, %zu tokens, %zu shared chars, "
                      "%.2f s, lease wait %.2f s\n",
-                     transcript.size(), result.perf_metrics.get_num_input_tokens(),
-                     SharedPrefix(prompt, impl_->last_prefill), seconds, lease.waited());
+                     transcript.size(), result.input_tokens,
+                     SharedPrefix(prompt, impl_->last_prefill), Seconds(t0), lease.waited());
         impl_->last_prefill = prompt;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ambient-note-host: prefill failed (%s)\n", e.what());
@@ -238,7 +277,7 @@ std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& 
     // The streamer carries both the partials out and the cancel in; on
     // cancel the accumulated text is returned as-is
     std::string text;
-    const auto streamer = [this, &text, &progress](std::string piece) {
+    const TextPipeline::Streamer streamer = [this, &text, &progress](std::string piece) {
         if (impl_->cancel.load()) {
             return ov::genai::StreamingStatus::STOP;
         }
@@ -248,7 +287,15 @@ std::string QwenNoteWriter::Generate(const std::string& prompt, const Progress& 
         }
         return ov::genai::StreamingStatus::RUNNING;
     };
-    pipeline->generate(wrapped, config, streamer);
+    // Generation holds the GPU lease; a recording started meanwhile decodes
+    // after it ends
+    const host::AwakeRequest awake(L"Ambient: writing the note");
+    const auto lease = host::GpuLease::Global().Acquire();
+    if (lease.waited() > 0.25) {
+        std::fprintf(stderr, "ambient-note-host: generation waited %.2f s for the GPU lease\n",
+                     lease.waited());
+    }
+    pipeline->Generate(wrapped, config, streamer);
     return Trimmed(text);
 }
 

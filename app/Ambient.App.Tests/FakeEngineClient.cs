@@ -76,7 +76,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
         if (method == "engine/readiness")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
-                new { firstUse = FirstUse, ready = ModelsCompiled }));
+                new { firstUse = FirstUse, ready = ModelsCompiled, strayNoteHost = StrayNoteHost }));
         }
 
         if (method == "translate/languages")
@@ -104,15 +104,32 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
         if (method == "engine/models")
         {
+            var models = new List<object>
+            {
+                // An ablation export listed first: the default tier must still win
+                new { id = "whisper-turbo-int8-wordts", name = "", task = "asr", tier = "wordts", device = "GPU", licence = "MIT", active = false },
+                new { id = "whisper-turbo-int8", name = "Whisper Large v3 Turbo", task = "asr", tier = "default", device = "GPU", licence = "MIT", active = true },
+                new { id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", task = "note", tier = "default", device = "GPU", licence = "Apache-2.0", active = NoteTier == "default" },
+            };
+            foreach (var (id, name, tier) in ExtraNoteModels)
+            {
+                models.Add(new { id, name, task = "note", tier, device = "GPU", licence = "Apache-2.0", active = NoteTier == tier });
+            }
+
+            return Task.FromResult(JsonSerializer.SerializeToElement(new { models }));
+        }
+
+        if (method == "note/tier")
+        {
+            var tier = JsonDocument.Parse(Requests[^1].Params).RootElement
+                .GetProperty("tier").GetString() ?? "default";
+            NoteTier = tier;
             return Task.FromResult(JsonSerializer.SerializeToElement(new
             {
-                models = new object[]
-                {
-                    // An ablation export listed first: the default tier must still win
-                    new { id = "whisper-turbo-int8-wordts", name = "", task = "asr", tier = "wordts", device = "GPU", licence = "MIT" },
-                    new { id = "whisper-turbo-int8", name = "Whisper Large v3 Turbo", task = "asr", tier = "default", device = "GPU", licence = "MIT" },
-                    new { id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", task = "note", tier = "default", device = "GPU", licence = "Apache-2.0" },
-                },
+                tier,
+                id = tier == "default" ? "qwen3.5-9b-int4" : "",
+                name = tier == "default" ? "Qwen3.5 9B" : "",
+                state = NoteTierReply,
             }));
         }
 
@@ -168,10 +185,22 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineClient
 
     public long? AnchorEnrolledAt { get; set; }
 
+    /// <summary>Note models beyond the 9B that engine/models lists: (id, name, tier).</summary>
+    public List<(string Id, string Name, string Tier)> ExtraNoteModels { get; } = [];
+
+    /// <summary>The tier the engine's note lane is on; note/tier moves it.</summary>
+    public string NoteTier { get; set; } = "default";
+
+    /// <summary>The lane state note/tier answers with.</summary>
+    public string NoteTierReply { get; set; } = "loading";
+
     /// <summary>Served by engine/readiness; warm and compiled by default.</summary>
     public bool FirstUse { get; set; }
 
     public bool ModelsCompiled { get; set; } = true;
+
+    /// <summary>Served by engine/readiness; no wedged note process by default.</summary>
+    public bool StrayNoteHost { get; set; }
 
     public void RaiseNotification(string method, JsonElement parameters = default) =>
         NotificationReceived?.Invoke(method, parameters);

@@ -101,6 +101,7 @@ target_link_libraries(ambient_transcription
 
 add_library(ambient_note STATIC
     src/adapters/note/qwen_note_writer.cpp
+    src/adapters/note/text_pipeline.cpp
     src/adapters/note/worker_note_writer.cpp)
 target_link_libraries(ambient_note
     PUBLIC ambient_core

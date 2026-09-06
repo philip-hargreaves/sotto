@@ -503,6 +503,12 @@ def _start_engine(index):
         except (TimeoutError, RuntimeError):
             time.sleep(0.1)
     echo_at = now() - t0
+    # PERF_NOTE_TIER: the note model role to run, as the shell would configure it on connect
+    tier = os.environ.get("PERF_NOTE_TIER")
+    if tier:
+        result, _ = engine.request("note/tier", {"tier": tier}, 30)
+        event("note_tier", index=index, tier=tier, state=result.get("state"), model=result.get("id"))
+        log(f"engine {index}: note tier {tier} -> {result.get('id')} ({result.get('state')})")
     # Readiness: the compile caches; loads still proceed in the background
     ready_at = None
     for _ in range(1200):

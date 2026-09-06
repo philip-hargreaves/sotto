@@ -1,25 +1,33 @@
+using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Ambient.App.Core.Hosting;
 using Ambient.App.Core.Metrics;
+using Ambient.Client;
 
 namespace Ambient.App.Core.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
     private readonly AppPreferences? _preferences;
     private readonly IEngineHost? _engine;
     private readonly ISessionState? _session;
     private readonly StatusBarViewModel? _status;
     private readonly IMachineInfoProvider? _machine;
     private readonly PerformanceCollector? _metrics;
+    private readonly IEngineClient? _client;
+    private readonly IUiDispatcher? _dispatcher;
     private readonly string _exportDirectory;
     private bool _reverting;
 
     public SettingsViewModel(AppPreferences? preferences = null, IEngineHost? engine = null,
         ISessionState? session = null, StatusBarViewModel? status = null,
         IMachineInfoProvider? machine = null, PerformanceCollector? metrics = null,
-        string? exportDirectory = null)
+        string? exportDirectory = null, IEngineClient? client = null,
+        IUiDispatcher? dispatcher = null)
     {
         _preferences = preferences;
         _engine = engine;
@@ -27,6 +35,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _status = status;
         _machine = machine;
         _metrics = metrics;
+        _client = client;
+        _dispatcher = dispatcher;
         _exportDirectory = exportDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         // Restoring saved values is not the clinician changing them: the
@@ -38,10 +48,290 @@ public sealed partial class SettingsViewModel : ObservableObject
         KeepConsultations = preferences?.KeepConsultations ?? false;
         ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
         Theme = preferences?.Theme ?? "system";
+        _noteTier = preferences?.NoteTier ?? "default";
         _initialising = false;
+
+        if (client is not null)
+        {
+            // Options come from the engine's store; the lane's state drives the control
+            client.ConnectedChanged += connected => Post(() =>
+            {
+                if (connected)
+                {
+                    _ = LoadNoteModelsAsync();
+                }
+            });
+            client.NotificationReceived += (method, parameters) =>
+            {
+                if (method == "note/model")
+                {
+                    var snapshot = parameters.Clone();
+                    Post(() => OnNoteModel(snapshot));
+                }
+            };
+            if (client.Connected)
+            {
+                _ = LoadNoteModelsAsync();
+            }
+        }
     }
 
     private readonly bool _initialising;
+
+    private void Post(Action action)
+    {
+        if (_dispatcher is null)
+        {
+            action();
+        }
+        else
+        {
+            _dispatcher.Post(action);
+        }
+    }
+
+    // ---- note model tier --------------------------------------------------
+
+    // Tier keys in ladder order, parallel to NoteModelOptions
+    private readonly List<string> _tiers = [];
+    private string _noteTier;
+    private string? _revertTier;  // where a failed switch goes back to
+    private bool _populating;
+
+    /// <summary>Display names of the staged note models, smallest first.</summary>
+    public ObservableCollection<string> NoteModelOptions { get; } = [];
+
+    /// <summary>The chosen note model as the control's selection.</summary>
+    [ObservableProperty]
+    public partial int NoteModelIndex { get; set; } = -1;
+
+    /// <summary>False while the lane loads, and when there is nothing to choose between.</summary>
+    [ObservableProperty]
+    public partial bool NoteModelEnabled { get; set; }
+
+    /// <summary>Lane status; empty when nothing is happening.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoteModelCaption))]
+    public partial string NoteModelStatus { get; set; } = "";
+
+    /// <summary>The caption under the control: the status while there is one, else the description.</summary>
+    public string NoteModelCaption =>
+        string.IsNullOrEmpty(NoteModelStatus) ? "Larger models are more accurate and use more memory." : NoteModelStatus;
+
+    /// <summary>The tier the shell wants; the engine's store resolves it.</summary>
+    public string NoteTier => _noteTier;
+
+    private static int LadderRank(string tier) => tier switch
+    {
+        "constrained" => 0,
+        "default" => 1,
+        "accuracy" => 2,
+        _ => 3,
+    };
+
+    private async Task LoadNoteModelsAsync()
+    {
+        if (_client is null || !_client.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await _client
+                .RequestAsync("engine/models", null, TimeSpan.FromSeconds(5))
+                .ConfigureAwait(true);
+            var staged = response.GetProperty("models").EnumerateArray()
+                .Where(m => m.GetProperty("task").GetString() == "note")
+                .Select(m => (
+                    Tier: m.GetProperty("tier").GetString() ?? "",
+                    Name: m.TryGetProperty("name", out var n) && !string.IsNullOrWhiteSpace(n.GetString())
+                        ? n.GetString()!
+                        : StatusBarViewModel.FriendlyModelName(m.GetProperty("id").GetString() ?? "")))
+                .Where(m => AppPreferences.NoteTiers.Contains(m.Tier))
+                .OrderBy(m => LadderRank(m.Tier))
+                .ToList();
+
+            _populating = true;
+            // Rebuilt only when the store's contents changed: clearing ComboBox items
+            // under an open popup or a live selection can fault in XAML, and every
+            // reconnect would otherwise do it
+            var tiers = staged.Select(m => m.Tier).ToList();
+            var names = staged.Select(m => m.Name).ToList();
+            if (!tiers.SequenceEqual(_tiers) || !names.SequenceEqual(NoteModelOptions))
+            {
+                NoteModelIndex = -1;  // clear the selection before the items
+                _tiers.Clear();
+                NoteModelOptions.Clear();
+                foreach (var (tier, name) in staged)
+                {
+                    _tiers.Add(tier);
+                    NoteModelOptions.Add(name);
+                }
+            }
+
+            NoteModelStatus = _tiers.Count <= 1 ? "Only one model installed" : "";
+            // Preference for an unstaged tier: the engine stayed on the default,
+            // and the control shows that
+            if (!_tiers.Contains(_noteTier) && _tiers.Contains("default"))
+            {
+                NoteModelStatus = "Saved model not installed; using the default";
+                _noteTier = "default";
+                PersistTier();
+            }
+
+            NoteModelIndex = _tiers.IndexOf(_noteTier);
+            _populating = false;
+            NoteModelEnabled = _tiers.Count > 1;
+        }
+        catch (Exception)
+        {
+            _populating = false;
+        }
+    }
+
+    private string NameOf(string tier)
+    {
+        var index = _tiers.IndexOf(tier);
+        return index >= 0 && index < NoteModelOptions.Count ? NoteModelOptions[index] : tier;
+    }
+
+    partial void OnNoteModelIndexChanged(int value)
+    {
+        if (_reverting || _initialising || _populating || value < 0 || value >= _tiers.Count)
+        {
+            return;
+        }
+
+        var tier = _tiers[value];
+        if (tier == _noteTier)
+        {
+            return;
+        }
+
+        // The switch ends the resident model; a consultation needs it
+        if (_session?.ConsultationActive == true)
+        {
+            _reverting = true;
+            NoteModelIndex = _tiers.IndexOf(_noteTier);
+            _reverting = false;
+            _status?.Append("finish the consultation before changing the note model");
+            return;
+        }
+
+        _revertTier = _noteTier;
+        _noteTier = tier;
+        PersistTier();
+        NoteModelEnabled = false;
+        NoteModelStatus = "Loading";
+        _status?.Append($"Loading {NameOf(tier)}", busy: true);
+        _ = SendTierAsync(tier);
+    }
+
+    private void PersistTier()
+    {
+        if (_preferences is not null)
+        {
+            _preferences.NoteTier = _noteTier;
+            _preferences.Save();
+        }
+    }
+
+    private async Task SendTierAsync(string tier)
+    {
+        if (_client is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var reply = await _client
+                .RequestAsync("note/tier", new { tier }, RequestTimeout)
+                .ConfigureAwait(true);
+            // Already resident (the same tier after a restart): nothing to wait for
+            if (reply.TryGetProperty("state", out var state) && state.GetString() == "ready")
+            {
+                OnNoteModel(reply);
+            }
+        }
+        catch (Exception e)
+        {
+            RevertTier(e.Message);
+        }
+    }
+
+    // A refused or failed switch reverts to the previous tier, once; the
+    // engine is told
+    private void RevertTier(string reason)
+    {
+        var back = _revertTier;
+        _revertTier = null;
+        NoteModelStatus = $"Could not switch: {reason}";
+        _status?.Append($"Could not switch note model: {reason}");
+        if (back is null)
+        {
+            NoteModelEnabled = _tiers.Count > 1;
+            return;
+        }
+
+        _noteTier = back;
+        PersistTier();
+        _reverting = true;
+        NoteModelIndex = _tiers.IndexOf(back);
+        _reverting = false;
+        _ = SendTierAsync(back);
+    }
+
+    private void OnNoteModel(JsonElement parameters)
+    {
+        if (parameters.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var state = parameters.TryGetProperty("state", out var s) ? s.GetString() ?? "" : "";
+        var tier = parameters.TryGetProperty("tier", out var t) ? t.GetString() ?? "" : "";
+        switch (state)
+        {
+            case "loading":
+                NoteModelEnabled = false;
+                var firstUse = parameters.TryGetProperty("firstUse", out var f) && f.GetBoolean();
+                NoteModelStatus = firstUse
+                    ? "Preparing for this computer, a few minutes the first time"
+                    : "Loading";
+                break;
+            case "ready":
+                _revertTier = null;
+                NoteModelEnabled = _tiers.Count > 1;
+                NoteModelStatus = "";
+                // The engine is authoritative about what is resident
+                if (_tiers.Contains(tier) && tier != _noteTier)
+                {
+                    _noteTier = tier;
+                    PersistTier();
+                    _reverting = true;
+                    NoteModelIndex = _tiers.IndexOf(tier);
+                    _reverting = false;
+                }
+
+                break;
+            case "failed":
+                var detail = parameters.TryGetProperty("detail", out var d) ? d.GetString() ?? "" : "";
+                if (tier == _noteTier)
+                {
+                    RevertTier(detail);
+                }
+                else
+                {
+                    NoteModelStatus = $"Load failed: {detail}";
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
 
     /// <summary>
     /// Off by default: a consultation is erased when it is left. On: the

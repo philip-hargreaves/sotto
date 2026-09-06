@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Ambient.Fetch;
 
@@ -34,8 +35,17 @@ public sealed class Fetcher(HttpClient http, Action<string> log)
 
         if (pack.Manifest is not null)
         {
+            // Sizes let the engine's load-time check be presence and size, no re-hash
+            var manifest = JsonNode.Parse(pack.Manifest.Value.GetRawText())!.AsObject();
+            var bytes = new JsonObject();
+            foreach (var (file, shards) in pack.Shards)
+            {
+                bytes[file] = shards.Sum(s => s.Size);
+            }
+
+            manifest["bytes"] = bytes;
             File.WriteAllText(Path.Combine(stage, "manifest.json"),
-                JsonSerializer.Serialize(pack.Manifest, Json.Options));
+                manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);

@@ -20,8 +20,8 @@ public sealed partial class SettingsView : UserControl
             var dialog = new ContentDialog
             {
                 XamlRoot = XamlRoot,
-                Title = "Forget your voice?",
-                Content = "Ambient will learn it again automatically from your next consultation.",
+                Title = "Forget voice enrolment?",
+                Content = "It will be learned again from your next consultation.",
                 PrimaryButtonText = "Forget",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,

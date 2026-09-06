@@ -9,6 +9,35 @@
 namespace ambient::host {
 namespace {
 
+// A holder that never releases is a process wedged in a driver call: the
+// bounded acquire gives up, marks the lease broken, and every later acquire
+// returns at once so the waiter carries on without the GPU to itself
+TEST(GpuLease, ABoundedAcquireGivesUpOnAWedgedHolderAndStaysBroken) {
+    const std::string name =
+        "Local\\ambient-gpu-lease-wedged-" + std::to_string(GetCurrentProcessId());
+    GpuLease wedged(name);
+    GpuLease waiter(name);
+    const auto held = wedged.Acquire();  // never released while this test runs
+
+    // On another thread: a mutex is recursive for the thread that owns it
+    double waited = 0;
+    double again = 0;
+    std::thread other([&] {
+        const auto t0 = std::chrono::steady_clock::now();
+        const auto gave_up = waiter.Acquire(std::chrono::milliseconds(200));
+        waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        EXPECT_EQ(gave_up.waited(), 0.0) << "an empty guard: nothing to release";
+        const auto t1 = std::chrono::steady_clock::now();
+        const auto at_once = waiter.Acquire(std::chrono::milliseconds(5000));
+        again = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+    });
+    other.join();
+    EXPECT_GE(waited, 0.15);
+    EXPECT_TRUE(waiter.Broken());
+    EXPECT_LT(again, 0.05) << "a broken lease never waits again";
+    EXPECT_FALSE(wedged.Broken()) << "the holder's own handle is unaffected";
+}
+
 TEST(GpuLease, UnnamedLeaseIsInertAndFree) {
     GpuLease lease("");
     EXPECT_FALSE(lease.Active());

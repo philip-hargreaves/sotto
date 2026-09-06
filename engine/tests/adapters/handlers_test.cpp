@@ -6,6 +6,10 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
@@ -98,6 +102,107 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
     const json built = MakeResult(std::int64_t{7}, HandleModels(store));
     EXPECT_EQ(built, LoadFixture("models-list.json"));
     std::filesystem::remove_all(root);
+}
+
+// Two note models staged: the configured tier is the active one, whatever
+// order the store lists them in
+TEST(Handlers, ModelsListMarksTheConfiguredNoteTierActive) {
+    const auto root = std::filesystem::temp_directory_path() / "ambient-handlers-tiers";
+    std::filesystem::remove_all(root);
+    for (const auto& [id, tier] :
+         {std::pair{"qwen3.5-9b-int4", "default"}, std::pair{"qwen3.6-35b-a3b-int4", "accuracy"}}) {
+        std::filesystem::create_directories(root / id);
+        std::ofstream(root / id / "manifest.json")
+            << R"({"manifestVersion": 1, "id": ")" << id << R"(", "task": "note", "tier": ")"
+            << tier << R"(", "licence": "Apache-2.0", "runtime": {"device": "GPU"},)"
+            << R"( "files": {"model.xml": "00"}})";
+    }
+
+    const ambient::models::ModelStore store(root);
+    const json listed = HandleModels(store, "accuracy");
+    for (const auto& model : listed["models"]) {
+        EXPECT_EQ(model["active"], model["tier"] == "accuracy") << model.dump();
+    }
+    std::filesystem::remove_all(root);
+}
+
+// A lane that records what it was asked and answers with a state
+struct FakeLane : ambient::note::INoteLane {
+    std::vector<std::string> configured;
+    ambient::note::NoteModelState state;
+    std::string refuse;  // Configure throws this as invalid_argument when set
+
+    ambient::note::NoteModelState Configure(const std::string& tier) override {
+        if (!refuse.empty()) throw std::invalid_argument(refuse);
+        configured.push_back(tier);
+        state.tier = tier;
+        state.phase = ambient::note::NoteModelState::Phase::kLoading;
+        return state;
+    }
+
+    ambient::note::NoteModelState State() const override {
+        return state;
+    }
+
+    void SetListener(Listener) override {}
+};
+
+TEST(Handlers, NoteTierConfiguresTheLaneAndAnswersWithItsState) {
+    FakeLane lane;
+    lane.state.id = "qwen3.6-35b-a3b-int4";
+    lane.state.name = "Qwen3.6 35B";
+
+    const auto outcome = HandleNoteTier(&lane, false, json{{"tier", "accuracy"}});
+
+    ASSERT_TRUE(std::holds_alternative<json>(outcome));
+    const json& result = ResultOf(outcome);
+    EXPECT_EQ(lane.configured, std::vector<std::string>{"accuracy"});
+    EXPECT_EQ(result["tier"], "accuracy");
+    EXPECT_EQ(result["state"], "loading");
+    EXPECT_EQ(result["name"], "Qwen3.6 35B");
+    EXPECT_EQ(result, LoadFixture("note-tier.json")["response"]["result"]);
+}
+
+TEST(Handlers, NoteTierRefusesWhatTheLaneCannotServe) {
+    FakeLane lane;
+
+    // Not a tier at all: never reaches the lane
+    auto outcome = HandleNoteTier(&lane, false, json{{"tier", "premium"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+    EXPECT_EQ(std::get<Error>(outcome).code, kInvalidParams);
+    EXPECT_TRUE(lane.configured.empty());
+
+    // A tier nothing is staged for: the store's message, as a parameter error
+    lane.refuse = "no model for note/accuracy; installed: qwen3.5-9b-int4(note/default)";
+    outcome = HandleNoteTier(&lane, false, json{{"tier", "accuracy"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+    EXPECT_EQ(std::get<Error>(outcome).code, kInvalidParams);
+    EXPECT_NE(std::get<Error>(outcome).data->dump().find("qwen3.5-9b-int4"), std::string::npos);
+
+    // Mid-consultation: a switch would end the resident model under a session
+    lane.refuse.clear();
+    outcome = HandleNoteTier(&lane, true, json{{"tier", "accuracy"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+    EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
+    EXPECT_TRUE(lane.configured.empty());
+
+    // No note lane at all (nothing staged, or no host beside the engine)
+    outcome = HandleNoteTier(nullptr, false, json{{"tier", "default"}});
+    ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+    EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
+}
+
+TEST(Handlers, NoteModelNotificationMatchesTheFixture) {
+    ambient::note::NoteModelState state;
+    state.phase = ambient::note::NoteModelState::Phase::kReady;
+    state.tier = "accuracy";
+    state.id = "qwen3.6-35b-a3b-int4";
+    state.name = "Qwen3.6 35B";
+    state.seconds = 27.4;
+
+    const json fixture = LoadFixture("note-model.json");
+    EXPECT_EQ(NoteModelJson(state), fixture["params"]);
+    EXPECT_EQ(fixture["method"], "note/model");
 }
 
 struct SessionStoreFixture {

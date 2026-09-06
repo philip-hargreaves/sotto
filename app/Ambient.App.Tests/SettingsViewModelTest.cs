@@ -149,6 +149,174 @@ public class SettingsViewModelTest
         Assert.True(settings.DemoTrayEnabled);
     }
 
+    // ---- note model tier ---------------------------------------------------
+
+    private static FakeEngineClient TieredEngine()
+    {
+        var engine = new FakeEngineClient();
+        engine.ExtraNoteModels.Add(("qwen3.6-35b-a3b-int4", "Qwen3.6 35B", "accuracy"));
+        engine.ExtraNoteModels.Add(("qwen3.5-4b-int4", "Qwen3.5 4B", "constrained"));
+        return engine;
+    }
+
+    private static System.Text.Json.JsonElement NoteModel(
+        string state, string tier, string name, string? detail = null) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(
+            new { state, tier, name, id = tier, seconds = 12.0, firstUse = false, detail });
+
+    [Fact]
+    public void NoteModelsComeFromTheEngineInLadderOrderAndThePreferenceSelects()
+    {
+        var preferences = TempPreferences();
+        preferences.NoteTier = "accuracy";
+        var engine = TieredEngine();
+
+        var settings = new SettingsViewModel(preferences, client: engine);
+
+        Assert.Equal(["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.6 35B"], settings.NoteModelOptions);
+        Assert.Equal(2, settings.NoteModelIndex);
+        Assert.True(settings.NoteModelEnabled);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");  // restoring is not choosing
+    }
+
+    // A reconnect re-reads the store; the same models must not rebuild the bound
+    // collection under the control, only a changed store does
+    [Fact]
+    public void AReconnectWithTheSameModelsLeavesTheCollectionAlone()
+    {
+        var engine = TieredEngine();
+        var settings = new SettingsViewModel(TempPreferences(), client: engine, session: new FakeSession());
+        var changes = 0;
+        settings.NoteModelOptions.CollectionChanged += (_, _) => changes++;
+        settings.NoteModelIndex = 2;
+
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        Assert.Equal(0, changes);
+        Assert.Equal(2, settings.NoteModelIndex);
+
+        engine.ExtraNoteModels.RemoveAt(1);  // the 4B was uninstalled
+        engine.SetConnected(false);
+        engine.SetConnected(true);
+
+        Assert.True(changes > 0);
+        Assert.Equal(["Qwen3.5 9B", "Qwen3.6 35B"], settings.NoteModelOptions);
+        Assert.Equal(1, settings.NoteModelIndex);
+    }
+
+    [Fact]
+    public void ASingleStagedModelLeavesNothingToChoose()
+    {
+        var settings = new SettingsViewModel(TempPreferences(), client: new FakeEngineClient());
+
+        Assert.Equal(["Qwen3.5 9B"], settings.NoteModelOptions);
+        Assert.Equal(0, settings.NoteModelIndex);
+        Assert.False(settings.NoteModelEnabled);
+        Assert.Equal("Only one model installed", settings.NoteModelStatus);
+    }
+
+    [Fact]
+    public void APreferenceForAnUninstalledTierFallsBackToTheDefault()
+    {
+        var preferences = TempPreferences();
+        preferences.NoteTier = "accuracy";
+
+        var settings = new SettingsViewModel(preferences, client: new FakeEngineClient());
+
+        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal(0, settings.NoteModelIndex);
+        Assert.Contains("not installed", settings.NoteModelStatus);
+    }
+
+    [Fact]
+    public void ChoosingATierPersistsItConfiguresTheEngineAndGreysUntilReady()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var settings = new SettingsViewModel(preferences, client: engine, session: new FakeSession());
+
+        settings.NoteModelIndex = 2;
+
+        Assert.Equal("accuracy", preferences.NoteTier);
+        var request = engine.Requests.Single(r => r.Method == "note/tier");
+        Assert.Contains("accuracy", request.Params);
+        Assert.False(settings.NoteModelEnabled, "greyed while the lane loads");
+        Assert.Equal("Loading", settings.NoteModelStatus);
+
+        engine.RaiseNotification("note/model", NoteModel("loading", "accuracy", "Qwen3.6 35B"));
+        Assert.False(settings.NoteModelEnabled);
+
+        engine.RaiseNotification("note/model", NoteModel("ready", "accuracy", "Qwen3.6 35B"));
+        Assert.True(settings.NoteModelEnabled);
+        Assert.Equal("", settings.NoteModelStatus);
+        Assert.StartsWith("Larger models", settings.NoteModelCaption);
+        Assert.Equal(2, settings.NoteModelIndex);
+    }
+
+    [Fact]
+    public void AFailedLoadRevertsToTheTierThatWorked()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var settings = new SettingsViewModel(preferences, client: engine, session: new FakeSession());
+        settings.NoteModelIndex = 2;
+        engine.Requests.Clear();
+
+        engine.RaiseNotification(
+            "note/model", NoteModel("failed", "accuracy", "Qwen3.6 35B", "out of memory"));
+
+        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal(1, settings.NoteModelIndex);
+        Assert.Contains("out of memory", settings.NoteModelStatus);
+        var back = engine.Requests.Single(r => r.Method == "note/tier");
+        Assert.Contains("default", back.Params);
+    }
+
+    [Fact]
+    public void ARefusedRequestRevertsToo()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var settings = new SettingsViewModel(preferences, client: engine, session: new FakeSession());
+        engine.FailNext = method => method == "note/tier" ? new IOException("no such device") : null;
+
+        settings.NoteModelIndex = 0;
+
+        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal(1, settings.NoteModelIndex);
+        Assert.Contains("no such device", settings.NoteModelStatus);
+    }
+
+    [Fact]
+    public void ChoosingATierRefusesDuringAConsultation()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var session = new FakeSession { ConsultationActive = true };
+        var settings = new SettingsViewModel(preferences, client: engine, session: session);
+
+        settings.NoteModelIndex = 2;
+
+        Assert.Equal(1, settings.NoteModelIndex);
+        Assert.Equal("default", preferences.NoteTier);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
+    }
+
+    [Fact]
+    public void TheEngineIsAuthoritativeAboutWhatIsResident()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var settings = new SettingsViewModel(preferences, client: engine, session: new FakeSession());
+
+        // Another shell instance, or the engine's own default: the control follows
+        engine.RaiseNotification("note/model", NoteModel("ready", "constrained", "Qwen3.5 4B"));
+
+        Assert.Equal(0, settings.NoteModelIndex);
+        Assert.Equal("constrained", preferences.NoteTier);
+    }
+
     private sealed class FixedMachine : Ambient.App.Core.Metrics.IMachineInfoProvider
     {
         public Ambient.App.Core.Metrics.MachineInfo Describe() =>

@@ -121,8 +121,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
                 // transcription...") is over; resume overwrites this
                 Status.Append("Ready");
                 _ = LoadLanguagesAsync();
-                _ = CheckReadinessAsync();
-                _ = PushNoteOptionsAsync();
+                _ = ConfigureThenCheckReadinessAsync();
                 if (State == SessionState.Recording)
                 {
                     _ = ResumeAfterRestartAsync();
@@ -132,9 +131,15 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         if (EngineReady)
         {
             _ = LoadLanguagesAsync();
-            _ = CheckReadinessAsync();
-            _ = PushNoteOptionsAsync();
+            _ = ConfigureThenCheckReadinessAsync();
         }
+    }
+
+    // Tier before readiness: readiness reports the configured tier's compile cache
+    private async Task ConfigureThenCheckReadinessAsync()
+    {
+        await PushNoteOptionsAsync().ConfigureAwait(true);
+        await CheckReadinessAsync().ConfigureAwait(true);
     }
 
     private readonly TimeSpan _readinessPollInterval;
@@ -148,6 +153,13 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
             var response = await _engine
                 .RequestAsync("engine/readiness", null, RequestTimeout)
                 .ConfigureAwait(true);
+            // A note host wedged in the GPU driver outlives the engine; only a reboot ends it
+            if (response.TryGetProperty("strayNoteHost", out var stray) && stray.GetBoolean())
+            {
+                Status.Append("A previous note process is stuck in the graphics driver - restart the computer");
+                Status.Log("stray note host detected at engine start");
+            }
+
             if (!response.TryGetProperty("firstUse", out var f) || !f.GetBoolean())
             {
                 ModelsReady = true;
@@ -234,11 +246,14 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         _ = PushNoteOptionsAsync();
     }
 
-    // The engine holds options per process; a restart loses them
+    // Engine options are per process: resent after a restart. The tier is a
+    // role; the engine's store resolves it
     private async Task PushNoteOptionsAsync()
     {
         if (_engine.Connected)
         {
+            await RequestAsync("note/tier", new { tier = _preferences?.NoteTier ?? "default" })
+                .ConfigureAwait(true);
             await RequestAsync("note/options", new { style = Note.Style, detail = Note.Detail })
                 .ConfigureAwait(true);
         }
@@ -641,6 +656,27 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     {
         switch (method)
         {
+            // A note model loading outside a consultation blocks recording;
+            // inside one the load overlaps capture
+            case "note/model" when State == SessionState.Idle
+                && parameters.ValueKind == JsonValueKind.Object:
+                var laneState = parameters.TryGetProperty("state", out var s) ? s.GetString() : "";
+                var modelName = parameters.TryGetProperty("name", out var n) ? n.GetString() : "";
+                if (laneState == "loading")
+                {
+                    ModelsReady = false;
+                    var firstUse = parameters.TryGetProperty("firstUse", out var f) && f.GetBoolean();
+                    Status.Append(firstUse
+                        ? $"Preparing {modelName} for this computer - this can take a few minutes"
+                        : $"Loading {modelName}", busy: true);
+                }
+                else if (laneState is "ready" or "failed")
+                {
+                    ModelsReady = true;
+                    Status.Append(laneState == "ready" ? $"{modelName} ready" : "Ready");
+                }
+
+                break;
             // Stages the engine skips never show; a late stage cannot move the
             // phase backwards
             case "session/progress" when State == SessionState.Finalising

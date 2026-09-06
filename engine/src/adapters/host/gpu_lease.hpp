@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <string>
@@ -84,16 +85,33 @@ class GpuLease {
     // Blocks until the GPU is ours; an abandoned mutex (the other process died
     // mid-decode) counts as acquired
     Guard Acquire() {
-        if (mutex_ == nullptr) return {};
+        return Acquire(std::chrono::milliseconds(INFINITE));
+    }
+
+    // Bounded: a holder that never releases is wedged in a driver call. On
+    // timeout the lease is marked broken and every later acquire returns at once
+    Guard Acquire(std::chrono::milliseconds bound) {
+        if (mutex_ == nullptr || broken_.load()) return {};
         const auto t0 = std::chrono::steady_clock::now();
-        const DWORD result = WaitForSingleObject(mutex_, INFINITE);
+        const DWORD result = WaitForSingleObject(
+            mutex_, bound.count() >= INFINITE ? INFINITE : static_cast<DWORD>(bound.count()));
+        if (result == WAIT_TIMEOUT) {
+            broken_ = true;
+            return {};
+        }
         if (result != WAIT_OBJECT_0 && result != WAIT_ABANDONED) return {};
         return {mutex_,
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()};
     }
 
+    // True once a bounded acquire gave up: the other process is wedged
+    bool Broken() const {
+        return broken_.load();
+    }
+
    private:
     HANDLE mutex_ = nullptr;
+    std::atomic<bool> broken_{false};
 };
 
 }  // namespace ambient::host
