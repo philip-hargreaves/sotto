@@ -113,8 +113,13 @@ TEST(WorkerNoteWriter, TheAccuracyTierWritesANoteThroughItsOwnPipeline) {
         GTEST_SKIP() << "accuracy note model or host not staged";
     }
 #ifdef _DEBUG
-    GTEST_SKIP() << "OpenVINO 2026.3 debug GPU plugin asserts on a second generation";
+    const bool debug_build = true;
+#else
+    const bool debug_build = false;
 #endif
+    if (debug_build) {
+        GTEST_SKIP() << "OpenVINO 2026.3 debug GPU plugin asserts on a second generation";
+    }
     const models::ModelStore store(kModels);
     WorkerNoteWriter writer(HostExe(), kModels, PromptPath(), &store);
     const auto switched = writer.Configure("accuracy");
