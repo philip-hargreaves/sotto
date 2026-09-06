@@ -162,8 +162,7 @@ void ModelStore::Verify(const ModelInfo& model) const {
         if (bytes != model.file_bytes.end() && std::filesystem::file_size(path) != bytes->second) {
             throw std::runtime_error(model.id + ": " + name + " is " +
                                      std::to_string(std::filesystem::file_size(path)) +
-                                     " bytes, the manifest says " +
-                                     std::to_string(bytes->second));
+                                     " bytes, the manifest says " + std::to_string(bytes->second));
         }
     }
 }

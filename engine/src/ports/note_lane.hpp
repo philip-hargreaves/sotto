@@ -12,10 +12,10 @@ struct NoteModelState {
 
     Phase phase = Phase::kIdle;
     std::string tier = "default";
-    std::string id;      // the model the tier resolves to; empty when none is staged
-    std::string name;    // its display name
-    std::string detail;  // the reason, on kFailed
-    double seconds = 0;  // verify + load, on kReady
+    std::string id;          // the model the tier resolves to; empty when none is staged
+    std::string name;        // its display name
+    std::string detail;      // the reason, on kFailed
+    double seconds = 0;      // verify + load, on kReady
     bool first_use = false;  // no compile cache yet: a load that takes minutes
 };
 

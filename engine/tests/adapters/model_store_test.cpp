@@ -112,10 +112,11 @@ TEST(ModelStore, AWrongSizeIsRefusedByNameWhenTheManifestRecordsSizes) {
     const auto dir = root.path / "m";
     std::filesystem::create_directories(dir);
     WriteFile(dir / "weights.bin", "hello");
-    WriteFile(dir / "manifest.json",
-              std::string(R"({"manifestVersion": 1, "id": "m", "task": "asr", "tier": "default",)") +
-                  R"( "licence": "MIT", "runtime": {"device": "GPU"}, "files": {"weights.bin": ")" +
-                  kHelloHash + R"("}, "bytes": {"weights.bin": 5}})");
+    WriteFile(
+        dir / "manifest.json",
+        std::string(R"({"manifestVersion": 1, "id": "m", "task": "asr", "tier": "default",)") +
+            R"( "licence": "MIT", "runtime": {"device": "GPU"}, "files": {"weights.bin": ")" +
+            kHelloHash + R"("}, "bytes": {"weights.bin": 5}})");
     const ModelStore store(root.path);
     EXPECT_NO_THROW(store.Verify(store.List()[0]));
 
@@ -288,10 +289,9 @@ TEST(ModelStore, RuntimePipelineAndPropertiesAreRead) {
 // A pipeline this build cannot construct, or a property it cannot pass, is
 // a corrupt manifest for this build: refused at scan, never best-effort
 TEST(ModelStore, AnUnknownPipelineOrANonScalarPropertyIsRefused) {
-    for (const char* runtime :
-         {R"({"device": "GPU", "pipeline": "diffusion"})",
-          R"({"device": "GPU", "properties": {"NESTED": {"a": 1}}})",
-          R"({"device": "GPU", "properties": [1, 2]})"}) {
+    for (const char* runtime : {R"({"device": "GPU", "pipeline": "diffusion"})",
+                                R"({"device": "GPU", "properties": {"NESTED": {"a": 1}}})",
+                                R"({"device": "GPU", "properties": [1, 2]})"}) {
         TempRoot root;
         const auto dir = root.path / "broken";
         std::filesystem::create_directories(dir);

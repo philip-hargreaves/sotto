@@ -2,10 +2,9 @@
 
 #include <functional>
 #include <memory>
-#include <string>
-
 #include <openvino/genai/generation_config.hpp>
 #include <openvino/genai/streamer_base.hpp>
+#include <string>
 
 namespace ambient::models {
 struct ModelInfo;

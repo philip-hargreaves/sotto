@@ -21,9 +21,10 @@ struct TieredStore {
     std::filesystem::path root;
 
     TieredStore() {
-        root = std::filesystem::temp_directory_path() /
-               ("ambient-lane-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
-                "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
+        root =
+            std::filesystem::temp_directory_path() /
+            ("ambient-lane-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+             "-" + ::testing::UnitTest::GetInstance()->current_test_info()->name());
         Stage("qwen3.5-9b-int4", "Qwen3.5 9B", "default");
         Stage("qwen3.6-35b-a3b-int4", "Qwen3.6 35B", "accuracy");
         Stage("qwen-broken-int4", "Broken", "constrained");

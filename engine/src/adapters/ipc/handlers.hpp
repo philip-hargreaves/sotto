@@ -70,7 +70,6 @@ void RegisterMethods(PipeServer& server, ambient::audio::SessionController& cont
                      ambient::translate::ITranslator* translator = nullptr,
                      ambient::translate::TranslateLane* translate_lane = nullptr,
                      bool first_use = false, ambient::diar::AnchorStore* anchors = nullptr,
-                     ambient::note::INoteLane* note_lane = nullptr,
-                     bool stray_note_host = false);
+                     ambient::note::INoteLane* note_lane = nullptr, bool stray_note_host = false);
 
 }  // namespace ambient::ipc

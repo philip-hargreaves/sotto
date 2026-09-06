@@ -14,15 +14,15 @@ std::string Sha256File(const std::filesystem::path& path);
 
 struct ModelInfo {
     std::string id;
-    std::string name;      // display name; the id when the manifest has none
-    std::string task;      // asr | vad | diarisation | notes
-    std::string tier;      // default | accuracy | constrained
-    std::string device;    // GPU | CPU | NPU
-    std::string licence;   // SPDX id
-    std::string pipeline;  // llm | vlm: which GenAI pipeline loads it; llm when absent
+    std::string name;           // display name; the id when the manifest has none
+    std::string task;           // asr | vad | diarisation | notes
+    std::string tier;           // default | accuracy | constrained
+    std::string device;         // GPU | CPU | NPU
+    std::string licence;        // SPDX id
+    std::string pipeline;       // llm | vlm: which GenAI pipeline loads it; llm when absent
     nlohmann::json properties;  // OpenVINO properties passed verbatim at compile; {} when absent
     std::filesystem::path dir;
-    std::map<std::string, std::string> file_hashes;  // filename -> sha256 hex: provenance
+    std::map<std::string, std::string> file_hashes;    // filename -> sha256 hex: provenance
     std::map<std::string, std::uintmax_t> file_bytes;  // filename -> size, when the manifest says
 };
 

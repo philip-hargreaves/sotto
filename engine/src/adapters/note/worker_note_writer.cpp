@@ -116,8 +116,8 @@ struct WorkerNoteWriter::Impl {
                                        std::to_wstring(++spawn_count);
         const std::string tier = Tier();
         std::wstring command = L"\"" + host_exe.wstring() + L"\" \"" + pipe_path + L"\" \"" +
-                               models_root.wstring() + L"\" \"" + prompt_path.wstring() +
-                               L"\" \"" + std::wstring(tier.begin(), tier.end()) + L"\"";
+                               models_root.wstring() + L"\" \"" + prompt_path.wstring() + L"\" \"" +
+                               std::wstring(tier.begin(), tier.end()) + L"\"";
         // The worker shares the engine's stderr so its diagnostics land in
         // the same log
         STARTUPINFOW startup{};
@@ -315,8 +315,8 @@ struct WorkerNoteWriter::Impl {
     // Bounded: a worker wedged inside a driver call must not wedge the
     // note thread with it
     json ReadMessage() {
-        const DWORD bound = Phase() == NoteModelState::Phase::kLoading ? kLoadTimeoutMs
-                                                                       : kInactivityTimeoutMs;
+        const DWORD bound =
+            Phase() == NoteModelState::Phase::kLoading ? kLoadTimeoutMs : kInactivityTimeoutMs;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(bound);
         for (;;) {
             {

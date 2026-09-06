@@ -149,11 +149,14 @@ TEST(WorkerNoteWriter, NoteTierSweep) {
     const auto switched = writer.Configure(tier);
     ASSERT_EQ(switched.tier, tier);
     const std::string note = writer.Write(ElbowTranscript(), {}, nullptr);
-    const double to_note = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    const double to_note =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     ASSERT_FALSE(note.empty());
     const std::string sheet = writer.WritePatient(note, nullptr);
     const auto state = writer.State();
-    std::fprintf(stderr, "sweep %s: %s, host load %.1f s, configure-to-note %.1f s, note %zu chars, sheet %zu chars\n",
+    std::fprintf(stderr,
+                 "sweep %s: %s, host load %.1f s, configure-to-note %.1f s, note %zu chars, sheet "
+                 "%zu chars\n",
                  tier.c_str(), state.id.c_str(), state.seconds, to_note, note.size(), sheet.size());
 }
 
@@ -184,9 +187,8 @@ void TerminateLoadingHostAfter(int seconds) {
         GTEST_SKIP() << "accuracy note model or host not staged";
     }
     char* armed = nullptr;
-    const bool run =
-        _dupenv_s(&armed, nullptr, "AMBIENT_ZOMBIE_PROBE") == 0 && armed != nullptr &&
-        std::string(armed) == "1";
+    const bool run = _dupenv_s(&armed, nullptr, "AMBIENT_ZOMBIE_PROBE") == 0 && armed != nullptr &&
+                     std::string(armed) == "1";
     std::free(armed);
     if (!run) GTEST_SKIP() << "set AMBIENT_ZOMBIE_PROBE=1 to run (may need a reboot after)";
 
@@ -221,8 +223,8 @@ void TerminateLoadingHostAfter(int seconds) {
     if (handle != nullptr) CloseHandle(handle);
     std::fprintf(stderr, "zombie probe: host %lu after 30 s: %s (exit code %lu)\n", victim,
                  gone ? "gone" : "STILL LISTED", exit_code);
-    EXPECT_TRUE(gone || signalled) << "host " << victim
-                                   << " survived TerminateProcess: wedged in a driver call";
+    EXPECT_TRUE(gone || signalled)
+        << "host " << victim << " survived TerminateProcess: wedged in a driver call";
 }
 
 TEST(WorkerNoteWriter, ZombieProbeTerminatedWhileHashing) {

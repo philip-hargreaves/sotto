@@ -109,8 +109,8 @@ TEST(Handlers, ModelsListMatchesTheFixture) {
 TEST(Handlers, ModelsListMarksTheConfiguredNoteTierActive) {
     const auto root = std::filesystem::temp_directory_path() / "ambient-handlers-tiers";
     std::filesystem::remove_all(root);
-    for (const auto& [id, tier] : {std::pair{"qwen3.5-9b-int4", "default"},
-                                   std::pair{"qwen3.6-35b-a3b-int4", "accuracy"}}) {
+    for (const auto& [id, tier] :
+         {std::pair{"qwen3.5-9b-int4", "default"}, std::pair{"qwen3.6-35b-a3b-int4", "accuracy"}}) {
         std::filesystem::create_directories(root / id);
         std::ofstream(root / id / "manifest.json")
             << R"({"manifestVersion": 1, "id": ")" << id << R"(", "task": "note", "tier": ")"

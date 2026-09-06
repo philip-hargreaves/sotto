@@ -22,8 +22,8 @@ class WorkerNoteWriter : public INoteWriter, public INoteLane {
     // store: resolves tiers for Configure and names the model in the
     // state; null leaves the lane on its tier with no names (tests)
     WorkerNoteWriter(std::filesystem::path host_exe, std::filesystem::path models_root,
-                     std::filesystem::path prompt_path,
-                     const models::ModelStore* store = nullptr, std::string tier = "default");
+                     std::filesystem::path prompt_path, const models::ModelStore* store = nullptr,
+                     std::string tier = "default");
     ~WorkerNoteWriter() override;
 
     void Prepare() override;

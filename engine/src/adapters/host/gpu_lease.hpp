@@ -93,9 +93,8 @@ class GpuLease {
     Guard Acquire(std::chrono::milliseconds bound) {
         if (mutex_ == nullptr || broken_.load()) return {};
         const auto t0 = std::chrono::steady_clock::now();
-        const DWORD result =
-            WaitForSingleObject(mutex_, bound.count() >= INFINITE ? INFINITE
-                                                                  : static_cast<DWORD>(bound.count()));
+        const DWORD result = WaitForSingleObject(
+            mutex_, bound.count() >= INFINITE ? INFINITE : static_cast<DWORD>(bound.count()));
         if (result == WAIT_TIMEOUT) {
             broken_ = true;
             return {};

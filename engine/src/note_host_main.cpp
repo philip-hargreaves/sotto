@@ -52,9 +52,8 @@ class GenerationLane {
                     generate([this, &t0, &first_at, &pieces](const std::string& partial) {
                         if (pieces++ == 0) {
                             first_at = std::chrono::steady_clock::now();
-                            std::fprintf(
-                                stderr, "ambient-note-host: first token in %.1f s\n",
-                                std::chrono::duration<double>(first_at - t0).count());
+                            std::fprintf(stderr, "ambient-note-host: first token in %.1f s\n",
+                                         std::chrono::duration<double>(first_at - t0).count());
                         }
                         server_.PushNotification("partial", {{"text", partial}});
                     });
@@ -103,8 +102,7 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         if (argc < 4) {
-            std::fprintf(stderr,
-                         "usage: ambient_note_host <pipe> <models> <prompts-dir> [tier]\n");
+            std::fprintf(stderr, "usage: ambient_note_host <pipe> <models> <prompts-dir> [tier]\n");
             return 2;
         }
         std::fprintf(stderr, "ambient-note-host: power throttling %s\n",
