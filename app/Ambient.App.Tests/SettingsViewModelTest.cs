@@ -213,7 +213,7 @@ public class SettingsViewModelTest
         Assert.Equal(["Qwen3.5 9B"], settings.NoteModelOptions);
         Assert.Equal(0, settings.NoteModelIndex);
         Assert.False(settings.NoteModelEnabled);
-        Assert.Equal("Only one note model is installed", settings.NoteModelStatus);
+        Assert.Equal("Only one model installed", settings.NoteModelStatus);
     }
 
     [Fact]
@@ -242,14 +242,15 @@ public class SettingsViewModelTest
         var request = engine.Requests.Single(r => r.Method == "note/tier");
         Assert.Contains("accuracy", request.Params);
         Assert.False(settings.NoteModelEnabled, "greyed while the lane loads");
-        Assert.Contains("Loading Qwen3.6 35B", settings.NoteModelStatus);
+        Assert.Equal("Loading", settings.NoteModelStatus);
 
         engine.RaiseNotification("note/model", NoteModel("loading", "accuracy", "Qwen3.6 35B"));
         Assert.False(settings.NoteModelEnabled);
 
         engine.RaiseNotification("note/model", NoteModel("ready", "accuracy", "Qwen3.6 35B"));
         Assert.True(settings.NoteModelEnabled);
-        Assert.Equal("Qwen3.6 35B ready (12 s)", settings.NoteModelStatus);
+        Assert.Equal("", settings.NoteModelStatus);
+        Assert.StartsWith("Larger models", settings.NoteModelCaption);
         Assert.Equal(2, settings.NoteModelIndex);
     }
 

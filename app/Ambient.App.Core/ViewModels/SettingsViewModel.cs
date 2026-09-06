@@ -109,9 +109,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool NoteModelEnabled { get; set; }
 
-    /// <summary>Lane status shown under the control.</summary>
+    /// <summary>Lane status; empty when nothing is happening.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoteModelCaption))]
     public partial string NoteModelStatus { get; set; } = "";
+
+    /// <summary>The caption under the control: the status while there is one, else the description.</summary>
+    public string NoteModelCaption =>
+        string.IsNullOrEmpty(NoteModelStatus) ? "Larger models are more accurate and use more memory." : NoteModelStatus;
 
     /// <summary>The tier the shell wants; the engine's store resolves it.</summary>
     public string NoteTier => _noteTier;
@@ -165,12 +170,12 @@ public sealed partial class SettingsViewModel : ObservableObject
                 }
             }
 
-            NoteModelStatus = _tiers.Count <= 1 ? "Only one note model is installed" : "";
+            NoteModelStatus = _tiers.Count <= 1 ? "Only one model installed" : "";
             // Preference for an unstaged tier: the engine stayed on the default,
             // and the control shows that
             if (!_tiers.Contains(_noteTier) && _tiers.Contains("default"))
             {
-                NoteModelStatus = $"The saved choice is not installed; using {NameOf("default")}";
+                NoteModelStatus = "Saved model not installed; using the default";
                 _noteTier = "default";
                 PersistTier();
             }
@@ -218,7 +223,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _noteTier = tier;
         PersistTier();
         NoteModelEnabled = false;
-        NoteModelStatus = $"Loading {NameOf(tier)}";
+        NoteModelStatus = "Loading";
         _status?.Append($"Loading {NameOf(tier)}", busy: true);
         _ = SendTierAsync(tier);
     }
@@ -287,25 +292,19 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         var state = parameters.TryGetProperty("state", out var s) ? s.GetString() ?? "" : "";
         var tier = parameters.TryGetProperty("tier", out var t) ? t.GetString() ?? "" : "";
-        var name = parameters.TryGetProperty("name", out var n) && !string.IsNullOrEmpty(n.GetString())
-            ? n.GetString()!
-            : NameOf(tier);
         switch (state)
         {
             case "loading":
                 NoteModelEnabled = false;
                 var firstUse = parameters.TryGetProperty("firstUse", out var f) && f.GetBoolean();
                 NoteModelStatus = firstUse
-                    ? $"Preparing {name} for this computer - the first time takes a few minutes"
-                    : $"Loading {name}";
+                    ? "Preparing for this computer, a few minutes the first time"
+                    : "Loading";
                 break;
             case "ready":
                 _revertTier = null;
                 NoteModelEnabled = _tiers.Count > 1;
-                var seconds = parameters.TryGetProperty("seconds", out var sec) ? sec.GetDouble() : 0;
-                NoteModelStatus = seconds > 0
-                    ? FormattableString.Invariant($"{name} ready ({seconds:0} s)")
-                    : $"{name} ready";
+                NoteModelStatus = "";
                 // The engine is authoritative about what is resident
                 if (_tiers.Contains(tier) && tier != _noteTier)
                 {
@@ -325,7 +324,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 }
                 else
                 {
-                    NoteModelStatus = $"{name} failed: {detail}";
+                    NoteModelStatus = $"Load failed: {detail}";
                 }
 
                 break;
